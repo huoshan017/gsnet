@@ -23,7 +23,7 @@ type DefaultClientCallback struct {
 func (c *DefaultClientCallback) OnConnect() {
 }
 
-func (c *DefaultClientCallback) OnDisconnect() {
+func (c *DefaultClientCallback) OnDisconnect(err error) {
 }
 
 func (c *DefaultClientCallback) OnError(err error) {
