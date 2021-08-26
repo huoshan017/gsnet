@@ -169,6 +169,7 @@ func (s *GameService) onPlayerEnterGame(sess *gsnet.Session, data []byte) error 
 		}
 		return s.net.Send(sess, game_proto.MsgIdGamePlayerEnterResp, d)
 	}
+	// 先判断session中有没保存的数据
 	p := sessMgr.GetPlayer(sess.GetId())
 	if p == nil {
 		p = NewPlayer()
