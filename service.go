@@ -18,14 +18,14 @@ type serviceErrInfo struct {
 type Service struct {
 	acceptor         *Acceptor
 	callback         IServiceCallback
-	handler          IHandler
+	handler          IServiceHandler
 	options          ServiceOptions
 	errInfoChan      chan *serviceErrInfo
 	sessionIdCounter uint64
 	sessMap          map[uint64]*Session
 }
 
-func NewService(callback IServiceCallback, handler IHandler, options ...Option) *Service {
+func NewService(callback IServiceCallback, handler IServiceHandler, options ...Option) *Service {
 	s := &Service{
 		callback: callback,
 		handler:  handler,
@@ -130,7 +130,7 @@ func (s *Service) handleConn(conn IConn) {
 			if err != nil {
 				break
 			}
-			err = s.handler.HandleData(sess, data)
+			err = s.handler.OnData(sess, data)
 			if err != nil {
 				break
 			}

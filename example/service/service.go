@@ -12,7 +12,7 @@ import (
 type PlayerHandler struct {
 }
 
-func (h *PlayerHandler) HandleData(s *gsnet.Session, data []byte) error {
+func (h *PlayerHandler) OnData(s *gsnet.Session, data []byte) error {
 	return s.Send(data)
 }
 

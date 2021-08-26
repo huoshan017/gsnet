@@ -3,17 +3,18 @@ package gsnet
 // 消息服务
 type MsgService struct {
 	*Service
-	dispatcher *MsgDispatcher
+	dispatcher *ServiceMsgDispatcher
 }
 
 func NewMsgService(callback IServiceCallback, options ...Option) *MsgService {
 	s := &MsgService{}
-	if s.options.MsgProto == nil {
-		s.dispatcher = NewMsgDispatcher(&DefaultMsgProto{})
-	} else {
-		s.dispatcher = NewMsgDispatcher(s.options.MsgProto)
-	}
 	s.Service = NewService(callback, s.dispatcher, options...)
+	if s.options.MsgProto == nil {
+		s.dispatcher = NewServiceMsgDispatcher(&DefaultMsgProto{})
+	} else {
+		s.dispatcher = NewServiceMsgDispatcher(s.options.MsgProto)
+	}
+	s.Service.handler = s.dispatcher
 	return s
 }
 

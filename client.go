@@ -8,16 +8,15 @@ import (
 type Client struct {
 	conn     *Connector
 	callback IClientCallback
-	handler  IHandler
+	handler  IClientHandler
 	options  ClientOptions
-	sess     *Session
+	lastTime time.Time
 }
 
-func NewClient(callback IClientCallback, handler IHandler, options ...Option) *Client {
+func NewClient(callback IClientCallback, handler IClientHandler, options ...Option) *Client {
 	c := &Client{
 		callback: callback,
 		handler:  handler,
-		sess:     &Session{},
 	}
 	for _, option := range options {
 		option(&c.options.Options)
@@ -46,29 +45,20 @@ func (c *Client) Send(data []byte) error {
 
 func (c *Client) Run() {
 	var ticker *time.Ticker
-	var lastTime time.Time
 	if c.callback != nil && c.options.tickSpan > 0 {
 		ticker = time.NewTicker(c.options.tickSpan)
-		lastTime = time.Now()
+		c.lastTime = time.Now()
 	}
 
 	var err error
 	for {
 		if ticker != nil {
-			select {
-			case <-ticker.C:
-				now := time.Now()
-				tick := now.Sub(lastTime)
-				c.callback.OnTick(tick)
-				lastTime = now
-			default:
-				err = c.handle(true)
-				if err != nil {
-					break
-				}
+			err = c.handle(ticker)
+			if err != nil {
+				break
 			}
 		} else {
-			err = c.handle(false)
+			err = c.handle(nil)
 			if err != nil {
 				break
 			}
@@ -87,20 +77,37 @@ func (c *Client) Run() {
 	}
 }
 
-func (c *Client) handle(nonblock bool) error {
+func (c *Client) Close() {
+	c.conn.Close()
+}
+
+func (c *Client) handle(ticker *time.Ticker) error {
 	var d []byte
 	var err error
-	if nonblock {
-		d, err = c.conn.RecvNonblock()
+	if ticker != nil {
+		select {
+		case d = <-c.conn.getRecvCh():
+		case <-ticker.C:
+			now := time.Now()
+			tick := now.Sub(c.lastTime)
+			c.callback.OnTick(tick)
+			c.lastTime = now
+		case err = <-c.conn.getErrCh():
+		}
 	} else {
 		d, err = c.conn.Recv()
 	}
-	if err == nil {
-		c.sess.conn = c.conn.Conn
-		err = c.handler.HandleData(c.sess, d)
+	if err == nil && (d != nil || len(d) > 0) {
+		err = c.handler.OnData(d)
 	}
-	if err != nil && c.callback != nil {
-		c.callback.OnError(err)
+	if err != nil {
+		if IsNoDisconnectError(err) {
+			err = nil
+		} else {
+			if c.callback != nil {
+				c.callback.OnError(err)
+			}
+		}
 	}
 	return err
 }
@@ -108,24 +115,26 @@ func (c *Client) handle(nonblock bool) error {
 // 消息客户端
 type MsgClient struct {
 	*Client
-	dispatcher *MsgDispatcher
+	dispatcher *ClientMsgDispatcher
 }
 
 func NewMsgClient(callback IClientCallback, options ...Option) *MsgClient {
 	c := &MsgClient{}
-	if c.options.MsgProto == nil {
-		c.dispatcher = NewMsgDispatcher(&DefaultMsgProto{})
-	} else {
-		c.dispatcher = NewMsgDispatcher(c.options.MsgProto)
-	}
 	c.Client = NewClient(callback, c.dispatcher, options...)
+	if c.options.MsgProto == nil {
+		c.dispatcher = NewClientMsgDispatcher(&DefaultMsgProto{})
+	} else {
+		c.dispatcher = NewClientMsgDispatcher(c.options.MsgProto)
+	}
+	c.Client.handler = c.dispatcher
 	return c
 }
 
-func (c *MsgClient) RegisterHandle(msgid uint32, handle func(*Session, []byte) error) {
+func (c *MsgClient) RegisterHandle(msgid uint32, handle func([]byte) error) {
 	c.dispatcher.RegisterHandle(msgid, handle)
 }
 
-func (c *MsgClient) Send(sess *Session, msgid uint32, data []byte) error {
-	return c.dispatcher.SendMsg(sess, msgid, data)
+func (c *MsgClient) Send(msgid uint32, data []byte) error {
+	ed := c.dispatcher.Encode(msgid, data)
+	return c.Client.Send(ed)
 }

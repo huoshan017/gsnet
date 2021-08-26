@@ -34,7 +34,7 @@ type ConnOptions struct {
 	// todo 以下是需要实现的配置逻辑
 	FlushWriteInterval       time.Duration // 写缓冲数据刷新到网络的最小时间间隔
 	GracefulCloseWaitingTime time.Duration // 优雅关闭等待时间
-	HeartbeatInterval time.Duration // 心跳间隔
+	HeartbeatInterval        time.Duration // 心跳间隔
 }
 
 // 创建新连接
@@ -273,6 +273,14 @@ func (c *Conn) _recvErr() error {
 	default:
 	}
 	return nil
+}
+
+func (c *Conn) getRecvCh() chan []byte {
+	return c.recvCh
+}
+
+func (c *Conn) getErrCh() chan error {
+	return c.errCh
 }
 
 // 接收超时设置
