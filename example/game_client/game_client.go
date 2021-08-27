@@ -85,6 +85,7 @@ func (p *Player) onEnterGame(data []byte) error {
 
 func (p *Player) onExitGame(data []byte) error {
 	p.state = PlayerStateNotEnter
+	p.owner.GetNet().Close()
 	fmt.Println("Player exited game")
 	return nil
 }

@@ -25,8 +25,3 @@ func IsNoDisconnectError(err error) bool {
 func RegisterNoDisconnectError(err error) {
 	noDisconnectErrMap[err] = struct{}{}
 }
-
-func HasRegisteredNoDisconnectError(err error) bool {
-	_, o := noDisconnectErrMap[err]
-	return o
-}

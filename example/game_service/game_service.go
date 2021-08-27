@@ -40,42 +40,6 @@ func (p *Player) GetToken() string {
 	return p.token
 }
 
-func (p *Player) GetSessionId() uint64 {
-	return p.sess.GetId()
-}
-
-func (p *Player) Exit() {
-	p.sess.Close()
-}
-
-type SessionMgr struct {
-	sid2player cmap.ConcurrentMap
-}
-
-func NewSessionMgr() *SessionMgr {
-	return &SessionMgr{
-		sid2player: cmap.New(),
-	}
-}
-
-var sessMgr = NewSessionMgr()
-
-func (sm *SessionMgr) GetPlayer(sid uint64) *Player {
-	p, o := sm.sid2player.Get(strconv.FormatUint(sid, 10))
-	if !o {
-		return nil
-	}
-	return p.(*Player)
-}
-
-func (sm *SessionMgr) AddPlayer(sid uint64, p *Player) {
-	sm.sid2player.Set(strconv.FormatUint(sid, 10), p)
-}
-
-func (sm *SessionMgr) RemovePlayer(sid uint64) {
-	sm.sid2player.Get(strconv.FormatUint(sid, 10))
-}
-
 type PlayerManager struct {
 	id2player cmap.ConcurrentMap
 }
@@ -169,13 +133,12 @@ func (s *GameService) onPlayerEnterGame(sess *gsnet.Session, data []byte) error 
 		}
 		return s.net.Send(sess, game_proto.MsgIdGamePlayerEnterResp, d)
 	}
+
+	var p *Player
 	// 先判断session中有没保存的数据
-	p := sessMgr.GetPlayer(sess.GetId())
-	if p == nil {
-		p = NewPlayer()
-		p.sess = sess
-		sessMgr.AddPlayer(sess.GetId(), p)
-	} else {
+	pd := sess.GetData()
+	if pd != nil {
+		// 重复进入
 		resp.Result = -2
 		d, e := json.Marshal(&resp)
 		if e != nil {
@@ -185,31 +148,45 @@ func (s *GameService) onPlayerEnterGame(sess *gsnet.Session, data []byte) error 
 		if e != nil {
 			return e
 		}
+		var o bool
+		p, o = pd.(*Player)
+		if !o {
+			return errors.New("game_service: type cast to *Player failed")
+		}
 		fmt.Println("error: same player, kick it")
-		return ErrKickDuplicatePlayer
+		// 断开之前的连接
+		p.sess.Close()
 	}
-	d, e := json.Marshal(&game_proto.GamePlayerEnterResp{})
+	p = NewPlayer()
+	p.account = req.Account
+	p.token = req.Token
+	p.sess = sess
+	playerMgr.Add(p)
+	sess.SetData(pd)
+	dd, e := json.Marshal(&game_proto.GamePlayerEnterResp{})
 	if e != nil {
 		return e
 	}
-	s.net.Send(sess, game_proto.MsgIdGamePlayerEnterResp, d)
-	fmt.Println("player ", p.account, " entered game")
+	s.net.Send(sess, game_proto.MsgIdGamePlayerEnterResp, dd)
+	fmt.Println("Player ", p.account, " entered game")
 	return nil
 }
 
 func (s *GameService) onPlayerExitGame(sess *gsnet.Session, data []byte) error {
-	p := sessMgr.GetPlayer(sess.GetId())
-	if p == nil {
-		fmt.Println("error: not found player with session id ", sess.GetId())
-		return nil
+	d := sess.GetData()
+	if d == nil {
+		return errors.New("game_service: no invalid session")
 	}
-	sessMgr.RemovePlayer(sess.GetId())
+	p, o := d.(*Player)
+	if !o {
+		return errors.New("game_service: type cast to Player failed")
+	}
 	var resp game_proto.GamePlayerExitResp
-	d, e := json.Marshal(&resp)
+	dd, e := json.Marshal(&resp)
 	if e != nil {
 		return e
 	}
-	s.net.Send(sess, game_proto.MsgIdGamePlayerExitResp, d)
+	s.net.Send(sess, game_proto.MsgIdGamePlayerExitResp, dd)
 	fmt.Println("player ", p.account, " exit game")
 	return nil
 }
