@@ -7,6 +7,12 @@ const (
 	MsgIdGamePlayerExitResp  = 4
 )
 
+type HandShakeReq struct {
+}
+
+type HandShakeAck struct {
+}
+
 type GamePlayerEnterReq struct {
 	Account string
 	Token   string

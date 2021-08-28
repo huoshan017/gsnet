@@ -10,18 +10,20 @@ import (
 const (
 	DefaultConnRecvChanLen = 100
 	DefaultConnSendChanLen = 100
+	MaxDataBodyLength      = 128 * 1024
 )
 
 type Conn struct {
-	conn    net.Conn
-	options ConnOptions
-	writer  *bufio.Writer
-	reader  *bufio.Reader
-	recvCh  chan []byte   // 缓存从网络接收的数据，对应一个接收者一个发送者
-	sendCh  chan []byte   // 缓存发往网络的数据，对应一个接收者一个发送者
-	closeCh chan struct{} // 关闭通道
-	closed  int32         // 是否关闭
-	errCh   chan error    // 错误通道
+	conn       net.Conn
+	options    ConnOptions
+	writer     *bufio.Writer
+	reader     *bufio.Reader
+	recvCh     chan []byte   // 缓存从网络接收的数据，对应一个接收者一个发送者
+	sendCh     chan []byte   // 缓存发往网络的数据，对应一个接收者一个发送者
+	closeCh    chan struct{} // 关闭通道
+	closed     int32         // 是否关闭
+	errCh      chan error    // 错误通道
+	errWriteCh chan error    // 写错误通道
 }
 
 type ConnOptions struct {
@@ -40,10 +42,11 @@ type ConnOptions struct {
 // 创建新连接
 func NewConn(conn net.Conn, options *ConnOptions) *Conn {
 	c := &Conn{
-		conn:    conn,
-		options: *options,
-		closeCh: make(chan struct{}),
-		errCh:   make(chan error, 1),
+		conn:       conn,
+		options:    *options,
+		closeCh:    make(chan struct{}),
+		errCh:      make(chan error, 1),
+		errWriteCh: make(chan error, 1),
 	}
 
 	if c.options.WriteBuffSize <= 0 {
@@ -91,8 +94,13 @@ func (c *Conn) readLoop() {
 			break
 		}
 		c.options.DataProto.SetHeader(header)
-		// todo 用内存池来优化
-		body := make([]byte, c.options.DataProto.GetBodyLen())
+		// todo  1. 判断长度是否超过限制 2. 用内存池来优化
+		bodyLen := c.options.DataProto.GetBodyLen()
+		if bodyLen > MaxDataBodyLength {
+			err = ErrBodyLenInvalid
+			break
+		}
+		body := make([]byte, bodyLen)
 		closed, err = c._read(body)
 		if closed || err != nil {
 			break
@@ -115,6 +123,8 @@ func (c *Conn) _read(data []byte) (closed bool, err error) {
 		select {
 		case <-c.closeCh:
 			closed = true
+			return
+		case err = <-c.errWriteCh: // 接收写协程的错误
 			return
 		default:
 		}
@@ -149,6 +159,11 @@ func (c *Conn) writeLoop() {
 			break
 		}
 	}
+	// 错误写入通道由读协程接收
+	if err != nil {
+		c.errWriteCh <- err
+	}
+	close(c.errWriteCh)
 }
 
 // 写数据包

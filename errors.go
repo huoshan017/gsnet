@@ -4,10 +4,11 @@ import (
 	"errors"
 )
 
-var ErrConnClosed = errors.New("netlib: conn is closed")
-var ErrSendChanFull = errors.New("netlib: send chan full")
-var ErrRecvChanEmpty = errors.New("netlib: recv chan empty")
-var ErrNoMsgHandle = errors.New("netlib: no message handle")
+var ErrBodyLenInvalid = errors.New("gsnet: receive body len too large")
+var ErrConnClosed = errors.New("gsnet: conn is closed")
+var ErrSendChanFull = errors.New("gsnet: send chan full")
+var ErrRecvChanEmpty = errors.New("gsnet: recv chan empty")
+var ErrNoMsgHandle = errors.New("gsnet: no message handle")
 
 var noDisconnectErrMap = make(map[error]struct{})
 
