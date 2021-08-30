@@ -94,6 +94,7 @@ func (s *GameService) Init(conf *config) bool {
 	s.net = net
 	s.registerHandle(game_proto.MsgIdGamePlayerEnterReq, s.onPlayerEnterGame)
 	s.registerHandle(game_proto.MsgIdGamePlayerExitReq, s.onPlayerExitGame)
+	s.registerHandle(game_proto.MsgIdHandShakeReq, s.onHandShake)
 	return true
 }
 
@@ -119,6 +120,10 @@ func (s *GameService) OnTick(tick time.Duration) {
 
 func (s *GameService) registerHandle(msgid uint32, handle func(*gsnet.Session, []byte) error) {
 	s.net.RegisterHandle(msgid, handle)
+}
+
+func (s *GameService) onHandShake(sess *gsnet.Session, data []byte) error {
+	return nil
 }
 
 func (s *GameService) onPlayerEnterGame(sess *gsnet.Session, data []byte) error {

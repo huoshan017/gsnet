@@ -32,11 +32,12 @@ type IClientCallback interface {
 	OnTick(tick time.Duration)
 }
 
+// 服务处理接口
 type IServiceHandler interface {
 	OnData(*Session, []byte) error
 }
 
-// 处理器接口
+// 客户端处理器接口
 type IClientHandler interface {
 	OnData([]byte) error
 }

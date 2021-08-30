@@ -34,7 +34,7 @@ type ConnOptions struct {
 	DataProto     IDataProto // 数据包协议
 
 	// todo 以下是需要实现的配置逻辑
-	FlushWriteInterval       time.Duration // 写缓冲数据刷新到网络的最小时间间隔
+	FlushWriteInterval       time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
 	GracefulCloseWaitingTime time.Duration // 优雅关闭等待时间
 	HeartbeatInterval        time.Duration // 心跳间隔
 }

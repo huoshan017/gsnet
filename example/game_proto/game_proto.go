@@ -1,10 +1,12 @@
 package game_proto
 
 const (
-	MsgIdGamePlayerEnterReq  = 1
-	MsgIdGamePlayerEnterResp = 2
-	MsgIdGamePlayerExitReq   = 3
-	MsgIdGamePlayerExitResp  = 4
+	MsgIdHandShakeReq        = 1
+	MsgIdHandShakeAck        = 2
+	MsgIdGamePlayerEnterReq  = 100
+	MsgIdGamePlayerEnterResp = 101
+	MsgIdGamePlayerExitReq   = 102
+	MsgIdGamePlayerExitResp  = 103
 )
 
 type HandShakeReq struct {
