@@ -18,10 +18,10 @@ func NewMsgService(callback IServiceCallback, options ...Option) *MsgService {
 	return s
 }
 
-func (s *MsgService) RegisterHandle(msgid uint32, handle func(*Session, []byte) error) {
+func (s *MsgService) RegisterHandle(msgid uint32, handle func(ISession, []byte) error) {
 	s.dispatcher.RegisterHandle(msgid, handle)
 }
 
-func (s *MsgService) Send(sess *Session, msgid uint32, msgdata []byte) error {
+func (s *MsgService) Send(sess ISession, msgid uint32, msgdata []byte) error {
 	return s.dispatcher.SendMsg(sess, msgid, msgdata)
 }

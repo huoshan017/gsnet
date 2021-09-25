@@ -21,7 +21,7 @@ type Player struct {
 	id      int
 	account string
 	token   string
-	sess    *gsnet.Session
+	sess    gsnet.ISession
 }
 
 func NewPlayer() *Player {
@@ -118,15 +118,15 @@ func (s *GameService) OnTick(tick time.Duration) {
 	fmt.Println("onTick")
 }
 
-func (s *GameService) registerHandle(msgid uint32, handle func(*gsnet.Session, []byte) error) {
+func (s *GameService) registerHandle(msgid uint32, handle func(gsnet.ISession, []byte) error) {
 	s.net.RegisterHandle(msgid, handle)
 }
 
-func (s *GameService) onHandShake(sess *gsnet.Session, data []byte) error {
+func (s *GameService) onHandShake(sess gsnet.ISession, data []byte) error {
 	return nil
 }
 
-func (s *GameService) onPlayerEnterGame(sess *gsnet.Session, data []byte) error {
+func (s *GameService) onPlayerEnterGame(sess gsnet.ISession, data []byte) error {
 	var req game_proto.GamePlayerEnterReq
 	err := json.Unmarshal(data, &req)
 	var resp game_proto.GamePlayerEnterResp
@@ -177,7 +177,7 @@ func (s *GameService) onPlayerEnterGame(sess *gsnet.Session, data []byte) error 
 	return nil
 }
 
-func (s *GameService) onPlayerExitGame(sess *gsnet.Session, data []byte) error {
+func (s *GameService) onPlayerExitGame(sess gsnet.ISession, data []byte) error {
 	d := sess.GetData()
 	if d == nil {
 		return errors.New("game_service: no invalid session")

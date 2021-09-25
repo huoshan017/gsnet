@@ -34,7 +34,7 @@ type IClientCallback interface {
 
 // 服务处理接口
 type IServiceHandler interface {
-	OnData(*Session, []byte) error
+	OnData(ISession, []byte) error
 }
 
 // 客户端处理器接口
