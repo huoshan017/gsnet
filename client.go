@@ -7,13 +7,14 @@ import (
 // 数据客户端
 type Client struct {
 	conn     *Connector
+	sess     ISession
 	callback IClientCallback
-	handler  IClientHandler
+	handler  IHandler
 	options  ClientOptions
 	lastTime time.Time
 }
 
-func NewClient(callback IClientCallback, handler IClientHandler, options ...Option) *Client {
+func NewClient(callback IClientCallback, handler IHandler, options ...Option) *Client {
 	c := &Client{
 		callback: callback,
 		handler:  handler,
@@ -36,6 +37,7 @@ func (c *Client) Connect(addr string) error {
 	if err == nil && c.callback != nil {
 		c.callback.OnConnect()
 	}
+	c.sess = NewSessionNoId(c.conn)
 	return err
 }
 
@@ -88,17 +90,14 @@ func (c *Client) handle(ticker *time.Ticker) error {
 		select {
 		case d = <-c.conn.getRecvCh():
 		case <-ticker.C:
-			now := time.Now()
-			tick := now.Sub(c.lastTime)
-			c.callback.OnTick(tick)
-			c.lastTime = now
+			c.handleTick()
 		case err = <-c.conn.getErrCh():
 		}
 	} else {
 		d, err = c.conn.Recv()
 	}
 	if err == nil && (d != nil || len(d) > 0) {
-		err = c.handler.OnData(d)
+		err = c.handler.OnData(c.sess, d)
 	}
 	if err != nil {
 		if IsNoDisconnectError(err) {
@@ -112,29 +111,36 @@ func (c *Client) handle(ticker *time.Ticker) error {
 	return err
 }
 
+func (c *Client) handleTick() {
+	now := time.Now()
+	tick := now.Sub(c.lastTime)
+	c.callback.OnTick(tick)
+	c.lastTime = now
+}
+
 // 消息客户端
 type MsgClient struct {
 	*Client
-	dispatcher *ClientMsgDispatcher
+	dispatcher *MsgDispatcher
 }
 
 func NewMsgClient(callback IClientCallback, options ...Option) *MsgClient {
 	c := &MsgClient{}
 	c.Client = NewClient(callback, c.dispatcher, options...)
 	if c.options.MsgProto == nil {
-		c.dispatcher = NewClientMsgDispatcher(&DefaultMsgProto{})
+		c.dispatcher = NewMsgDispatcher(&DefaultMsgProto{})
 	} else {
-		c.dispatcher = NewClientMsgDispatcher(c.options.MsgProto)
+		c.dispatcher = NewMsgDispatcher(c.options.MsgProto)
 	}
 	c.Client.handler = c.dispatcher
 	return c
 }
 
-func (c *MsgClient) RegisterHandle(msgid uint32, handle func([]byte) error) {
+func (c *MsgClient) RegisterHandle(msgid uint32, handle func(ISession, []byte) error) {
 	c.dispatcher.RegisterHandle(msgid, handle)
 }
 
 func (c *MsgClient) Send(msgid uint32, data []byte) error {
-	ed := c.dispatcher.Encode(msgid, data)
-	return c.Client.Send(ed)
+	sess := c.Client.sess
+	return c.dispatcher.SendMsg(sess, msgid, data)
 }

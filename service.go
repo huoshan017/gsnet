@@ -18,14 +18,14 @@ type serviceErrInfo struct {
 type Service struct {
 	acceptor         *Acceptor
 	callback         IServiceCallback
-	handler          IServiceHandler
+	handler          IHandler
 	options          ServiceOptions
 	errInfoChan      chan *serviceErrInfo
 	sessionIdCounter uint64
 	sessMap          map[uint64]*Session
 }
 
-func NewService(callback IServiceCallback, handler IServiceHandler, options ...Option) *Service {
+func NewService(callback IServiceCallback, handler IHandler, options ...Option) *Service {
 	s := &Service{
 		callback: callback,
 		handler:  handler,

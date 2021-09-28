@@ -27,7 +27,3 @@ func (c *Connector) Connect(address string) error {
 	c.Run()
 	return nil
 }
-
-func (c *Connector) Close() error {
-	return c.conn.Close()
-}

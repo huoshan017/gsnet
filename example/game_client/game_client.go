@@ -24,9 +24,6 @@ type IOwner interface {
 
 type Player struct {
 	owner IOwner
-	id    int32
-	acc   string
-	token string
 	state int32
 }
 
@@ -73,17 +70,17 @@ func (p *Player) send(msgid uint32, msgdata []byte) error {
 	return p.owner.GetNet().Send(msgid, msgdata)
 }
 
-func (p *Player) registerHandle(msgid uint32, handle func([]byte) error) {
+func (p *Player) registerHandle(msgid uint32, handle func(gsnet.ISession, []byte) error) {
 	p.owner.GetNet().RegisterHandle(msgid, handle)
 }
 
-func (p *Player) onEnterGame(data []byte) error {
+func (p *Player) onEnterGame(sess gsnet.ISession, data []byte) error {
 	p.state = PlayerStateEntered
 	fmt.Println("Player entered game")
 	return nil
 }
 
-func (p *Player) onExitGame(data []byte) error {
+func (p *Player) onExitGame(sess gsnet.ISession, data []byte) error {
 	p.state = PlayerStateNotEnter
 	p.owner.GetNet().Close()
 	fmt.Println("Player exited game")

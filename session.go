@@ -21,6 +21,12 @@ func NewSession(conn IConn, id uint64) *Session {
 	}
 }
 
+func NewSessionNoId(conn IConn) *Session {
+	return &Session{
+		conn: conn,
+	}
+}
+
 func (s *Session) Send(data []byte) error {
 	return s.conn.Send(data)
 }
