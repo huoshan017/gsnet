@@ -12,8 +12,24 @@ import (
 type PlayerHandler struct {
 }
 
+func (h *PlayerHandler) OnConnect(s gsnet.ISession) {
+
+}
+
+func (h *PlayerHandler) OnDisconnect(s gsnet.ISession, err error) {
+
+}
+
 func (h *PlayerHandler) OnData(s gsnet.ISession, data []byte) error {
 	return s.Send(data)
+}
+
+func (h *PlayerHandler) OnTick(s gsnet.ISession, tick time.Duration) {
+
+}
+
+func (h *PlayerHandler) OnError(err error) {
+
 }
 
 type PlayerCallback struct {

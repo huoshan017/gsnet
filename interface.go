@@ -32,7 +32,11 @@ type IClientCallback interface {
 	OnTick(tick time.Duration)
 }
 
-// 处理接口
+// 处理器接口
 type IHandler interface {
+	OnConnect(ISession)
+	OnDisconnect(ISession, error)
 	OnData(ISession, []byte) error
+	OnTick(ISession, time.Duration)
+	OnError(error)
 }

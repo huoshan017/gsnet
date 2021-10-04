@@ -123,6 +123,8 @@ func (s *Service) handleConn(conn IConn) {
 	conn.Run()
 
 	go func(conn IConn) {
+		s.handler.OnConnect(sess)
+
 		var data []byte
 		var err error
 		for {
@@ -135,6 +137,16 @@ func (s *Service) handleConn(conn IConn) {
 				break
 			}
 		}
+
+		if err != nil {
+			if IsNoDisconnectError(err) {
+				s.handler.OnError(err)
+			} else {
+				s.handler.OnDisconnect(sess, err)
+				sess.Close()
+			}
+		}
+
 		s.getErrInfoChan() <- &serviceErrInfo{sessionId: sess.id, err: err}
 	}(conn)
 }
@@ -148,9 +160,8 @@ func (s *Service) handleErr(err *serviceErrInfo) {
 		if s.callback != nil {
 			s.callback.OnDisconnect(err.sessionId, err.err)
 		}
-		sess, o := s.sessMap[err.sessionId]
+		_, o := s.sessMap[err.sessionId]
 		if o {
-			sess.Close()
 			delete(s.sessMap, err.sessionId)
 		} else {
 			err := fmt.Errorf("netlib: session %v not found, close failed", err.sessionId)
