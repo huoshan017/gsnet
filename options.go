@@ -8,6 +8,7 @@ import (
 // 选项结构
 type Options struct {
 	tickSpan      time.Duration
+	tickHandle    func(time.Duration)
 	DataProto     IDataProto
 	MsgProto      IMsgProto
 	SendChanLen   int
@@ -21,6 +22,10 @@ type Option func(*Options)
 
 func (options *Options) SetTickSpan(span time.Duration) {
 	options.tickSpan = span
+}
+
+func (options *Options) SetTickHandle(handle func(time.Duration)) {
+	options.tickHandle = handle
 }
 
 func (options *Options) SetDataProto(proto IDataProto) {

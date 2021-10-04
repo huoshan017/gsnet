@@ -85,7 +85,7 @@ func (s *GameService) GetNet() *gsnet.MsgService {
 }
 
 func (s *GameService) Init(conf *config) bool {
-	net := gsnet.NewMsgService(s)
+	net := gsnet.NewMsgService()
 	err := net.Listen(conf.addr)
 	if err != nil {
 		fmt.Println("game service listen addr ", conf.addr, " err: ", err)
@@ -203,9 +203,6 @@ func main() {
 	}
 	ip_str := flag.String("ip", "", "ip set")
 	flag.Parse()
-
-	// 错误注册
-	//netlib.RegisterNoDisconnectError(ErrKickDuplicatePlayer)
 
 	gameService := NewGameService()
 	if !gameService.Init(&config{addr: *ip_str}) {

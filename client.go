@@ -8,16 +8,14 @@ import (
 type Client struct {
 	conn     *Connector
 	sess     ISession
-	callback IClientCallback
 	handler  IHandler
 	options  ClientOptions
 	lastTime time.Time
 }
 
-func NewClient(callback IClientCallback, handler IHandler, options ...Option) *Client {
+func NewClient(handler IHandler, options ...Option) *Client {
 	c := &Client{
-		callback: callback,
-		handler:  handler,
+		handler: handler,
 	}
 	for _, option := range options {
 		option(&c.options.Options)
@@ -34,8 +32,8 @@ func (c *Client) Connect(addr string) error {
 		DataProto:     c.options.DataProto,
 	})
 	err := c.conn.Connect(addr)
-	if err == nil && c.callback != nil {
-		c.callback.OnConnect()
+	if err == nil && c.handler != nil {
+		c.handler.OnConnect(c.sess)
 	}
 	c.sess = NewSessionNoId(c.conn)
 	return err
@@ -47,7 +45,7 @@ func (c *Client) Send(data []byte) error {
 
 func (c *Client) Run() {
 	var ticker *time.Ticker
-	if c.callback != nil && c.options.tickSpan > 0 {
+	if c.handler != nil && c.options.tickSpan > 0 {
 		ticker = time.NewTicker(c.options.tickSpan)
 		c.lastTime = time.Now()
 	}
@@ -71,9 +69,9 @@ func (c *Client) Run() {
 		ticker.Stop()
 	}
 
-	if err != nil {
-		if c.callback != nil {
-			c.callback.OnDisconnect(err)
+	if err != nil && !IsNoDisconnectError(err) {
+		if c.handler != nil {
+			c.handler.OnDisconnect(c.sess, err)
 		}
 		c.conn.Close()
 	}
@@ -103,8 +101,8 @@ func (c *Client) handle(ticker *time.Ticker) error {
 		if IsNoDisconnectError(err) {
 			err = nil
 		} else {
-			if c.callback != nil {
-				c.callback.OnError(err)
+			if c.handler != nil {
+				c.handler.OnError(err)
 			}
 		}
 	}
@@ -114,7 +112,7 @@ func (c *Client) handle(ticker *time.Ticker) error {
 func (c *Client) handleTick() {
 	now := time.Now()
 	tick := now.Sub(c.lastTime)
-	c.callback.OnTick(tick)
+	c.handler.OnTick(c.sess, tick)
 	c.lastTime = now
 }
 
@@ -124,9 +122,9 @@ type MsgClient struct {
 	dispatcher *MsgDispatcher
 }
 
-func NewMsgClient(callback IClientCallback, options ...Option) *MsgClient {
+func NewMsgClient(options ...Option) *MsgClient {
 	c := &MsgClient{}
-	c.Client = NewClient(callback, c.dispatcher, options...)
+	c.Client = NewClient(c.dispatcher, options...)
 	if c.options.MsgProto == nil {
 		c.dispatcher = NewMsgDispatcher(&DefaultMsgProto{})
 	} else {
@@ -134,6 +132,22 @@ func NewMsgClient(callback IClientCallback, options ...Option) *MsgClient {
 	}
 	c.Client.handler = c.dispatcher
 	return c
+}
+
+func (c *MsgClient) SetConnectHandle(handle func(ISession)) {
+	c.dispatcher.SetConnectHandle(handle)
+}
+
+func (c *MsgClient) SetDisconnect(handle func(ISession, error)) {
+	c.dispatcher.SetDisconnectHandle(handle)
+}
+
+func (c *MsgClient) SetTickHandle(handle func(ISession, time.Duration)) {
+	c.dispatcher.SetTickHandle(handle)
+}
+
+func (c *MsgClient) SetErrorHandle(handle func(error)) {
+	c.dispatcher.SetErrorHandle(handle)
 }
 
 func (c *MsgClient) RegisterHandle(msgid uint32, handle func(ISession, []byte) error) {

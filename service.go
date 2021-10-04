@@ -1,7 +1,6 @@
 package gsnet
 
 import (
-	"fmt"
 	"time"
 )
 
@@ -17,19 +16,18 @@ type serviceErrInfo struct {
 // 服务
 type Service struct {
 	acceptor         *Acceptor
-	callback         IServiceCallback
 	handler          IHandler
+	mainTickHandle   func(time.Duration)
 	options          ServiceOptions
 	errInfoChan      chan *serviceErrInfo
 	sessionIdCounter uint64
 	sessMap          map[uint64]*Session
 }
 
-func NewService(callback IServiceCallback, handler IHandler, options ...Option) *Service {
+func NewService(handler IHandler, options ...Option) *Service {
 	s := &Service{
-		callback: callback,
-		handler:  handler,
-		sessMap:  make(map[uint64]*Session),
+		handler: handler,
+		sessMap: make(map[uint64]*Session),
 	}
 	for _, option := range options {
 		option(&s.options.Options)
@@ -58,12 +56,16 @@ func (s *Service) Listen(addr string) error {
 	return nil
 }
 
+func (s *Service) SetMainTickHandle(handle func(time.Duration)) {
+	s.mainTickHandle = handle
+}
+
 func (s *Service) Start() {
 	go s.acceptor.Serve()
 
 	var ticker *time.Ticker
 	var lastTime time.Time
-	if s.callback != nil && s.options.tickSpan > 0 {
+	if s.mainTickHandle != nil && s.options.tickSpan > 0 {
 		ticker = time.NewTicker(s.options.tickSpan)
 		lastTime = time.Now()
 	}
@@ -81,7 +83,7 @@ func (s *Service) Start() {
 			case <-ticker.C:
 				now := time.Now()
 				tick := now.Sub(lastTime)
-				s.callback.OnTick(tick)
+				s.mainTickHandle(tick)
 				lastTime = now
 			case err := <-s.errInfoChan:
 				s.handleErr(err)
@@ -116,9 +118,6 @@ func (s *Service) handleConn(conn IConn) {
 	s.sessionIdCounter += 1
 	sess := NewSession(conn, s.sessionIdCounter)
 	s.sessMap[sess.id] = sess
-	if s.callback != nil {
-		s.callback.OnConnect(sess.id)
-	}
 
 	conn.Run()
 
@@ -129,23 +128,19 @@ func (s *Service) handleConn(conn IConn) {
 		var err error
 		for {
 			data, err = conn.Recv()
-			if err != nil {
-				break
+			if err == nil {
+				err = s.handler.OnData(sess, data)
 			}
-			err = s.handler.OnData(sess, data)
 			if err != nil {
-				break
+				if !IsNoDisconnectError(err) {
+					break
+				}
+				s.handler.OnError(err)
 			}
 		}
 
-		if err != nil {
-			if IsNoDisconnectError(err) {
-				s.handler.OnError(err)
-			} else {
-				s.handler.OnDisconnect(sess, err)
-				sess.Close()
-			}
-		}
+		s.handler.OnDisconnect(sess, err)
+		sess.Close()
 
 		s.getErrInfoChan() <- &serviceErrInfo{sessionId: sess.id, err: err}
 	}(conn)
@@ -153,21 +148,10 @@ func (s *Service) handleConn(conn IConn) {
 
 func (s *Service) handleErr(err *serviceErrInfo) {
 	if IsNoDisconnectError(err.err) {
-		if s.callback != nil {
-			s.callback.OnError(err.err)
-		}
 	} else {
-		if s.callback != nil {
-			s.callback.OnDisconnect(err.sessionId, err.err)
-		}
 		_, o := s.sessMap[err.sessionId]
 		if o {
 			delete(s.sessMap, err.sessionId)
-		} else {
-			err := fmt.Errorf("netlib: session %v not found, close failed", err.sessionId)
-			if s.callback != nil {
-				s.callback.OnError(err)
-			}
 		}
 	}
 }

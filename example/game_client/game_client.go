@@ -116,7 +116,7 @@ func (c *GameClient) GetNet() *gsnet.MsgClient {
 }
 
 func (c *GameClient) Init(conf *config) error {
-	net := gsnet.NewMsgClient(c, gsnet.SetTickSpan(time.Millisecond))
+	net := gsnet.NewMsgClient(gsnet.SetTickSpan(time.Millisecond))
 	err := net.Connect(conf.addr)
 	if err != nil {
 		fmt.Println("connect ", conf.addr, " failed")
