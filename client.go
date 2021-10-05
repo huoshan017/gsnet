@@ -138,7 +138,7 @@ func (c *MsgClient) SetConnectHandle(handle func(ISession)) {
 	c.dispatcher.SetConnectHandle(handle)
 }
 
-func (c *MsgClient) SetDisconnect(handle func(ISession, error)) {
+func (c *MsgClient) SetDisconnectHandle(handle func(ISession, error)) {
 	c.dispatcher.SetDisconnectHandle(handle)
 }
 
