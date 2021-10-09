@@ -43,6 +43,25 @@ func (c *Client) Send(data []byte) error {
 	return c.conn.Send(data)
 }
 
+func (c *Client) Update() {
+	d, err := c.conn.RecvNonblock()
+	// 没有数据
+	if err == ErrRecvChanEmpty {
+		return
+	}
+	if err == nil && (d != nil || len(d) > 0) {
+		err = c.handler.OnData(c.sess, d)
+	}
+	if err != nil {
+		if !IsNoDisconnectError(err) {
+			c.handler.OnDisconnect(c.sess, err)
+		} else {
+			c.handler.OnError(err)
+		}
+		c.conn.Close()
+	}
+}
+
 func (c *Client) Run() {
 	var ticker *time.Ticker
 	if c.handler != nil && c.options.tickSpan > 0 {
