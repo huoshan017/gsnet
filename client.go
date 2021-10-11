@@ -43,11 +43,11 @@ func (c *Client) Send(data []byte) error {
 	return c.conn.Send(data)
 }
 
-func (c *Client) Update() {
+func (c *Client) Update() error {
 	d, err := c.conn.RecvNonblock()
 	// 没有数据
 	if err == ErrRecvChanEmpty {
-		return
+		return nil
 	}
 	if err == nil && (d != nil || len(d) > 0) {
 		err = c.handler.OnData(c.sess, d)
@@ -60,6 +60,7 @@ func (c *Client) Update() {
 		}
 		c.conn.Close()
 	}
+	return err
 }
 
 func (c *Client) Run() {
