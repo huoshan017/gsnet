@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -72,61 +73,43 @@ type config struct {
 	addr string
 }
 
-type GameService struct {
-	net *gsnet.MsgService
+type DefaultMsgHandler struct {
+	gsnet.MsgHandler
+	msgProto gsnet.IMsgProto
 }
 
-func NewGameService() *GameService {
-	return &GameService{}
+func (h *DefaultMsgHandler) Init(args ...interface{}) {
+	h.msgProto = &gsnet.DefaultMsgProto{}
+	h.MsgHandler = *gsnet.NewMsgHandler(h.msgProto)
+	h.RegisterHandle(game_proto.MsgIdGamePlayerEnterReq, h.onPlayerEnterGame)
+	h.RegisterHandle(game_proto.MsgIdGamePlayerExitReq, h.onPlayerExitGame)
+	h.RegisterHandle(game_proto.MsgIdHandShakeReq, h.onHandShake)
 }
 
-func (s *GameService) GetNet() *gsnet.MsgService {
-	return s.net
+func (h *DefaultMsgHandler) OnConnect(sess gsnet.ISession) {
+	log.Printf("session %v connected", sess.GetId())
 }
 
-func (s *GameService) Init(conf *config) bool {
-	net := gsnet.NewMsgService()
-	err := net.Listen(conf.addr)
-	if err != nil {
-		fmt.Println("game service listen addr ", conf.addr, " err: ", err)
-		return false
-	}
-	s.net = net
-	s.registerHandle(game_proto.MsgIdGamePlayerEnterReq, s.onPlayerEnterGame)
-	s.registerHandle(game_proto.MsgIdGamePlayerExitReq, s.onPlayerExitGame)
-	s.registerHandle(game_proto.MsgIdHandShakeReq, s.onHandShake)
-	return true
+func (h *DefaultMsgHandler) OnDisconnect(sess gsnet.ISession, err error) {
+	log.Printf("session %v disconnected", sess.GetId())
 }
 
-func (s *GameService) Start() {
-	s.net.Start()
+func (h *DefaultMsgHandler) OnData(sess gsnet.ISession, data []byte) error {
+	return h.MsgHandler.OnData(sess, data)
 }
 
-func (s *GameService) OnConnect(sessId uint64) {
-	fmt.Println("session ", sessId, " connected")
+func (h *DefaultMsgHandler) OnTick(sess gsnet.ISession, tick time.Duration) {
 }
 
-func (s *GameService) OnDisconnect(sessId uint64, err error) {
-	fmt.Println("session ", sessId, " disconnect, err ", err)
+func (h *DefaultMsgHandler) OnError(err error) {
+	log.Printf("err %v", err)
 }
 
-func (s *GameService) OnError(err error) {
-	fmt.Println("error: ", err)
-}
-
-func (s *GameService) OnTick(tick time.Duration) {
-	fmt.Println("onTick")
-}
-
-func (s *GameService) registerHandle(msgid uint32, handle func(gsnet.ISession, []byte) error) {
-	s.net.RegisterHandle(msgid, handle)
-}
-
-func (s *GameService) onHandShake(sess gsnet.ISession, data []byte) error {
+func (h *DefaultMsgHandler) onHandShake(sess gsnet.ISession, data []byte) error {
 	return nil
 }
 
-func (s *GameService) onPlayerEnterGame(sess gsnet.ISession, data []byte) error {
+func (h *DefaultMsgHandler) onPlayerEnterGame(sess gsnet.ISession, data []byte) error {
 	var req game_proto.GamePlayerEnterReq
 	err := json.Unmarshal(data, &req)
 	var resp game_proto.GamePlayerEnterResp
@@ -136,7 +119,7 @@ func (s *GameService) onPlayerEnterGame(sess gsnet.ISession, data []byte) error 
 		if e != nil {
 			return e
 		}
-		return s.net.Send(sess, game_proto.MsgIdGamePlayerEnterResp, d)
+		return h.Send(sess, game_proto.MsgIdGamePlayerEnterResp, d)
 	}
 
 	var p *Player
@@ -149,7 +132,7 @@ func (s *GameService) onPlayerEnterGame(sess gsnet.ISession, data []byte) error 
 		if e != nil {
 			return e
 		}
-		e = s.net.Send(sess, game_proto.MsgIdGamePlayerEnterResp, d)
+		e = h.Send(sess, game_proto.MsgIdGamePlayerEnterResp, d)
 		if e != nil {
 			return e
 		}
@@ -172,12 +155,12 @@ func (s *GameService) onPlayerEnterGame(sess gsnet.ISession, data []byte) error 
 	if e != nil {
 		return e
 	}
-	s.net.Send(sess, game_proto.MsgIdGamePlayerEnterResp, dd)
+	h.Send(sess, game_proto.MsgIdGamePlayerEnterResp, dd)
 	fmt.Println("Player ", p.account, " entered game")
 	return nil
 }
 
-func (s *GameService) onPlayerExitGame(sess gsnet.ISession, data []byte) error {
+func (h *DefaultMsgHandler) onPlayerExitGame(sess gsnet.ISession, data []byte) error {
 	d := sess.GetData()
 	if d == nil {
 		return errors.New("game_service: no invalid session")
@@ -191,9 +174,37 @@ func (s *GameService) onPlayerExitGame(sess gsnet.ISession, data []byte) error {
 	if e != nil {
 		return e
 	}
-	s.net.Send(sess, game_proto.MsgIdGamePlayerExitResp, dd)
+	h.Send(sess, game_proto.MsgIdGamePlayerExitResp, dd)
 	fmt.Println("player ", p.account, " exit game")
 	return nil
+}
+
+type GameService struct {
+	net *gsnet.Server
+}
+
+func NewGameService() *GameService {
+	return &GameService{}
+}
+
+func (s *GameService) GetNet() *gsnet.Server {
+	return s.net
+}
+
+func (s *GameService) Init(conf *config) bool {
+	h := &DefaultMsgHandler{}
+	net := gsnet.NewServer(h, nil)
+	err := net.Listen(conf.addr)
+	if err != nil {
+		fmt.Println("game service listen addr ", conf.addr, " err: ", err)
+		return false
+	}
+	s.net = net
+	return true
+}
+
+func (s *GameService) Start() {
+	s.net.Start()
 }
 
 func main() {

@@ -3,6 +3,7 @@ package gsnet
 import "time"
 
 type MsgDispatcher struct {
+	ISessionHandler
 	connectHandle    func(ISession)
 	disconnectHandle func(ISession, error)
 	tickHandle       func(ISession, time.Duration)
@@ -12,10 +13,13 @@ type MsgDispatcher struct {
 }
 
 func NewMsgDispatcher(msgProto IMsgProto) *MsgDispatcher {
-	return &MsgDispatcher{
-		handleMap: make(map[uint32]func(ISession, []byte) error),
-		msgProto:  msgProto,
-	}
+	d := &MsgDispatcher{}
+	d.handleMap = make(map[uint32]func(ISession, []byte) error)
+	d.msgProto = msgProto
+	return d
+}
+
+func (d *MsgDispatcher) Init(args ...interface{}) {
 }
 
 func (d *MsgDispatcher) SetConnectHandle(handle func(ISession)) {

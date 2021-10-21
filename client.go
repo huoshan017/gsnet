@@ -8,12 +8,12 @@ import (
 type Client struct {
 	conn     *Connector
 	sess     ISession
-	handler  IHandler
+	handler  ISessionHandler
 	options  ClientOptions
 	lastTime time.Time
 }
 
-func NewClient(handler IHandler, options ...Option) *Client {
+func NewClient(handler ISessionHandler, options ...Option) *Client {
 	c := &Client{
 		handler: handler,
 	}

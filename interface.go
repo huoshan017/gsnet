@@ -16,8 +16,9 @@ type IConn interface {
 	Close()
 }
 
-// 处理器接口
-type IHandler interface {
+// 会话处理器接口
+type ISessionHandler interface {
+	Init(args ...interface{})
 	OnConnect(ISession)
 	OnDisconnect(ISession, error)
 	OnData(ISession, []byte) error

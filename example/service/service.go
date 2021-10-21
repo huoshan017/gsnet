@@ -12,6 +12,10 @@ import (
 type PlayerHandler struct {
 }
 
+func (h *PlayerHandler) Init(args ...interface{}) {
+
+}
+
 func (h *PlayerHandler) OnConnect(s gsnet.ISession) {
 
 }
@@ -43,7 +47,7 @@ func main() {
 
 	addr := *ip_str + ":" + *port_str
 	h := &PlayerHandler{}
-	playerService := gsnet.NewService(h, gsnet.SetErrChanLen(100))
+	playerService := gsnet.NewServer(h, nil, gsnet.SetErrChanLen(100))
 	err := playerService.Listen(addr)
 	if err != nil {
 		fmt.Println("player service listen ", addr, " err: ", err)
