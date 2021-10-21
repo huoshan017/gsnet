@@ -94,10 +94,6 @@ func (h *DefaultMsgHandler) OnDisconnect(sess gsnet.ISession, err error) {
 	log.Printf("session %v disconnected", sess.GetId())
 }
 
-func (h *DefaultMsgHandler) OnData(sess gsnet.ISession, data []byte) error {
-	return h.MsgHandler.OnData(sess, data)
-}
-
 func (h *DefaultMsgHandler) OnTick(sess gsnet.ISession, tick time.Duration) {
 }
 

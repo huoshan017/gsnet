@@ -2,6 +2,7 @@ package gsnet
 
 // 消息处理器
 type MsgHandler struct {
+	ISessionHandler
 	msgProto IMsgProto
 	handles  map[uint32]func(ISession, []byte) error
 }
