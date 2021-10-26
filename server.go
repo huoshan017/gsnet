@@ -7,7 +7,7 @@ import (
 
 const (
 	DefaultSessionCloseChanLen = 100
-	DefaultSessionTick         = 20 * time.Millisecond // 默认会话定时器间隔
+	DefaultSessionHandleTick   = 20 * time.Millisecond // 默认会话定时器间隔
 )
 
 type sessionCloseInfo struct {
@@ -43,6 +43,9 @@ func NewServer(handler ISessionHandler, handlerInitArgs []interface{}, options .
 
 	if s.options.ErrChanLen <= 0 {
 		s.options.ErrChanLen = DefaultSessionCloseChanLen
+	}
+	if s.options.SessionHandleTick <= 0 {
+		s.options.SessionHandleTick = DefaultSessionHandleTick
 	}
 	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.ErrChanLen)
 	return s
@@ -131,7 +134,8 @@ func (s *Server) handleConn(conn IConn) {
 	sess := NewSession(conn, s.sessionIdCounter)
 	s.sessMap[sess.id] = sess
 
-	conn.SetTick(DefaultSessionTick)
+	// 会话处理时间间隔设置到连接
+	conn.SetTick(s.options.SessionHandleTick)
 	conn.Run()
 
 	go func(conn IConn) {

@@ -102,16 +102,28 @@ type ClientOptions struct {
 // 服务选项结构
 type ServiceOptions struct {
 	Options
-	ErrChanLen int
+	ErrChanLen        int           // 错误通道长度
+	SessionHandleTick time.Duration // 会话逻辑处理时间间隔
 }
 
 func (options *ServiceOptions) SetErrChanLen(length int) {
 	options.ErrChanLen = length
 }
 
+func (options *ServiceOptions) SetSessionHandleTick(tick time.Duration) {
+	options.SessionHandleTick = tick
+}
+
 func SetErrChanLen(length int) Option {
 	return func(options *Options) {
 		p := (*ServiceOptions)(unsafe.Pointer(options))
 		p.SetErrChanLen(length)
+	}
+}
+
+func SetSessionHandleTick(tick time.Duration) Option {
+	return func(options *Options) {
+		p := (*ServiceOptions)(unsafe.Pointer(options))
+		p.SetSessionHandleTick(tick)
 	}
 }

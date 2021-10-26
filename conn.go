@@ -109,12 +109,17 @@ func (c *Conn) readLoop() {
 		}
 		c.recvCh <- body
 	}
+	// 停止定时器
+	if c.ticker != nil {
+		c.ticker.Stop()
+	}
 	// 关闭接收通道
 	close(c.recvCh)
 	// 错误写入通道
 	if err != nil {
 		c.errCh <- err
 	}
+	// 关闭错误通道
 	close(c.errCh)
 }
 
@@ -165,6 +170,7 @@ func (c *Conn) writeLoop() {
 	if err != nil {
 		c.errWriteCh <- err
 	}
+	// 关闭写错误通道
 	close(c.errWriteCh)
 }
 
@@ -291,7 +297,7 @@ func (c *Conn) WaitSelect() ([]byte, error) {
 		select {
 		case d, o = <-c.recvCh:
 			if !o {
-				err = ErrRecvChanEmpty
+				err = ErrConnClosed
 			}
 		case <-c.ticker.C:
 		case err, o = <-c.errCh:
@@ -303,7 +309,7 @@ func (c *Conn) WaitSelect() ([]byte, error) {
 		select {
 		case d, o = <-c.recvCh:
 			if !o {
-				err = ErrRecvChanEmpty
+				err = ErrConnClosed
 			}
 		case err, o = <-c.errCh:
 			if !o {
