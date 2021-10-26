@@ -11,6 +11,7 @@ const (
 	DefaultConnRecvChanLen = 100
 	DefaultConnSendChanLen = 100
 	MaxDataBodyLength      = 128 * 1024
+	MinConnTick            = 10 * time.Millisecond
 )
 
 type Conn struct {
@@ -24,6 +25,7 @@ type Conn struct {
 	closed     int32         // 是否关闭
 	errCh      chan error    // 错误通道
 	errWriteCh chan error    // 写错误通道
+	ticker     *time.Ticker  // 定时器
 }
 
 type ConnOptions struct {
@@ -277,6 +279,32 @@ func (c *Conn) RecvNonblock() ([]byte, error) {
 	return data, nil
 }
 
+// 等待选择结果
+func (c *Conn) WaitSelect() ([]byte, error) {
+	var d []byte
+	var err error
+	var o bool
+	if c.ticker != nil {
+		select {
+		case d, o = <-c.recvCh:
+			if !o {
+				err = ErrRecvChanEmpty
+			}
+		case <-c.ticker.C:
+		case err = <-c.errCh:
+		}
+	} else {
+		select {
+		case d, o = <-c.recvCh:
+			if !o {
+				err = ErrRecvChanEmpty
+			}
+		case err = <-c.errCh:
+		}
+	}
+	return d, err
+}
+
 // 接收错误
 func (c *Conn) _recvErr() error {
 	select {
@@ -296,6 +324,13 @@ func (c *Conn) getRecvCh() chan []byte {
 
 func (c *Conn) getErrCh() chan error {
 	return c.errCh
+}
+
+func (c *Conn) SetTick(tick time.Duration) {
+	if tick < MinConnTick {
+		tick = MinConnTick
+	}
+	c.ticker = time.NewTicker(tick)
 }
 
 // 接收超时设置

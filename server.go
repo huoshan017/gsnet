@@ -7,6 +7,7 @@ import (
 
 const (
 	DefaultSessionCloseChanLen = 100
+	DefaultSessionTick         = 20 * time.Millisecond // 默认会话定时器间隔
 )
 
 type sessionCloseInfo struct {
@@ -130,6 +131,7 @@ func (s *Server) handleConn(conn IConn) {
 	sess := NewSession(conn, s.sessionIdCounter)
 	s.sessMap[sess.id] = sess
 
+	conn.SetTick(DefaultSessionTick)
 	conn.Run()
 
 	go func(conn IConn) {
@@ -139,12 +141,20 @@ func (s *Server) handleConn(conn IConn) {
 		handler.Init(s.initArgs...)
 		handler.OnConnect(sess)
 
+		var lastTime time.Time
 		var data []byte
 		var err error
 		for {
-			data, err = conn.Recv()
+			//data, err = conn.Recv()
+			data, err = conn.WaitSelect()
 			if err == nil {
-				err = handler.OnData(sess, data)
+				if data != nil {
+					err = handler.OnData(sess, data)
+				} else {
+					now := time.Now()
+					handler.OnTick(sess, now.Sub(lastTime))
+					lastTime = now
+				}
 			}
 			if err != nil {
 				if !IsNoDisconnectError(err) {
