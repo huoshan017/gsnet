@@ -281,6 +281,9 @@ func (c *Conn) RecvNonblock() ([]byte, error) {
 
 // 等待选择结果
 func (c *Conn) WaitSelect() ([]byte, error) {
+	if atomic.LoadInt32(&c.closed) > 0 {
+		return nil, ErrConnClosed
+	}
 	var d []byte
 	var err error
 	var o bool
@@ -291,7 +294,10 @@ func (c *Conn) WaitSelect() ([]byte, error) {
 				err = ErrRecvChanEmpty
 			}
 		case <-c.ticker.C:
-		case err = <-c.errCh:
+		case err, o = <-c.errCh:
+			if !o {
+				err = ErrConnClosed
+			}
 		}
 	} else {
 		select {
@@ -299,7 +305,10 @@ func (c *Conn) WaitSelect() ([]byte, error) {
 			if !o {
 				err = ErrRecvChanEmpty
 			}
-		case err = <-c.errCh:
+		case err, o = <-c.errCh:
+			if !o {
+				err = ErrConnClosed
+			}
 		}
 	}
 	return d, err
