@@ -145,7 +145,7 @@ func (s *Server) handleConn(conn IConn) {
 		handler.Init(s.initArgs...)
 		handler.OnConnect(sess)
 
-		var lastTime time.Time
+		var lastTime time.Time = time.Now()
 		var data []byte
 		var err error
 		for {
