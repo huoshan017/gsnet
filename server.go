@@ -19,7 +19,7 @@ type sessionCloseInfo struct {
 type Server struct {
 	acceptor          *Acceptor
 	handlerTemplate   ISessionHandler
-	typ               reflect.Type
+	sessHandleType    reflect.Type
 	initArgs          []interface{}
 	mainTickHandle    func(time.Duration)
 	options           ServiceOptions
@@ -33,7 +33,7 @@ func NewServer(handler ISessionHandler, handlerInitArgs []interface{}, options .
 	rf := reflect.TypeOf(handler)
 	s := &Server{
 		handlerTemplate: handler,
-		typ:             rf,
+		sessHandleType:  rf,
 		initArgs:        handlerInitArgs,
 		sessMap:         make(map[uint64]*Session),
 	}
@@ -134,22 +134,23 @@ func (s *Server) handleConn(conn IConn) {
 	sess := NewSession(conn, s.sessionIdCounter)
 	s.sessMap[sess.id] = sess
 
-	// 会话处理时间间隔设置到连接
-	conn.SetTick(s.options.SessionHandleTick)
 	conn.Run()
 
 	go func(conn IConn) {
-		v := reflect.New(s.typ.Elem())
+		// 创建handler
+		v := reflect.New(s.sessHandleType.Elem())
 		it := v.Interface()
 		handler := it.(ISessionHandler)
 		handler.Init(s.initArgs...)
 		handler.OnConnect(sess)
 
+		// 会话处理时间间隔设置到连接
+		conn.SetTick(s.options.SessionHandleTick)
+
 		var lastTime time.Time = time.Now()
 		var data []byte
 		var err error
 		for {
-			//data, err = conn.Recv()
 			data, err = conn.WaitSelect()
 			if err == nil {
 				if data != nil {
