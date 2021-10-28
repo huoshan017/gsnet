@@ -12,6 +12,7 @@ const (
 	DefaultConnSendChanLen = 100
 	MaxDataBodyLength      = 128 * 1024
 	MinConnTick            = 10 * time.Millisecond
+	DefaultConnTick        = 30 * time.Millisecond
 )
 
 type Conn struct {
@@ -290,31 +291,25 @@ func (c *Conn) WaitSelect() ([]byte, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
 	}
-	var d []byte
-	var err error
-	var o bool
-	if c.ticker != nil {
-		select {
-		case d, o = <-c.recvCh:
-			if !o {
-				err = ErrConnClosed
-			}
-		case <-c.ticker.C:
-		case err, o = <-c.errCh:
-			if !o {
-				err = ErrConnClosed
-			}
+
+	if c.ticker == nil {
+		c.ticker = time.NewTicker(DefaultConnTick)
+	}
+
+	var (
+		d   []byte
+		err error
+		o   bool
+	)
+	select {
+	case d, o = <-c.recvCh:
+		if !o {
+			err = ErrConnClosed
 		}
-	} else {
-		select {
-		case d, o = <-c.recvCh:
-			if !o {
-				err = ErrConnClosed
-			}
-		case err, o = <-c.errCh:
-			if !o {
-				err = ErrConnClosed
-			}
+	case <-c.ticker.C:
+	case err, o = <-c.errCh:
+		if !o {
+			err = ErrConnClosed
 		}
 	}
 	return d, err
