@@ -88,6 +88,12 @@ func (c *Conn) Run() {
 
 // 读循环
 func (c *Conn) readLoop() {
+	defer func() {
+		if err := recover(); err != nil {
+			getLogger().WithStack(err)
+		}
+	}()
+
 	var err error
 	var closed bool
 	header := make([]byte, c.options.DataProto.GetHeaderLen())
@@ -149,6 +155,11 @@ func (c *Conn) _read(data []byte) (closed bool, err error) {
 
 // 写循环
 func (c *Conn) writeLoop() {
+	defer func() {
+		if err := recover(); err != nil {
+			getLogger().WithStack(err)
+		}
+	}()
 	var err error
 	for d := range c.sendCh {
 		closed := false

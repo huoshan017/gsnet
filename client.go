@@ -24,6 +24,20 @@ func NewClient(handler ISessionHandler, options ...Option) *Client {
 }
 
 func (c *Client) Connect(addr string) error {
+	c.newConnector()
+	err := c.conn.Connect(addr)
+	c.doConnectResult(err)
+	return err
+}
+
+func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(error)) {
+	c.newConnector()
+	c.conn.ConnectAsync(addr, timeout, func(err error) {
+		c.doConnectResult(err)
+	})
+}
+
+func (c *Client) newConnector() *Connector {
 	c.conn = NewConnector(&ConnOptions{
 		ReadBuffSize:  c.options.ReadBuffSize,
 		WriteBuffSize: c.options.WriteBuffSize,
@@ -31,12 +45,14 @@ func (c *Client) Connect(addr string) error {
 		SendChanLen:   c.options.SendChanLen,
 		DataProto:     c.options.DataProto,
 	})
-	err := c.conn.Connect(addr)
+	return c.conn
+}
+
+func (c *Client) doConnectResult(err error) {
 	if err == nil && c.handler != nil {
 		c.handler.OnConnect(c.sess)
 	}
 	c.sess = NewSessionNoId(c.conn)
-	return err
 }
 
 func (c *Client) Send(data []byte) error {
@@ -44,6 +60,12 @@ func (c *Client) Send(data []byte) error {
 }
 
 func (c *Client) Update() error {
+	// 连接状态
+	if c.sess == nil {
+		c.conn.WaitResult(0)
+		return nil
+	}
+
 	d, err := c.conn.RecvNonblock()
 	// 没有数据
 	if err == ErrRecvChanEmpty {

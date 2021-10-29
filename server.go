@@ -76,7 +76,14 @@ func (s *Server) SetMainTickHandle(handle func(time.Duration)) {
 }
 
 func (s *Server) Start() {
-	go s.acceptor.Serve()
+	go func () {
+		defer func() {
+			if err := recover(); err != nil {
+				getLogger().WithStack(err)
+			}
+		}()
+		s.acceptor.Serve()
+	}()
 
 	var ticker *time.Ticker
 	var lastTime time.Time
@@ -137,6 +144,11 @@ func (s *Server) handleConn(conn IConn) {
 	conn.Run()
 
 	go func(conn IConn) {
+		defer func() {
+			if err := recover(); err != nil {
+				getLogger().WithStack(err)
+			}
+		}()
 		// 创建handler
 		v := reflect.New(s.sessHandleType.Elem())
 		it := v.Interface()
