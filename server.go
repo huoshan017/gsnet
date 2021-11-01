@@ -76,7 +76,7 @@ func (s *Server) SetMainTickHandle(handle func(time.Duration)) {
 }
 
 func (s *Server) Start() {
-	go func () {
+	go func() {
 		defer func() {
 			if err := recover(); err != nil {
 				getLogger().WithStack(err)

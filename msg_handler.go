@@ -9,6 +9,9 @@ type MsgHandler struct {
 
 func NewMsgHandler(msgProto IMsgProto) *MsgHandler {
 	h := &MsgHandler{}
+	if msgProto == nil {
+		msgProto = &DefaultMsgProto{}
+	}
 	h.init(msgProto)
 	return h
 }

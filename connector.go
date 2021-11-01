@@ -23,7 +23,9 @@ func NewConnector(options *ConnOptions) *Connector {
 
 // 重置
 func (c *Connector) Reset() {
-
+	if c.asyncResultCh == nil {
+		c.asyncResultCh = make(chan error)
+	}
 }
 
 // 同步连接
