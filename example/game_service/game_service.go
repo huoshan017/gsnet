@@ -120,7 +120,7 @@ func (h *DefaultMsgHandler) onPlayerEnterGame(sess gsnet.ISession, data []byte) 
 
 	var p *Player
 	// 先判断session中有没保存的数据
-	pd := sess.GetData()
+	pd := sess.GetData("player")
 	if pd != nil {
 		// 重复进入
 		resp.Result = -2
@@ -146,7 +146,7 @@ func (h *DefaultMsgHandler) onPlayerEnterGame(sess gsnet.ISession, data []byte) 
 	p.token = req.Token
 	p.sess = sess
 	playerMgr.Add(p)
-	sess.SetData(pd)
+	sess.SetData("player", pd)
 	dd, e := json.Marshal(&game_proto.GamePlayerEnterResp{})
 	if e != nil {
 		return e
@@ -157,7 +157,7 @@ func (h *DefaultMsgHandler) onPlayerEnterGame(sess gsnet.ISession, data []byte) 
 }
 
 func (h *DefaultMsgHandler) onPlayerExitGame(sess gsnet.ISession, data []byte) error {
-	d := sess.GetData()
+	d := sess.GetData("player")
 	if d == nil {
 		return errors.New("game_service: no invalid session")
 	}
