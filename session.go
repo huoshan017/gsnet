@@ -16,8 +16,9 @@ type Session struct {
 
 func NewSession(conn IConn, id uint64) *Session {
 	return &Session{
-		conn: conn,
-		id:   id,
+		conn:    conn,
+		id:      id,
+		dataMap: make(map[string]interface{}),
 	}
 }
 
