@@ -124,18 +124,27 @@ func (c *Client) Close() {
 }
 
 func (c *Client) IsConnecting() bool {
+	if c.conn == nil {
+		return false
+	}
 	return c.conn.IsConnecting()
 }
 
 func (c *Client) IsConnected() bool {
+	if c.conn == nil {
+		return false
+	}
 	return c.conn.IsConnected()
 }
 
 func (c *Client) IsDisconnected() bool {
-	return c.conn.IsDisconnected()
+	return c.conn == nil || c.conn.IsDisconnected()
 }
 
 func (c *Client) IsDisconnecting() bool {
+	if c.conn == nil {
+		return false
+	}
 	return c.conn.IsDisconnecting()
 }
 
