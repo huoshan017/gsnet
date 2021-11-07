@@ -60,7 +60,6 @@ func (c *Connector) ConnectAsync(address string, timeout time.Duration, connectC
 		c.asyncResultCh <- err
 		close(c.asyncResultCh)
 		c.asyncResultCh = nil
-		atomic.StoreInt32(&c.state, ConnStateConnected)
 	}()
 	atomic.StoreInt32(&c.state, ConnStateConnecting)
 }
@@ -92,6 +91,12 @@ func (c *Connector) WaitResult(wait time.Duration) {
 		}
 		timer.Stop()
 	}
+}
+
+// 关闭
+func (c *Connector) Close() {
+	c.Conn.Close()
+	atomic.StoreInt32(&c.state, ConnStateNotConnect)
 }
 
 // 是否已连接
