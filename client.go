@@ -123,6 +123,22 @@ func (c *Client) Close() {
 	c.conn.Close()
 }
 
+func (c *Client) IsConnecting() bool {
+	return c.conn.IsConnecting()
+}
+
+func (c *Client) IsConnected() bool {
+	return c.conn.IsConnected()
+}
+
+func (c *Client) IsDisconnected() bool {
+	return c.conn.IsDisconnected()
+}
+
+func (c *Client) IsDisconnecting() bool {
+	return c.conn.IsDisconnecting()
+}
+
 func (c *Client) handle(ticker *time.Ticker) error {
 	var d []byte
 	var err error
