@@ -9,12 +9,12 @@ import (
 type Options struct {
 	tickSpan      time.Duration
 	tickHandle    func(time.Duration)
-	DataProto     IDataProto
-	MsgProto      IMsgProto
-	SendChanLen   int
-	RecvChanLen   int
-	WriteBuffSize int
-	ReadBuffSize  int
+	dataProto     IDataProto
+	msgProto      IMsgProto
+	sendChanLen   int
+	recvChanLen   int
+	writeBuffSize int
+	readBuffSize  int
 }
 
 // 选项
@@ -29,27 +29,27 @@ func (options *Options) SetTickHandle(handle func(time.Duration)) {
 }
 
 func (options *Options) SetDataProto(proto IDataProto) {
-	options.DataProto = proto
+	options.dataProto = proto
 }
 
 func (options *Options) SetMsgProto(proto IMsgProto) {
-	options.MsgProto = proto
+	options.msgProto = proto
 }
 
 func (options *Options) SetSendChanLen(chanLen int) {
-	options.SendChanLen = chanLen
+	options.sendChanLen = chanLen
 }
 
 func (options *Options) SetRecvChanLen(chanLen int) {
-	options.RecvChanLen = chanLen
+	options.recvChanLen = chanLen
 }
 
 func (options *Options) SetWriteBuffSize(size int) {
-	options.WriteBuffSize = size
+	options.writeBuffSize = size
 }
 
 func (options *Options) SetReadBuffSize(size int) {
-	options.ReadBuffSize = size
+	options.readBuffSize = size
 }
 
 func SetTickSpan(span time.Duration) Option {
@@ -72,25 +72,25 @@ func SetMsgProto(proto IMsgProto) Option {
 
 func SetSendChanLen(chanLen int) Option {
 	return func(options *Options) {
-		options.SendChanLen = chanLen
+		options.sendChanLen = chanLen
 	}
 }
 
 func SetRecvChanLen(chanLen int) Option {
 	return func(options *Options) {
-		options.RecvChanLen = chanLen
+		options.recvChanLen = chanLen
 	}
 }
 
 func SetWriteBuffSize(size int) Option {
 	return func(options *Options) {
-		options.WriteBuffSize = size
+		options.writeBuffSize = size
 	}
 }
 
 func SetReadBuffSize(size int) Option {
 	return func(options *Options) {
-		options.ReadBuffSize = size
+		options.readBuffSize = size
 	}
 }
 
@@ -102,34 +102,29 @@ type ClientOptions struct {
 // 会话处理器函数类型
 type NewSessionHandlerFunc func(args ...interface{}) ISessionHandler
 
-// 会话处理器结构
-type NewSessionHandlerFuncData struct {
-	fun NewSessionHandlerFunc // 函数
-	args []interface{} // 参数
-}
-
 // 服务选项结构
 type ServiceOptions struct {
 	Options
-	CreateHandlerFuncData NewSessionHandlerFuncData // 会话处理器创建函数
-	ErrChanLen            int                       // 错误通道长度
-	SessionHandleTick     time.Duration             // 会话逻辑处理时间间隔
+	createHandlerFunc     NewSessionHandlerFunc // 会话处理器创建函数
+	createHandlerFuncArgs []interface{}         // 会话处理器创建函数参数列表
+	errChanLen            int                   // 错误通道长度
+	sessionHandleTick     time.Duration         // 会话逻辑处理时间间隔
 }
 
 func (options *ServiceOptions) SetNewSessionHandlerFunc(fun NewSessionHandlerFunc) {
-	options.CreateHandlerFuncData.fun = fun
+	options.createHandlerFunc = fun
 }
 
 func (options *ServiceOptions) SetNewSessionHandlerFuncArgs(args ...interface{}) {
-	options.CreateHandlerFuncData.args = args
+	options.createHandlerFuncArgs = args
 }
 
 func (options *ServiceOptions) SetErrChanLen(length int) {
-	options.ErrChanLen = length
+	options.errChanLen = length
 }
 
 func (options *ServiceOptions) SetSessionHandleTick(tick time.Duration) {
-	options.SessionHandleTick = tick
+	options.sessionHandleTick = tick
 }
 
 func SetNewSessionHandlerFunc(fun NewSessionHandlerFunc) Option {

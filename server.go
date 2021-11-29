@@ -39,13 +39,13 @@ func NewServer(handler ISessionHandler, options ...Option) *Server {
 		option(&s.options.Options)
 	}
 
-	if s.options.ErrChanLen <= 0 {
-		s.options.ErrChanLen = DefaultSessionCloseChanLen
+	if s.options.errChanLen <= 0 {
+		s.options.errChanLen = DefaultSessionCloseChanLen
 	}
-	if s.options.SessionHandleTick <= 0 {
-		s.options.SessionHandleTick = DefaultSessionHandleTick
+	if s.options.sessionHandleTick <= 0 {
+		s.options.sessionHandleTick = DefaultSessionHandleTick
 	}
-	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.ErrChanLen)
+	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.errChanLen)
 	return s
 }
 
@@ -55,11 +55,11 @@ func (s *Server) Init(handler ISessionHandler) {
 
 func (s *Server) Listen(addr string) error {
 	aop := &AcceptorOptions{}
-	aop.WriteBuffSize = s.options.WriteBuffSize
-	aop.ReadBuffSize = s.options.ReadBuffSize
-	aop.SendChanLen = s.options.SendChanLen
-	aop.RecvChanLen = s.options.RecvChanLen
-	aop.DataProto = s.options.DataProto
+	aop.WriteBuffSize = s.options.writeBuffSize
+	aop.ReadBuffSize = s.options.readBuffSize
+	aop.SendChanLen = s.options.sendChanLen
+	aop.RecvChanLen = s.options.recvChanLen
+	aop.DataProto = s.options.dataProto
 
 	s.acceptor = NewAcceptor(aop)
 	err := s.acceptor.Listen(addr)
@@ -151,22 +151,22 @@ func (s *Server) handleConn(conn IConn) {
 		var handler ISessionHandler
 
 		// 创建handler
-		if s.options.CreateHandlerFuncData.fun == nil {
+		if s.options.createHandlerFunc == nil {
 			v := reflect.New(s.sessHandlerType.Elem())
 			it := v.Interface()
 			handler = it.(ISessionHandler)
 		} else {
-			if s.options.CreateHandlerFuncData.args == nil {
-				handler = s.options.CreateHandlerFuncData.fun()
+			if s.options.createHandlerFuncArgs == nil {
+				handler = s.options.createHandlerFunc()
 			} else {
-				handler = s.options.CreateHandlerFuncData.fun(s.options.CreateHandlerFuncData.args...)
+				handler = s.options.createHandlerFunc(s.options.createHandlerFuncArgs...)
 			}
 		}
 
 		handler.OnConnect(sess)
 
 		// 会话处理时间间隔设置到连接
-		conn.SetTick(s.options.SessionHandleTick)
+		conn.SetTick(s.options.sessionHandleTick)
 
 		var lastTime time.Time = time.Now()
 		var data []byte

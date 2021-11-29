@@ -39,11 +39,11 @@ func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(
 
 func (c *Client) newConnector() *Connector {
 	c.conn = NewConnector(&ConnOptions{
-		ReadBuffSize:  c.options.ReadBuffSize,
-		WriteBuffSize: c.options.WriteBuffSize,
-		RecvChanLen:   c.options.RecvChanLen,
-		SendChanLen:   c.options.SendChanLen,
-		DataProto:     c.options.DataProto,
+		ReadBuffSize:  c.options.readBuffSize,
+		WriteBuffSize: c.options.writeBuffSize,
+		RecvChanLen:   c.options.recvChanLen,
+		SendChanLen:   c.options.sendChanLen,
+		DataProto:     c.options.dataProto,
 	})
 	return c.conn
 }
@@ -192,10 +192,10 @@ type MsgClient struct {
 func NewMsgClient(options ...Option) *MsgClient {
 	c := &MsgClient{}
 	c.Client = NewClient(c.dispatcher, options...)
-	if c.options.MsgProto == nil {
+	if c.options.msgProto == nil {
 		c.dispatcher = NewMsgDispatcher(&DefaultMsgProto{})
 	} else {
-		c.dispatcher = NewMsgDispatcher(c.options.MsgProto)
+		c.dispatcher = NewMsgDispatcher(c.options.msgProto)
 	}
 	c.Client.handler = c.dispatcher
 	return c

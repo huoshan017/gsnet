@@ -10,9 +10,11 @@ type testClientHandler struct {
 	state int32 // 1 客户端模式   2 服务器模式
 }
 
-func (h *testClientHandler) Init(args ...interface{}) {
+func newTestClientHandler(args ...interface{}) ISessionHandler {
+	h := &testClientHandler{}
 	h.t = args[0].(*testing.T)
 	h.state = args[1].(int32)
+	return h
 }
 
 func (h *testClientHandler) OnConnect(sess ISession) {
@@ -41,8 +43,7 @@ func (h *testClientHandler) OnError(err error) {
 }
 
 func createTestClient(t *testing.T, state int32) *Client {
-	h := &testClientHandler{}
-	h.Init(t, state)
+	h := newTestClientHandler(t, state)
 	return NewClient(h)
 }
 
