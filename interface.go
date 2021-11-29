@@ -18,6 +18,15 @@ type IConn interface {
 	Close()
 }
 
+// 会话接口
+type ISession interface {
+	Send([]byte) error
+	Close()
+	GetId() uint64
+	SetData(string, interface{})
+	GetData(string) interface{}
+}
+
 // 会话处理器接口
 type ISessionHandler interface {
 	OnConnect(ISession)

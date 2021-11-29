@@ -1,13 +1,5 @@
 package gsnet
 
-type ISession interface {
-	Send([]byte) error
-	Close()
-	GetId() uint64
-	SetData(string, interface{})
-	GetData(string) interface{}
-}
-
 type Session struct {
 	conn    IConn
 	id      uint64
