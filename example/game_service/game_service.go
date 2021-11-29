@@ -189,7 +189,7 @@ func (s *GameService) GetNet() *gsnet.Server {
 
 func (s *GameService) Init(conf *config) bool {
 	h := &DefaultMsgHandler{}
-	net := gsnet.NewServer(h, nil)
+	net := gsnet.NewServer(h)
 	err := net.Listen(conf.addr)
 	if err != nil {
 		fmt.Println("game service listen addr ", conf.addr, " err: ", err)
