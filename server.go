@@ -19,8 +19,7 @@ type sessionCloseInfo struct {
 type Server struct {
 	acceptor          *Acceptor
 	handlerTemplate   ISessionHandler
-	sessHandleType    reflect.Type
-	initArgs          []interface{}
+	sessHandlerType   reflect.Type
 	mainTickHandle    func(time.Duration)
 	options           ServiceOptions
 	sessCloseInfoChan chan *sessionCloseInfo
@@ -29,12 +28,11 @@ type Server struct {
 	// todo 增加最大连接数限制
 }
 
-func NewServer(handler ISessionHandler, handlerInitArgs []interface{}, options ...Option) *Server {
+func NewServer(handler ISessionHandler, options ...Option) *Server {
 	rf := reflect.TypeOf(handler)
 	s := &Server{
 		handlerTemplate: handler,
-		sessHandleType:  rf,
-		initArgs:        handlerInitArgs,
+		sessHandlerType: rf,
 		sessMap:         make(map[uint64]*Session),
 	}
 	for _, option := range options {
@@ -149,11 +147,22 @@ func (s *Server) handleConn(conn IConn) {
 				getLogger().WithStack(err)
 			}
 		}()
+
+		var handler ISessionHandler
+
 		// 创建handler
-		v := reflect.New(s.sessHandleType.Elem())
-		it := v.Interface()
-		handler := it.(ISessionHandler)
-		handler.Init(s.initArgs...)
+		if s.options.CreateHandlerFuncData.fun == nil {
+			v := reflect.New(s.sessHandlerType.Elem())
+			it := v.Interface()
+			handler = it.(ISessionHandler)
+		} else {
+			if s.options.CreateHandlerFuncData.args == nil {
+				handler = s.options.CreateHandlerFuncData.fun()
+			} else {
+				handler = s.options.CreateHandlerFuncData.fun(s.options.CreateHandlerFuncData.args...)
+			}
+		}
+
 		handler.OnConnect(sess)
 
 		// 会话处理时间间隔设置到连接

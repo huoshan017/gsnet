@@ -20,7 +20,6 @@ type IConn interface {
 
 // 会话处理器接口
 type ISessionHandler interface {
-	Init(args ...interface{})
 	OnConnect(ISession)
 	OnDisconnect(ISession, error)
 	OnData(ISession, []byte) error
