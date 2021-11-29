@@ -132,7 +132,7 @@ func (options *ServiceOptions) SetSessionHandleTick(tick time.Duration) {
 	options.SessionHandleTick = tick
 }
 
-func SetNewSessionHandlerFuncData(fun NewSessionHandlerFunc) Option {
+func SetNewSessionHandlerFunc(fun NewSessionHandlerFunc) Option {
 	return func(options *Options) {
 		p := (*ServiceOptions)(unsafe.Pointer(options))
 		p.SetNewSessionHandlerFunc(fun)
