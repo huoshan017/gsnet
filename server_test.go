@@ -49,7 +49,7 @@ func (h *testServerHandler) OnError(err error) {
 }
 
 func createTestServer(t *testing.T, state int32) *Server {
-	return NewServerWithFunc(newTestServerHandler, SetNewSessionHandlerFuncArgs(t, state))
+	return NewServer(newTestServerHandler, SetNewSessionHandlerFuncArgs(t, state))
 }
 
 func TestServer(t *testing.T) {

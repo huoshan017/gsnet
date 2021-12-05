@@ -28,20 +28,20 @@ type Server struct {
 	// todo 增加最大连接数限制
 }
 
-func NewServer(handler ISessionHandler, options ...Option) *Server {
-	rf := reflect.TypeOf(handler)
+func NewServer(newFunc NewSessionHandlerFunc, options ...Option) *Server {
 	s := &Server{
-		sessHandlerType: rf,
-		sessMap:         make(map[uint64]*Session),
+		newHandlerFunc: newFunc,
+		sessMap:        make(map[uint64]*Session),
 	}
 	s.init(options...)
 	return s
 }
 
-func NewServerWithFunc(newFunc NewSessionHandlerFunc, options ...Option) *Server {
+func NewServerWithHandler(handler ISessionHandler, options ...Option) *Server {
+	rf := reflect.TypeOf(handler)
 	s := &Server{
-		newHandlerFunc: newFunc,
-		sessMap:        make(map[uint64]*Session),
+		sessHandlerType: rf,
+		sessMap:         make(map[uint64]*Session),
 	}
 	s.init(options...)
 	return s

@@ -78,12 +78,14 @@ type DefaultMsgHandler struct {
 	msgProto gsnet.IMsgProto
 }
 
-func (h *DefaultMsgHandler) Init(args ...interface{}) {
+func CreateDefaultMsgHandler(args ...interface{}) gsnet.ISessionHandler {
+	h := &DefaultMsgHandler{}
 	h.msgProto = &gsnet.DefaultMsgProto{}
 	h.MsgHandler = *gsnet.NewMsgHandler(h.msgProto)
 	h.RegisterHandle(game_proto.MsgIdGamePlayerEnterReq, h.onPlayerEnterGame)
 	h.RegisterHandle(game_proto.MsgIdGamePlayerExitReq, h.onPlayerExitGame)
 	h.RegisterHandle(game_proto.MsgIdHandShakeReq, h.onHandShake)
+	return h
 }
 
 func (h *DefaultMsgHandler) OnConnect(sess gsnet.ISession) {
@@ -188,8 +190,7 @@ func (s *GameService) GetNet() *gsnet.Server {
 }
 
 func (s *GameService) Init(conf *config) bool {
-	h := &DefaultMsgHandler{}
-	net := gsnet.NewServer(h)
+	net := gsnet.NewServer(CreateDefaultMsgHandler)
 	err := net.Listen(conf.addr)
 	if err != nil {
 		fmt.Println("game service listen addr ", conf.addr, " err: ", err)
