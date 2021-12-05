@@ -18,8 +18,8 @@ type sessionCloseInfo struct {
 // 服务器
 type Server struct {
 	acceptor          *Acceptor
-	handlerTemplate   ISessionHandler
 	sessHandlerType   reflect.Type
+	newHandlerFunc    NewSessionHandlerFunc
 	mainTickHandle    func(time.Duration)
 	options           ServiceOptions
 	sessCloseInfoChan chan *sessionCloseInfo
@@ -31,10 +31,23 @@ type Server struct {
 func NewServer(handler ISessionHandler, options ...Option) *Server {
 	rf := reflect.TypeOf(handler)
 	s := &Server{
-		handlerTemplate: handler,
 		sessHandlerType: rf,
 		sessMap:         make(map[uint64]*Session),
 	}
+	s.init(options...)
+	return s
+}
+
+func NewServerWithFunc(newFunc NewSessionHandlerFunc, options ...Option) *Server {
+	s := &Server{
+		newHandlerFunc: newFunc,
+		sessMap:        make(map[uint64]*Session),
+	}
+	s.init(options...)
+	return s
+}
+
+func (s *Server) init(options ...Option) {
 	for _, option := range options {
 		option(&s.options.Options)
 	}
@@ -46,11 +59,6 @@ func NewServer(handler ISessionHandler, options ...Option) *Server {
 		s.options.sessionHandleTick = DefaultSessionHandleTick
 	}
 	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.errChanLen)
-	return s
-}
-
-func (s *Server) Init(handler ISessionHandler) {
-	s.handlerTemplate = handler
 }
 
 func (s *Server) Listen(addr string) error {
@@ -151,15 +159,15 @@ func (s *Server) handleConn(conn IConn) {
 		var handler ISessionHandler
 
 		// 创建handler
-		if s.options.createHandlerFunc == nil {
+		if s.newHandlerFunc == nil {
 			v := reflect.New(s.sessHandlerType.Elem())
 			it := v.Interface()
 			handler = it.(ISessionHandler)
 		} else {
 			if s.options.createHandlerFuncArgs == nil {
-				handler = s.options.createHandlerFunc()
+				handler = s.newHandlerFunc()
 			} else {
-				handler = s.options.createHandlerFunc(s.options.createHandlerFuncArgs...)
+				handler = s.newHandlerFunc(s.options.createHandlerFuncArgs...)
 			}
 		}
 

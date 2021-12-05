@@ -16,7 +16,7 @@ type testServerHandler struct {
 }
 
 func newTestServerHandler(args ...interface{}) ISessionHandler {
-	h := &testClientHandler{}
+	h := &testServerHandler{}
 	h.t = args[0].(*testing.T)
 	h.state = args[1].(int32)
 	return h
@@ -49,7 +49,7 @@ func (h *testServerHandler) OnError(err error) {
 }
 
 func createTestServer(t *testing.T, state int32) *Server {
-	return NewServer(&testServerHandler{}, SetNewSessionHandlerFunc(newTestServerHandler), SetNewSessionHandlerFuncArgs(t, state))
+	return NewServerWithFunc(newTestServerHandler, SetNewSessionHandlerFuncArgs(t, state))
 }
 
 func TestServer(t *testing.T) {

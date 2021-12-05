@@ -105,14 +105,9 @@ type NewSessionHandlerFunc func(args ...interface{}) ISessionHandler
 // 服务选项结构
 type ServiceOptions struct {
 	Options
-	createHandlerFunc     NewSessionHandlerFunc // 会话处理器创建函数
-	createHandlerFuncArgs []interface{}         // 会话处理器创建函数参数列表
-	errChanLen            int                   // 错误通道长度
-	sessionHandleTick     time.Duration         // 会话逻辑处理时间间隔
-}
-
-func (options *ServiceOptions) SetNewSessionHandlerFunc(fun NewSessionHandlerFunc) {
-	options.createHandlerFunc = fun
+	createHandlerFuncArgs []interface{} // 会话处理器创建函数参数列表
+	errChanLen            int           // 错误通道长度
+	sessionHandleTick     time.Duration // 会话逻辑处理时间间隔
 }
 
 func (options *ServiceOptions) SetNewSessionHandlerFuncArgs(args ...interface{}) {
@@ -125,13 +120,6 @@ func (options *ServiceOptions) SetErrChanLen(length int) {
 
 func (options *ServiceOptions) SetSessionHandleTick(tick time.Duration) {
 	options.sessionHandleTick = tick
-}
-
-func SetNewSessionHandlerFunc(fun NewSessionHandlerFunc) Option {
-	return func(options *Options) {
-		p := (*ServiceOptions)(unsafe.Pointer(options))
-		p.SetNewSessionHandlerFunc(fun)
-	}
 }
 
 func SetNewSessionHandlerFuncArgs(args ...interface{}) Option {
