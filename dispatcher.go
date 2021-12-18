@@ -64,7 +64,9 @@ func (d *MsgDispatcher) OnData(s ISession, data []byte) error {
 	msgid, msgdata := d.msgProto.Decode(data)
 	h, o := d.handleMap[msgid]
 	if !o {
-		return ErrNoMsgHandle
+		e := ErrNoMsgHandleFunc(msgid)
+		RegisterNoDisconnectError(e)
+		return e
 	}
 	return h(s, msgdata)
 }

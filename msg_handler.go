@@ -29,7 +29,9 @@ func (h *MsgHandler) OnData(sess ISession, data []byte) error {
 	msgid, msgdata := h.msgProto.Decode(data)
 	handle, o := h.handles[msgid]
 	if !o {
-		return ErrNoMsgHandle
+		e := ErrNoMsgHandleFunc(msgid)
+		RegisterNoDisconnectError(e)
+		return e
 	}
 	return handle(sess, msgdata)
 }
