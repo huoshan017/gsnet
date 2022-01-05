@@ -19,9 +19,6 @@ func NewMsgDispatcher(msgProto IMsgProto) *MsgDispatcher {
 	return d
 }
 
-func (d *MsgDispatcher) Init(args ...interface{}) {
-}
-
 func (d *MsgDispatcher) SetConnectHandle(handle func(ISession)) {
 	d.connectHandle = handle
 }
