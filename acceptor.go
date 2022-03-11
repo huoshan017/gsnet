@@ -1,8 +1,11 @@
 package gsnet
 
 import (
+	"context"
 	"net"
 	"time"
+
+	"github.com/huoshan017/gsnet/control"
 )
 
 type Acceptor struct {
@@ -17,6 +20,7 @@ const (
 
 type AcceptorOptions struct {
 	ConnOptions
+	control.CtrlOptions
 	ConnChanLen int
 }
 
@@ -32,22 +36,35 @@ func NewAcceptor(options *AcceptorOptions) *Acceptor {
 }
 
 func (s *Acceptor) Listen(addr string) error {
-	listener, err := net.Listen("tcp", addr)
+	var lc = net.ListenConfig{
+		Control: control.GetControl(s.options.CtrlOptions),
+	}
+	listener, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return err
 	}
-
 	s.listener = listener
-
 	return nil
 }
 
+func (s *Acceptor) ListenAndServe(addr string) error {
+	err := s.Listen(addr)
+	if err != nil {
+		return err
+	}
+	return s.serve(s.listener)
+}
+
 func (s *Acceptor) Serve() error {
+	return s.serve(s.listener)
+}
+
+func (s *Acceptor) serve(listener net.Listener) error {
 	var delay time.Duration
 	var conn net.Conn
 	var err error
 	for {
-		conn, err = s.listener.Accept()
+		conn, err = listener.Accept()
 		if err != nil {
 			if net_err, ok := err.(net.Error); ok && net_err.Temporary() {
 				if delay == 0 {

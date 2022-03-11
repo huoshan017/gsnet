@@ -66,19 +66,20 @@ func TestServer(t *testing.T) {
 
 	t.Logf("test server is running")
 
-	clientNum := 100
+	clientNum := 1000
 	var wg sync.WaitGroup
 	wg.Add(clientNum)
 
 	// 创建一堆客户端
 	for i := 0; i < clientNum; i++ {
 		tc := createTestClient(t, 2)
-		go func(c *Client) {
+		go func(c *Client, idx int) {
 			err := c.Connect(testAddress)
 			if err != nil {
 				t.Errorf("client for test server connect address %v err: %v", testAddress, err)
 				return
 			}
+			t.Logf("client %v connected server", idx)
 			// 另起goroutine执行Client的Run函数
 			go func(c *Client) {
 				c.Run()
@@ -91,8 +92,9 @@ func TestServer(t *testing.T) {
 				}
 			}
 			c.Close()
+			t.Logf("client %v test done", idx)
 			wg.Done()
-		}(tc)
+		}(tc, i)
 	}
 
 	wg.Wait()

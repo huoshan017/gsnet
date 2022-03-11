@@ -106,12 +106,22 @@ type NewSessionHandlerFunc func(args ...interface{}) ISessionHandler
 type ServiceOptions struct {
 	Options
 	createHandlerFuncArgs []interface{} // 会话处理器创建函数参数列表
+	reusePort             bool          // 重用端口
+	reuseAddr             bool          // 重用地址
 	errChanLen            int           // 错误通道长度
 	sessionHandleTick     time.Duration // 会话逻辑处理时间间隔
 }
 
 func (options *ServiceOptions) SetNewSessionHandlerFuncArgs(args ...interface{}) {
 	options.createHandlerFuncArgs = args
+}
+
+func (options *ServiceOptions) SetReuseAddr(enable bool) {
+	options.reuseAddr = enable
+}
+
+func (options *ServiceOptions) SetReusePort(enable bool) {
+	options.reusePort = enable
 }
 
 func (options *ServiceOptions) SetErrChanLen(length int) {
@@ -126,6 +136,20 @@ func SetNewSessionHandlerFuncArgs(args ...interface{}) Option {
 	return func(options *Options) {
 		p := (*ServiceOptions)(unsafe.Pointer(options))
 		p.SetNewSessionHandlerFuncArgs(args...)
+	}
+}
+
+func SetReuseAddr(enable bool) Option {
+	return func(options *Options) {
+		p := (*ServiceOptions)(unsafe.Pointer(options))
+		p.SetReuseAddr(enable)
+	}
+}
+
+func SetReusePort(enable bool) Option {
+	return func(options *Options) {
+		p := (*ServiceOptions)(unsafe.Pointer(options))
+		p.SetReusePort(enable)
 	}
 }
 

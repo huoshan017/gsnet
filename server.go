@@ -68,7 +68,12 @@ func (s *Server) Listen(addr string) error {
 	aop.SendChanLen = s.options.sendChanLen
 	aop.RecvChanLen = s.options.recvChanLen
 	aop.DataProto = s.options.dataProto
-
+	if s.options.reuseAddr {
+		aop.ReuseAddr = 1
+	}
+	if s.options.reusePort {
+		aop.ReusePort = 1
+	}
 	s.acceptor = NewAcceptor(aop)
 	err := s.acceptor.Listen(addr)
 	if err != nil {
