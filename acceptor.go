@@ -78,6 +78,7 @@ func (s *Acceptor) serve(listener net.Listener) error {
 				time.Sleep(delay)
 				continue
 			}
+			close(s.connCh)
 			break
 		}
 		c := NewConn(conn, &s.options.ConnOptions)
@@ -92,5 +93,4 @@ func (s *Acceptor) GetNewConnChan() chan IConn {
 
 func (s *Acceptor) Close() {
 	s.listener.Close()
-	close(s.connCh)
 }

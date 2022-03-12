@@ -17,14 +17,15 @@ type sessionCloseInfo struct {
 
 // 服务器
 type Server struct {
-	acceptor          *Acceptor
-	sessHandlerType   reflect.Type
-	newHandlerFunc    NewSessionHandlerFunc
-	mainTickHandle    func(time.Duration)
-	options           ServiceOptions
-	sessCloseInfoChan chan *sessionCloseInfo
-	sessionIdCounter  uint64
-	sessMap           map[uint64]*Session
+	acceptor              *Acceptor
+	sessHandlerType       reflect.Type
+	newHandlerFunc        NewSessionHandlerFunc
+	mainTickHandle        func(time.Duration)
+	options               ServiceOptions
+	sessCloseInfoChan     chan *sessionCloseInfo
+	sessionIdCounter      uint64
+	sessMap               map[uint64]*Session
+	stopSessCloseInfoChan chan struct{} // 停止會話關閉信息通道
 	// todo 增加最大连接数限制
 }
 
@@ -59,6 +60,7 @@ func (s *Server) init(options ...Option) {
 		s.options.sessionHandleTick = DefaultSessionHandleTick
 	}
 	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.errChanLen)
+	s.stopSessCloseInfoChan = make(chan struct{})
 }
 
 func (s *Server) Listen(addr string) error {
@@ -138,9 +140,12 @@ func (s *Server) Start() {
 	}
 }
 
+// 結束
 func (s *Server) End() {
 	s.acceptor.Close()
-	close(s.sessCloseInfoChan)
+	// todo 不能這麽關閉channel，因爲這是多個發送一個接收的通道
+	close(s.stopSessCloseInfoChan)
+	// todo 缺少通知所有連接關閉的處理
 }
 
 func (s *Server) getSessCloseInfoChan() chan *sessionCloseInfo {
@@ -148,33 +153,34 @@ func (s *Server) getSessCloseInfoChan() chan *sessionCloseInfo {
 }
 
 func (s *Server) handleConn(conn IConn) {
+	conn.Run()
+
+	// 创建會話處理器
+	var handler ISessionHandler
+	if s.newHandlerFunc == nil {
+		v := reflect.New(s.sessHandlerType.Elem())
+		it := v.Interface()
+		handler = it.(ISessionHandler)
+	} else {
+		if s.options.createHandlerFuncArgs == nil {
+			handler = s.newHandlerFunc()
+		} else {
+			handler = s.newHandlerFunc(s.options.createHandlerFuncArgs...)
+		}
+	}
+
+	// 創建會話
 	s.sessionIdCounter += 1
 	sess := NewSession(conn, s.sessionIdCounter)
 	s.sessMap[sess.id] = sess
 
-	conn.Run()
-
+	// 會話處理綫程
 	go func(conn IConn) {
 		defer func() {
 			if err := recover(); err != nil {
 				getLogger().WithStack(err)
 			}
 		}()
-
-		var handler ISessionHandler
-
-		// 创建handler
-		if s.newHandlerFunc == nil {
-			v := reflect.New(s.sessHandlerType.Elem())
-			it := v.Interface()
-			handler = it.(ISessionHandler)
-		} else {
-			if s.options.createHandlerFuncArgs == nil {
-				handler = s.newHandlerFunc()
-			} else {
-				handler = s.newHandlerFunc(s.options.createHandlerFuncArgs...)
-			}
-		}
 
 		handler.OnConnect(sess)
 
@@ -206,7 +212,16 @@ func (s *Server) handleConn(conn IConn) {
 		handler.OnDisconnect(sess, err)
 		sess.Close()
 
-		s.getSessCloseInfoChan() <- &sessionCloseInfo{sessionId: sess.id, err: err}
+		select {
+		case <-s.stopSessCloseInfoChan:
+			return
+		default:
+			select {
+			case <-s.stopSessCloseInfoChan:
+				return
+			case s.getSessCloseInfoChan() <- &sessionCloseInfo{sessionId: sess.id, err: err}:
+			}
+		}
 	}(conn)
 }
 

@@ -52,9 +52,23 @@ func createTestServer(t *testing.T, state int32) *Server {
 	return NewServer(newTestServerHandler, SetNewSessionHandlerFuncArgs(t, state))
 }
 
-func TestServer(t *testing.T) {
-	// 创建并启动服务器
-	ts := createTestServer(t, 1)
+func createTestServerWithHandler(t *testing.T, state int32) *Server {
+	return NewServerWithHandler(&testClientHandler{
+		t:     t,
+		state: state,
+	})
+}
+
+func testServer(t *testing.T, state int32, typ int32) {
+	var ts *Server
+	if typ == 0 {
+		ts = createTestServer(t, state)
+	} else {
+		ts = createTestServerWithHandler(t, state)
+	}
+
+	defer ts.End()
+
 	err := ts.Listen(testAddress)
 	if err != nil {
 		t.Errorf("test server listen address %v err: %v", testAddress, err)
@@ -98,6 +112,12 @@ func TestServer(t *testing.T) {
 	}
 
 	wg.Wait()
+}
 
-	t.Logf("test done")
+func TestServer(t *testing.T) {
+	// 创建并启动服务器
+	testServer(t, 1, 0)
+	t.Logf("test server done")
+	testServer(t, 1, 1)
+	t.Logf("test server with handler done")
 }
