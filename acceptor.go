@@ -12,6 +12,8 @@ type Acceptor struct {
 	listener net.Listener
 	connCh   chan IConn
 	options  *AcceptorOptions
+	closeCh  chan struct{}
+	closed   bool
 }
 
 const (
@@ -31,6 +33,7 @@ func NewAcceptor(options *AcceptorOptions) *Acceptor {
 	s := &Acceptor{
 		connCh:  make(chan IConn, options.ConnChanLen),
 		options: options,
+		closeCh: make(chan struct{}),
 	}
 	return s
 }
@@ -64,6 +67,11 @@ func (s *Acceptor) serve(listener net.Listener) error {
 	var conn net.Conn
 	var err error
 	for {
+		select {
+		case <-s.closeCh:
+			s.listener.Close()
+		default:
+		}
 		conn, err = listener.Accept()
 		if err != nil {
 			if net_err, ok := err.(net.Error); ok && net_err.Temporary() {
@@ -92,5 +100,9 @@ func (s *Acceptor) GetNewConnChan() chan IConn {
 }
 
 func (s *Acceptor) Close() {
-	s.listener.Close()
+	if s.closed {
+		return
+	}
+	close(s.closeCh)
+	s.closed = true
 }
