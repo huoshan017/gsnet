@@ -61,10 +61,11 @@ func (s *Server) init(options ...Option) {
 	}
 	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.errChanLen)
 	s.stopSessCloseInfoChan = make(chan struct{})
+	s.acceptor = NewAcceptor(options...)
 }
 
 func (s *Server) Listen(addr string) error {
-	aop := &AcceptorOptions{}
+	/*aop := &AcceptorOptions{}
 	aop.WriteBuffSize = s.options.writeBuffSize
 	aop.ReadBuffSize = s.options.readBuffSize
 	aop.SendChanLen = s.options.sendChanLen
@@ -76,7 +77,7 @@ func (s *Server) Listen(addr string) error {
 	if s.options.reusePort {
 		aop.ReusePort = 1
 	}
-	s.acceptor = NewAcceptor(aop)
+	*/
 	err := s.acceptor.Listen(addr)
 	if err != nil {
 		return err
@@ -187,10 +188,19 @@ func (s *Server) handleConn(conn IConn) {
 		// 会话处理时间间隔设置到连接
 		conn.SetTick(s.options.sessionHandleTick)
 
-		var lastTime time.Time = time.Now()
-		var data []byte
-		var err error
-		for {
+		var (
+			lastTime time.Time = time.Now()
+			data     []byte
+			err      error
+			run      bool = true
+		)
+		for run {
+			select {
+			case <-s.stopSessCloseInfoChan:
+				run = false
+				continue
+			default:
+			}
 			data, err = conn.WaitSelect()
 			if err == nil {
 				if data != nil {
@@ -212,16 +222,7 @@ func (s *Server) handleConn(conn IConn) {
 		handler.OnDisconnect(sess, err)
 		sess.Close()
 
-		select {
-		case <-s.stopSessCloseInfoChan:
-			return
-		default:
-			select {
-			case <-s.stopSessCloseInfoChan:
-				return
-			case s.getSessCloseInfoChan() <- &sessionCloseInfo{sessionId: sess.id, err: err}:
-			}
-		}
+		s.getSessCloseInfoChan() <- &sessionCloseInfo{sessionId: sess.id, err: err}
 	}(conn)
 }
 

@@ -35,7 +35,9 @@ func main() {
 	rand.Seed(time.Now().Unix())
 	for n := 1; n <= *player_num; n++ {
 		go func(no int) {
-			conn := gsnet.NewConnector(&gsnet.ConnOptions{DataProto: &gsnet.DefaultDataProto{}})
+			var options gsnet.Options
+			options.SetDataProto(&gsnet.DefaultDataProto{})
+			conn := gsnet.NewConnector(&options)
 			err := conn.Connect(addr)
 			if err != nil {
 				fmt.Println("connector Connect err: ", err)

@@ -17,7 +17,7 @@ const (
 
 type Conn struct {
 	conn       net.Conn
-	options    ConnOptions
+	options    Options
 	writer     *bufio.Writer
 	reader     *bufio.Reader
 	recvCh     chan []byte   // 缓存从网络接收的数据，对应一个接收者一个发送者
@@ -29,53 +29,40 @@ type Conn struct {
 	ticker     *time.Ticker  // 定时器
 }
 
-type ConnOptions struct {
-	ReadBuffSize  int        // 读取缓冲区大小
-	WriteBuffSize int        // 发送缓冲区大小
-	RecvChanLen   int        // 接收缓冲通道长度
-	SendChanLen   int        // 发送缓冲通道长度
-	DataProto     IDataProto // 数据包协议
-
-	// todo 以下是需要实现的配置逻辑
-	FlushWriteInterval       time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
-	GracefulCloseWaitingTime time.Duration // 优雅关闭等待时间
-	HeartbeatInterval        time.Duration // 心跳间隔
-}
-
 // 创建新连接
-func NewConn(conn net.Conn, options *ConnOptions) *Conn {
+func NewConn(conn net.Conn, options Options) *Conn {
 	c := &Conn{
 		conn:       conn,
-		options:    *options,
+		options:    options,
 		closeCh:    make(chan struct{}),
 		errCh:      make(chan error, 1),
 		errWriteCh: make(chan error, 1),
 	}
 
-	if c.options.WriteBuffSize <= 0 {
+	if c.options.writeBuffSize <= 0 {
 		c.writer = bufio.NewWriter(conn)
 	} else {
-		c.writer = bufio.NewWriterSize(conn, c.options.WriteBuffSize)
+		c.writer = bufio.NewWriterSize(conn, c.options.writeBuffSize)
 	}
 
-	if c.options.ReadBuffSize <= 0 {
+	if c.options.readBuffSize <= 0 {
 		c.reader = bufio.NewReader(conn)
 	} else {
-		c.reader = bufio.NewReaderSize(conn, c.options.ReadBuffSize)
+		c.reader = bufio.NewReaderSize(conn, c.options.readBuffSize)
 	}
 
-	if c.options.RecvChanLen <= 0 {
-		c.options.RecvChanLen = DefaultConnRecvChanLen
+	if c.options.recvChanLen <= 0 {
+		c.options.recvChanLen = DefaultConnRecvChanLen
 	}
-	c.recvCh = make(chan []byte, c.options.RecvChanLen)
+	c.recvCh = make(chan []byte, c.options.recvChanLen)
 
-	if c.options.SendChanLen <= 0 {
-		c.options.SendChanLen = DefaultConnSendChanLen
+	if c.options.sendChanLen <= 0 {
+		c.options.sendChanLen = DefaultConnSendChanLen
 	}
-	c.sendCh = make(chan []byte, c.options.SendChanLen)
+	c.sendCh = make(chan []byte, c.options.sendChanLen)
 
-	if c.options.DataProto == nil {
-		c.options.DataProto = &DefaultDataProto{}
+	if c.options.dataProto == nil {
+		c.options.dataProto = &DefaultDataProto{}
 	}
 
 	return c
@@ -96,15 +83,15 @@ func (c *Conn) readLoop() {
 
 	var err error
 	var closed bool
-	header := make([]byte, c.options.DataProto.GetHeaderLen())
+	header := make([]byte, c.options.dataProto.GetHeaderLen())
 	for err == nil {
 		closed, err = c._read(header)
 		if err != nil || closed {
 			break
 		}
-		c.options.DataProto.SetHeader(header)
+		c.options.dataProto.SetHeader(header)
 		// todo  1. 判断长度是否超过限制 2. 用内存池来优化
-		bodyLen := c.options.DataProto.GetBodyLen()
+		bodyLen := c.options.dataProto.GetBodyLen()
 		if bodyLen > MaxDataBodyLength {
 			err = ErrBodyLenInvalid
 			break
@@ -164,7 +151,7 @@ func (c *Conn) writeLoop() {
 	for d := range c.sendCh {
 		closed := false
 		// 写入数据头
-		closed, err = c._write(c.options.DataProto.EncodeBodyLen(d))
+		closed, err = c._write(c.options.dataProto.EncodeBodyLen(d))
 		if err != nil || closed {
 			break
 		}

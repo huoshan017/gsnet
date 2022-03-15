@@ -19,7 +19,7 @@ func main() {
 	flag.Parse()
 
 	addr := *ip_str + ":" + *port_str
-	acceptor := gsnet.NewAcceptor(&gsnet.AcceptorOptions{})
+	acceptor := gsnet.NewAcceptor()
 	err := acceptor.Listen(addr)
 	if err != nil {
 		fmt.Println("acceptor listen addr: ", addr, " err: ", err)

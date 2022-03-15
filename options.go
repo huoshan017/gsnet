@@ -7,6 +7,8 @@ import (
 
 // 选项结构
 type Options struct {
+	readTimeout   time.Duration
+	writeTimeout  time.Duration
 	tickSpan      time.Duration
 	tickHandle    func(time.Duration)
 	dataProto     IDataProto
@@ -15,10 +17,23 @@ type Options struct {
 	recvChanLen   int
 	writeBuffSize int
 	readBuffSize  int
+
+	// todo 以下是需要实现的配置逻辑
+	flushWriteInterval       time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
+	gracefulCloseWaitingTime time.Duration // 优雅关闭等待时间
+	heartbeatInterval        time.Duration // 心跳间隔
 }
 
 // 选项
 type Option func(*Options)
+
+func (options *Options) SetReadTimeout(timeout time.Duration) {
+	options.readTimeout = timeout
+}
+
+func (options *Options) SetWriteTimeout(timeout time.Duration) {
+	options.writeTimeout = timeout
+}
 
 func (options *Options) SetTickSpan(span time.Duration) {
 	options.tickSpan = span
@@ -52,6 +67,18 @@ func (options *Options) SetReadBuffSize(size int) {
 	options.readBuffSize = size
 }
 
+func SetReadTimeout(timeout time.Duration) Option {
+	return func(options *Options) {
+		options.SetReadTimeout(timeout)
+	}
+}
+
+func SetWriteTimeout(timeout time.Duration) Option {
+	return func(options *Options) {
+		options.SetWriteTimeout(timeout)
+	}
+}
+
 func SetTickSpan(span time.Duration) Option {
 	return func(options *Options) {
 		options.SetTickSpan(span)
@@ -72,25 +99,25 @@ func SetMsgProto(proto IMsgProto) Option {
 
 func SetSendChanLen(chanLen int) Option {
 	return func(options *Options) {
-		options.sendChanLen = chanLen
+		options.SetSendChanLen(chanLen)
 	}
 }
 
 func SetRecvChanLen(chanLen int) Option {
 	return func(options *Options) {
-		options.recvChanLen = chanLen
+		options.SetRecvChanLen(chanLen)
 	}
 }
 
 func SetWriteBuffSize(size int) Option {
 	return func(options *Options) {
-		options.writeBuffSize = size
+		options.SetWriteBuffSize(size)
 	}
 }
 
 func SetReadBuffSize(size int) Option {
 	return func(options *Options) {
-		options.readBuffSize = size
+		options.SetReadBuffSize(size)
 	}
 }
 
@@ -105,11 +132,16 @@ type NewSessionHandlerFunc func(args ...interface{}) ISessionHandler
 // 服务选项结构
 type ServiceOptions struct {
 	Options
+	connChanLen           int           // 連接通道長度
 	createHandlerFuncArgs []interface{} // 会话处理器创建函数参数列表
 	reusePort             bool          // 重用端口
 	reuseAddr             bool          // 重用地址
 	errChanLen            int           // 错误通道长度
 	sessionHandleTick     time.Duration // 会话逻辑处理时间间隔
+}
+
+func (options *ServiceOptions) SetConnChanLen(chanLen int) {
+	options.connChanLen = chanLen
 }
 
 func (options *ServiceOptions) SetNewSessionHandlerFuncArgs(args ...interface{}) {
@@ -130,6 +162,13 @@ func (options *ServiceOptions) SetErrChanLen(length int) {
 
 func (options *ServiceOptions) SetSessionHandleTick(tick time.Duration) {
 	options.sessionHandleTick = tick
+}
+
+func SetConnChanLen(chanLen int) Option {
+	return func(options *Options) {
+		p := (*ServiceOptions)(unsafe.Pointer(options))
+		p.SetConnChanLen(chanLen)
+	}
 }
 
 func SetNewSessionHandlerFuncArgs(args ...interface{}) Option {

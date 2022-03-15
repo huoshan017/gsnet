@@ -1,5 +1,8 @@
 package gsnet
 
+type MsgData struct {
+}
+
 // 基礎消息处理器
 type MsgHandlerBase struct {
 	msgProto IMsgProto
@@ -24,12 +27,16 @@ func (h *MsgHandlerBase) RegisterHandle(msgid uint32, handle func(ISession, []by
 	h.handles[msgid] = handle
 }
 
+func (h *MsgHandlerBase) OnMessage(sess ISession, msg MsgData) error {
+	return nil
+}
+
 func (h *MsgHandlerBase) OnData(sess ISession, data []byte) error {
 	msgid, msgdata := h.msgProto.Decode(data)
 	handle, o := h.handles[msgid]
 	if !o {
 		e := ErrNoMsgHandleFunc(msgid)
-		RegisterNoDisconnectError(e)
+		CheckAndRegisterNoDisconnectError(e)
 		return e
 	}
 	return handle(sess, msgdata)

@@ -12,9 +12,11 @@ func TestConnector(t *testing.T) {
 		t.Errorf("server for test connector listen address %v err: %v", testAddress, err)
 		return
 	}
+	defer ts.End()
+
 	go ts.Start()
 
-	connector := NewConnector(&ConnOptions{})
+	connector := NewConnector(&Options{})
 	err = connector.Connect(testAddress)
 	if err != nil {
 		t.Errorf("test connector connect address %v err: %v", testAddress, err)

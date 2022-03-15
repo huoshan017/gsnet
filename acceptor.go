@@ -11,7 +11,7 @@ import (
 type Acceptor struct {
 	listener net.Listener
 	connCh   chan IConn
-	options  *AcceptorOptions
+	options  ServiceOptions
 	closeCh  chan struct{}
 	closed   bool
 }
@@ -20,27 +20,30 @@ const (
 	DefaultConnChanLen = 100
 )
 
-type AcceptorOptions struct {
-	ConnOptions
-	control.CtrlOptions
-	ConnChanLen int
-}
-
-func NewAcceptor(options *AcceptorOptions) *Acceptor {
-	if options.ConnChanLen <= 0 {
-		options.ConnChanLen = DefaultConnChanLen
-	}
+func NewAcceptor(options ...Option) *Acceptor {
 	s := &Acceptor{
-		connCh:  make(chan IConn, options.ConnChanLen),
-		options: options,
 		closeCh: make(chan struct{}),
+	}
+	for _, option := range options {
+		option(&s.options.Options)
+	}
+	if s.options.connChanLen <= 0 {
+		s.options.connChanLen = DefaultConnChanLen
+		s.connCh = make(chan IConn, s.options.connChanLen)
 	}
 	return s
 }
 
 func (s *Acceptor) Listen(addr string) error {
+	var ctrlOptions control.CtrlOptions
+	if s.options.reuseAddr {
+		ctrlOptions.ReuseAddr = 1
+	}
+	if s.options.reusePort {
+		ctrlOptions.ReusePort = 1
+	}
 	var lc = net.ListenConfig{
-		Control: control.GetControl(s.options.CtrlOptions),
+		Control: control.GetControl(ctrlOptions),
 	}
 	listener, err := lc.Listen(context.Background(), "tcp", addr)
 	if err != nil {
@@ -89,7 +92,7 @@ func (s *Acceptor) serve(listener net.Listener) error {
 			close(s.connCh)
 			break
 		}
-		c := NewConn(conn, &s.options.ConnOptions)
+		c := NewConn(conn, s.options.Options)
 		s.connCh <- c
 	}
 	return err

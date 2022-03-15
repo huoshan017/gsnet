@@ -15,16 +15,16 @@ const (
 
 type Connector struct {
 	*Conn
-	options         ConnOptions
+	options         *Options
 	asyncResultCh   chan error
 	connectCallback func(error)
 	state           int32
 }
 
 // 创建连接器
-func NewConnector(options *ConnOptions) *Connector {
+func NewConnector(options *Options) *Connector {
 	c := &Connector{
-		options:       *options,
+		options:       options,
 		asyncResultCh: make(chan error),
 	}
 	return c
@@ -132,7 +132,7 @@ func (c *Connector) connect(address string, timeout time.Duration) error {
 		return err
 	}
 	atomic.StoreInt32(&c.state, ConnStateConnected)
-	c.Conn = NewConn(conn, &c.options)
+	c.Conn = NewConn(conn, *c.options)
 	c.Run()
 	return nil
 }

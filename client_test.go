@@ -54,6 +54,8 @@ func TestClient(t *testing.T) {
 		t.Errorf("server for test client listen err: %+v", err)
 		return
 	}
+	defer ts.End()
+
 	go ts.Start()
 
 	t.Logf("server for test client running")
