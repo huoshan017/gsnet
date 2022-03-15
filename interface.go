@@ -10,8 +10,6 @@ type IConn interface {
 	RecvNonblock() ([]byte, error)
 	Send([]byte) error
 	SendNonblock(buf []byte) error
-	SetRecvDeadline(deadline time.Time)
-	SetSendDeadline(deadline time.Time)
 	SetTick(tick time.Duration)
 	WaitSelect() ([]byte, error)
 	Run()

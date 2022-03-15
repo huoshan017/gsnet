@@ -130,6 +130,10 @@ func (c *Conn) _read(data []byte) (closed bool, err error) {
 		default:
 		}
 
+		if c.options.readTimeout != 0 {
+			c.conn.SetReadDeadline(time.Now().Add(c.options.readTimeout))
+		}
+
 		var nn int
 		nn, err = c.reader.Read(data[n:])
 		if err != nil {
@@ -160,7 +164,12 @@ func (c *Conn) writeLoop() {
 		if err != nil || closed {
 			break
 		}
-		err = c.writer.Flush()
+		if c.writer.Buffered() > 0 {
+			if c.options.writeTimeout != 0 {
+				c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+			}
+			err = c.writer.Flush()
+		}
 		if err != nil {
 			break
 		}
@@ -182,6 +191,10 @@ func (c *Conn) _write(data []byte) (closed bool, err error) {
 			closed = true
 			return
 		default:
+		}
+
+		if c.options.writeTimeout != 0 {
+			c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
 		}
 
 		var nn int
@@ -339,14 +352,4 @@ func (c *Conn) SetTick(tick time.Duration) {
 		tick = MinConnTick
 	}
 	c.ticker = time.NewTicker(tick)
-}
-
-// 接收超时设置
-func (c *Conn) SetRecvDeadline(deadline time.Time) {
-	c.conn.SetReadDeadline(deadline)
-}
-
-// 发送超时设置
-func (c *Conn) SetSendDeadline(deadline time.Time) {
-	c.conn.SetWriteDeadline(deadline)
 }
