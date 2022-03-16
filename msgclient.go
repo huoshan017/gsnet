@@ -11,10 +11,10 @@ type MsgClient struct {
 func NewMsgClient(options ...Option) *MsgClient {
 	c := &MsgClient{}
 	c.Client = NewClient(c.dispatcher, options...)
-	if c.options.msgProto == nil {
-		c.dispatcher = NewMsgDispatcher(&DefaultMsgProto{})
+	if c.options.msgDecoder == nil {
+		c.dispatcher = NewMsgDispatcher(&DefaultMsgDecoder{})
 	} else {
-		c.dispatcher = NewMsgDispatcher(c.options.msgProto)
+		c.dispatcher = NewMsgDispatcher(c.options.msgDecoder)
 	}
 	c.Client.handler = c.dispatcher
 	return c

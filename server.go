@@ -1,11 +1,13 @@
 package gsnet
 
 import (
+	"context"
 	"reflect"
 	"time"
 )
 
 const (
+	DefaultServerMaxConnCount  = 20000
 	DefaultSessionCloseChanLen = 100
 	DefaultSessionHandleTick   = 20 * time.Millisecond // 默认会话定时器间隔
 )
@@ -17,16 +19,16 @@ type sessionCloseInfo struct {
 
 // 服务器
 type Server struct {
-	acceptor              *Acceptor
-	sessHandlerType       reflect.Type
-	newHandlerFunc        NewSessionHandlerFunc
-	mainTickHandle        func(time.Duration)
-	options               ServiceOptions
-	sessCloseInfoChan     chan *sessionCloseInfo
-	sessionIdCounter      uint64
-	sessMap               map[uint64]*Session
-	stopSessCloseInfoChan chan struct{} // 停止會話關閉信息通道
-	// todo 增加最大连接数限制
+	acceptor          *Acceptor
+	sessHandlerType   reflect.Type
+	newHandlerFunc    NewSessionHandlerFunc
+	mainTickHandle    func(time.Duration)
+	options           ServiceOptions
+	sessCloseInfoChan chan *sessionCloseInfo
+	sessionIdCounter  uint64
+	sessMap           map[uint64]*Session
+	ctx               context.Context
+	cancel            context.CancelFunc
 }
 
 func NewServer(newFunc NewSessionHandlerFunc, options ...Option) *Server {
@@ -52,32 +54,21 @@ func (s *Server) init(options ...Option) {
 	for _, option := range options {
 		option(&s.options.Options)
 	}
-
+	if s.options.connMaxCount <= 0 {
+		s.options.connMaxCount = DefaultServerMaxConnCount
+	}
 	if s.options.errChanLen <= 0 {
 		s.options.errChanLen = DefaultSessionCloseChanLen
 	}
 	if s.options.sessionHandleTick <= 0 {
 		s.options.sessionHandleTick = DefaultSessionHandleTick
 	}
-	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.errChanLen)
-	s.stopSessCloseInfoChan = make(chan struct{})
 	s.acceptor = NewAcceptor(options...)
+	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.errChanLen)
+	s.ctx, s.cancel = context.WithCancel(context.Background())
 }
 
 func (s *Server) Listen(addr string) error {
-	/*aop := &AcceptorOptions{}
-	aop.WriteBuffSize = s.options.writeBuffSize
-	aop.ReadBuffSize = s.options.readBuffSize
-	aop.SendChanLen = s.options.sendChanLen
-	aop.RecvChanLen = s.options.recvChanLen
-	aop.DataProto = s.options.dataProto
-	if s.options.reuseAddr {
-		aop.ReuseAddr = 1
-	}
-	if s.options.reusePort {
-		aop.ReusePort = 1
-	}
-	*/
 	err := s.acceptor.Listen(addr)
 	if err != nil {
 		return err
@@ -106,7 +97,7 @@ func (s *Server) Start() {
 		lastTime = time.Now()
 	}
 
-	var conn IConn
+	var conn IServConn
 	var o bool = true
 	if ticker != nil {
 		for o {
@@ -144,16 +135,20 @@ func (s *Server) Start() {
 // 結束
 func (s *Server) End() {
 	s.acceptor.Close()
-	// todo 不能這麽關閉channel，因爲這是多個發送一個接收的通道
-	close(s.stopSessCloseInfoChan)
-	// todo 缺少通知所有連接關閉的處理
+	s.cancel()
 }
 
 func (s *Server) getSessCloseInfoChan() chan *sessionCloseInfo {
 	return s.sessCloseInfoChan
 }
 
-func (s *Server) handleConn(conn IConn) {
+func (s *Server) handleConn(conn IServConn) {
+	if len(s.sessMap) >= s.options.connMaxCount {
+		getLogger().Info("gsnet: connection to server is maximum")
+		return
+	}
+
+	// 先讓連接跑起來
 	conn.Run()
 
 	// 创建會話處理器
@@ -176,7 +171,7 @@ func (s *Server) handleConn(conn IConn) {
 	s.sessMap[sess.id] = sess
 
 	// 會話處理綫程
-	go func(conn IConn) {
+	go func(conn IServConn) {
 		defer func() {
 			if err := recover(); err != nil {
 				getLogger().WithStack(err)
@@ -195,13 +190,7 @@ func (s *Server) handleConn(conn IConn) {
 			run      bool = true
 		)
 		for run {
-			select {
-			case <-s.stopSessCloseInfoChan:
-				run = false
-				continue
-			default:
-			}
-			data, err = conn.WaitSelect()
+			data, err = conn.Wait(s.ctx)
 			if err == nil {
 				if data != nil {
 					err = handler.OnData(sess, data)

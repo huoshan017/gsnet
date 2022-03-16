@@ -10,7 +10,7 @@ import (
 
 type Acceptor struct {
 	listener net.Listener
-	connCh   chan IConn
+	connCh   chan IServConn
 	options  ServiceOptions
 	closeCh  chan struct{}
 	closed   bool
@@ -29,7 +29,7 @@ func NewAcceptor(options ...Option) *Acceptor {
 	}
 	if s.options.connChanLen <= 0 {
 		s.options.connChanLen = DefaultConnChanLen
-		s.connCh = make(chan IConn, s.options.connChanLen)
+		s.connCh = make(chan IServConn, s.options.connChanLen)
 	}
 	return s
 }
@@ -92,13 +92,13 @@ func (s *Acceptor) serve(listener net.Listener) error {
 			close(s.connCh)
 			break
 		}
-		c := NewConn(conn, s.options.Options)
+		c := NewServConn(conn, s.options.Options)
 		s.connCh <- c
 	}
 	return err
 }
 
-func (s *Acceptor) GetNewConnChan() chan IConn {
+func (s *Acceptor) GetNewConnChan() chan IServConn {
 	return s.connCh
 }
 

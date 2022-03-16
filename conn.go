@@ -2,6 +2,7 @@ package gsnet
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"sync/atomic"
 	"time"
@@ -297,35 +298,6 @@ func (c *Conn) RecvNonblock() ([]byte, error) {
 	return data, nil
 }
 
-// 等待选择结果
-func (c *Conn) WaitSelect() ([]byte, error) {
-	if atomic.LoadInt32(&c.closed) > 0 {
-		return nil, ErrConnClosed
-	}
-
-	if c.ticker == nil {
-		c.ticker = time.NewTicker(DefaultConnTick)
-	}
-
-	var (
-		d   []byte
-		err error
-		o   bool
-	)
-	select {
-	case d, o = <-c.recvCh:
-		if !o {
-			err = ErrConnClosed
-		}
-	case <-c.ticker.C:
-	case err, o = <-c.errCh:
-		if !o {
-			err = ErrConnClosed
-		}
-	}
-	return d, err
-}
-
 // 接收错误
 func (c *Conn) _recvErr() error {
 	select {
@@ -352,4 +324,45 @@ func (c *Conn) SetTick(tick time.Duration) {
 		tick = MinConnTick
 	}
 	c.ticker = time.NewTicker(tick)
+}
+
+type ServConn struct {
+	Conn
+}
+
+func NewServConn(conn net.Conn, options Options) *ServConn {
+	return &ServConn{
+		Conn: *NewConn(conn, options),
+	}
+}
+
+// 等待选择结果
+func (c *ServConn) Wait(ctx context.Context) ([]byte, error) {
+	if atomic.LoadInt32(&c.closed) > 0 {
+		return nil, ErrConnClosed
+	}
+
+	if c.ticker == nil {
+		c.ticker = time.NewTicker(DefaultConnTick)
+	}
+
+	var (
+		d   []byte
+		err error
+		o   bool
+	)
+	select {
+	case <-ctx.Done():
+		err = ErrCancelWait
+	case d, o = <-c.recvCh:
+		if !o {
+			err = ErrConnClosed
+		}
+	case <-c.ticker.C:
+	case err, o = <-c.errCh:
+		if !o {
+			err = ErrConnClosed
+		}
+	}
+	return d, err
 }

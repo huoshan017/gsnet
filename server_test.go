@@ -49,7 +49,7 @@ func (h *testServerHandler) OnError(err error) {
 }
 
 func createTestServer(t *testing.T, state int32) *Server {
-	return NewServer(newTestServerHandler, SetNewSessionHandlerFuncArgs(t, state))
+	return NewServer(newTestServerHandler, WithNewSessionHandlerFuncArgs(t, state))
 }
 
 func createTestServerWithHandler(t *testing.T, state int32) *Server {
@@ -59,24 +59,45 @@ func createTestServerWithHandler(t *testing.T, state int32) *Server {
 	})
 }
 
+func createTestServerWithReusePort(t *testing.T, state int32) []*Server {
+	return []*Server{
+		NewServerWithHandler(&testServerHandler{
+			t:     t,
+			state: state,
+		}, WithReuseAddr(true)),
+		NewServerWithHandler(&testServerHandler{
+			t:     t,
+			state: state,
+		}, WithReuseAddr(true)),
+	}
+}
+
 func testServer(t *testing.T, state int32, typ int32) {
-	var ts *Server
+	var ts []*Server
 	if typ == 0 {
-		ts = createTestServer(t, state)
+		ts = []*Server{createTestServer(t, state)}
+	} else if typ == 1 {
+		ts = []*Server{createTestServerWithHandler(t, state)}
+	} else if typ == 2 {
+		ts = createTestServerWithReusePort(t, state)
 	} else {
-		ts = createTestServerWithHandler(t, state)
+		panic("server invalid type !!!!!!")
 	}
 
-	defer ts.End()
-
-	err := ts.Listen(testAddress)
-	if err != nil {
-		t.Errorf("test server listen address %v err: %v", testAddress, err)
-		return
+	for _, s := range ts {
+		defer s.End()
 	}
-	go func() {
-		ts.Start()
-	}()
+
+	for _, s := range ts {
+		err := s.Listen(testAddress)
+		if err != nil {
+			t.Errorf("test server listen address %v err: %v", testAddress, err)
+			return
+		}
+		go func(s *Server) {
+			s.Start()
+		}(s)
+	}
 
 	t.Logf("test server is running")
 
@@ -120,4 +141,6 @@ func TestServer(t *testing.T) {
 	t.Logf("test server done")
 	testServer(t, 1, 1)
 	t.Logf("test server with handler done")
+	testServer(t, 1, 2)
+	t.Logf("test server with reuse port")
 }

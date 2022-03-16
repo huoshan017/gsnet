@@ -12,7 +12,7 @@ type Options struct {
 	tickSpan      time.Duration
 	tickHandle    func(time.Duration)
 	dataProto     IDataProto
-	msgProto      IMsgProto
+	msgDecoder    IMsgDecoder
 	sendChanLen   int
 	recvChanLen   int
 	writeBuffSize int
@@ -47,8 +47,8 @@ func (options *Options) SetDataProto(proto IDataProto) {
 	options.dataProto = proto
 }
 
-func (options *Options) SetMsgProto(proto IMsgProto) {
-	options.msgProto = proto
+func (options *Options) SetMsgDecoder(decoder IMsgDecoder) {
+	options.msgDecoder = decoder
 }
 
 func (options *Options) SetSendChanLen(chanLen int) {
@@ -67,55 +67,55 @@ func (options *Options) SetReadBuffSize(size int) {
 	options.readBuffSize = size
 }
 
-func SetReadTimeout(timeout time.Duration) Option {
+func WithReadTimeout(timeout time.Duration) Option {
 	return func(options *Options) {
 		options.SetReadTimeout(timeout)
 	}
 }
 
-func SetWriteTimeout(timeout time.Duration) Option {
+func WithWriteTimeout(timeout time.Duration) Option {
 	return func(options *Options) {
 		options.SetWriteTimeout(timeout)
 	}
 }
 
-func SetTickSpan(span time.Duration) Option {
+func WithTickSpan(span time.Duration) Option {
 	return func(options *Options) {
 		options.SetTickSpan(span)
 	}
 }
 
-func SetDataProto(proto IDataProto) Option {
+func WithDataProto(proto IDataProto) Option {
 	return func(options *Options) {
 		options.SetDataProto(proto)
 	}
 }
 
-func SetMsgProto(proto IMsgProto) Option {
+func WithMsgDecoder(decoder IMsgDecoder) Option {
 	return func(options *Options) {
-		options.SetMsgProto(proto)
+		options.SetMsgDecoder(decoder)
 	}
 }
 
-func SetSendChanLen(chanLen int) Option {
+func WithSendChanLen(chanLen int) Option {
 	return func(options *Options) {
 		options.SetSendChanLen(chanLen)
 	}
 }
 
-func SetRecvChanLen(chanLen int) Option {
+func WithRecvChanLen(chanLen int) Option {
 	return func(options *Options) {
 		options.SetRecvChanLen(chanLen)
 	}
 }
 
-func SetWriteBuffSize(size int) Option {
+func WithWriteBuffSize(size int) Option {
 	return func(options *Options) {
 		options.SetWriteBuffSize(size)
 	}
 }
 
-func SetReadBuffSize(size int) Option {
+func WithReadBuffSize(size int) Option {
 	return func(options *Options) {
 		options.SetReadBuffSize(size)
 	}
@@ -132,12 +132,17 @@ type NewSessionHandlerFunc func(args ...interface{}) ISessionHandler
 // 服务选项结构
 type ServiceOptions struct {
 	Options
+	connMaxCount          int           // 連接最大數
 	connChanLen           int           // 連接通道長度
 	createHandlerFuncArgs []interface{} // 会话处理器创建函数参数列表
 	reusePort             bool          // 重用端口
 	reuseAddr             bool          // 重用地址
 	errChanLen            int           // 错误通道长度
 	sessionHandleTick     time.Duration // 会话逻辑处理时间间隔
+}
+
+func (options *ServiceOptions) SetConnMaxCount(count int) {
+	options.connMaxCount = count
 }
 
 func (options *ServiceOptions) SetConnChanLen(chanLen int) {
@@ -164,42 +169,49 @@ func (options *ServiceOptions) SetSessionHandleTick(tick time.Duration) {
 	options.sessionHandleTick = tick
 }
 
-func SetConnChanLen(chanLen int) Option {
+func WithConnMaxCount(count int) Option {
+	return func(options *Options) {
+		p := (*ServiceOptions)(unsafe.Pointer(options))
+		p.SetConnMaxCount(count)
+	}
+}
+
+func WithConnChanLen(chanLen int) Option {
 	return func(options *Options) {
 		p := (*ServiceOptions)(unsafe.Pointer(options))
 		p.SetConnChanLen(chanLen)
 	}
 }
 
-func SetNewSessionHandlerFuncArgs(args ...interface{}) Option {
+func WithNewSessionHandlerFuncArgs(args ...interface{}) Option {
 	return func(options *Options) {
 		p := (*ServiceOptions)(unsafe.Pointer(options))
 		p.SetNewSessionHandlerFuncArgs(args...)
 	}
 }
 
-func SetReuseAddr(enable bool) Option {
+func WithReuseAddr(enable bool) Option {
 	return func(options *Options) {
 		p := (*ServiceOptions)(unsafe.Pointer(options))
 		p.SetReuseAddr(enable)
 	}
 }
 
-func SetReusePort(enable bool) Option {
+func WithReusePort(enable bool) Option {
 	return func(options *Options) {
 		p := (*ServiceOptions)(unsafe.Pointer(options))
 		p.SetReusePort(enable)
 	}
 }
 
-func SetErrChanLen(length int) Option {
+func WithErrChanLen(length int) Option {
 	return func(options *Options) {
 		p := (*ServiceOptions)(unsafe.Pointer(options))
 		p.SetErrChanLen(length)
 	}
 }
 
-func SetSessionHandleTick(tick time.Duration) Option {
+func WithSessionHandleTick(tick time.Duration) Option {
 	return func(options *Options) {
 		p := (*ServiceOptions)(unsafe.Pointer(options))
 		p.SetSessionHandleTick(tick)

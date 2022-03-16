@@ -5,21 +5,21 @@ type MsgData struct {
 
 // 基礎消息处理器
 type MsgHandlerBase struct {
-	msgProto IMsgProto
-	handles  map[uint32]func(ISession, []byte) error
+	msgDecoder IMsgDecoder
+	handles    map[uint32]func(ISession, []byte) error
 }
 
-func NewMsgHandlerBase(msgProto IMsgProto) *MsgHandlerBase {
+func NewMsgHandlerBase(msgDecoder IMsgDecoder) *MsgHandlerBase {
 	h := &MsgHandlerBase{}
-	if msgProto == nil {
-		msgProto = &DefaultMsgProto{}
+	if msgDecoder == nil {
+		msgDecoder = &DefaultMsgDecoder{}
 	}
-	h.init(msgProto)
+	h.init(msgDecoder)
 	return h
 }
 
-func (h *MsgHandlerBase) init(msgProto IMsgProto) {
-	h.msgProto = msgProto
+func (h *MsgHandlerBase) init(msgDecoder IMsgDecoder) {
+	h.msgDecoder = msgDecoder
 	h.handles = make(map[uint32]func(ISession, []byte) error)
 }
 
@@ -32,7 +32,7 @@ func (h *MsgHandlerBase) OnMessage(sess ISession, msg MsgData) error {
 }
 
 func (h *MsgHandlerBase) OnData(sess ISession, data []byte) error {
-	msgid, msgdata := h.msgProto.Decode(data)
+	msgid, msgdata := h.msgDecoder.Decode(data)
 	handle, o := h.handles[msgid]
 	if !o {
 		e := ErrNoMsgHandleFunc(msgid)
@@ -43,6 +43,6 @@ func (h *MsgHandlerBase) OnData(sess ISession, data []byte) error {
 }
 
 func (h *MsgHandlerBase) Send(sess ISession, msgid uint32, msgdata []byte) error {
-	data := h.msgProto.Encode(msgid, msgdata)
+	data := h.msgDecoder.Encode(msgid, msgdata)
 	return sess.Send(data)
 }

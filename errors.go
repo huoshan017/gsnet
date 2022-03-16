@@ -14,6 +14,7 @@ var (
 	ErrNoMsgHandleFunc = func(msgid uint32) error {
 		return fmt.Errorf("gsnet: no message %v handle", msgid)
 	}
+	ErrCancelWait = errors.New("gsnet: cancel wait")
 )
 
 var noDisconnectErrMap = make(map[error]struct{})

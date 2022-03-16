@@ -9,13 +9,13 @@ type MsgDispatcher struct {
 	tickHandle       func(ISession, time.Duration)
 	errHandle        func(error)
 	handleMap        map[uint32]func(ISession, []byte) error
-	msgProto         IMsgProto
+	msgDecoder       IMsgDecoder
 }
 
-func NewMsgDispatcher(msgProto IMsgProto) *MsgDispatcher {
+func NewMsgDispatcher(msgDecoder IMsgDecoder) *MsgDispatcher {
 	d := &MsgDispatcher{}
 	d.handleMap = make(map[uint32]func(ISession, []byte) error)
-	d.msgProto = msgProto
+	d.msgDecoder = msgDecoder
 	return d
 }
 
@@ -58,7 +58,7 @@ func (d *MsgDispatcher) OnTick(s ISession, tick time.Duration) {
 }
 
 func (d *MsgDispatcher) OnData(s ISession, data []byte) error {
-	msgid, msgdata := d.msgProto.Decode(data)
+	msgid, msgdata := d.msgDecoder.Decode(data)
 	h, o := d.handleMap[msgid]
 	if !o {
 		e := ErrNoMsgHandleFunc(msgid)
@@ -75,6 +75,6 @@ func (d *MsgDispatcher) OnError(err error) {
 }
 
 func (d *MsgDispatcher) SendMsg(s ISession, msgid uint32, msgdata []byte) error {
-	data := d.msgProto.Encode(msgid, msgdata)
+	data := d.msgDecoder.Encode(msgid, msgdata)
 	return s.Send(data)
 }

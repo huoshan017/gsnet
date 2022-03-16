@@ -1,6 +1,7 @@
 package gsnet
 
 import (
+	"context"
 	"time"
 )
 
@@ -11,9 +12,14 @@ type IConn interface {
 	Send([]byte) error
 	SendNonblock(buf []byte) error
 	SetTick(tick time.Duration)
-	WaitSelect() ([]byte, error)
 	Run()
 	Close()
+}
+
+// 服務器連接接口
+type IServConn interface {
+	IConn
+	Wait(ctx context.Context) ([]byte, error)
 }
 
 // 会话接口

@@ -75,13 +75,13 @@ type config struct {
 
 type DefaultMsgHandler struct {
 	gsnet.MsgHandlerBase
-	msgProto gsnet.IMsgProto
+	msgDecoder gsnet.IMsgDecoder
 }
 
 func CreateDefaultMsgHandler(args ...interface{}) gsnet.ISessionHandler {
 	h := &DefaultMsgHandler{}
-	h.msgProto = &gsnet.DefaultMsgProto{}
-	h.MsgHandlerBase = *gsnet.NewMsgHandlerBase(h.msgProto)
+	h.msgDecoder = &gsnet.DefaultMsgDecoder{}
+	h.MsgHandlerBase = *gsnet.NewMsgHandlerBase(h.msgDecoder)
 	h.MsgHandlerBase.RegisterHandle(game_proto.MsgIdGamePlayerEnterReq, h.onPlayerEnterGame)
 	h.MsgHandlerBase.RegisterHandle(game_proto.MsgIdGamePlayerExitReq, h.onPlayerExitGame)
 	h.MsgHandlerBase.RegisterHandle(game_proto.MsgIdHandShakeReq, h.onHandShake)
