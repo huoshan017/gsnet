@@ -25,6 +25,10 @@ func init() {
 	noDisconnectErrMap[ErrNoMsgHandle] = struct{}{}
 }
 
+func RegisterNoDisconnectError(err error) {
+	noDisconnectErrMap[err] = struct{}{}
+}
+
 func IsNoDisconnectError(err error) bool {
 	_, o := noDisconnectErrMap[err]
 	return o
