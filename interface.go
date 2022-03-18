@@ -14,6 +14,7 @@ type IConn interface {
 	SetTick(tick time.Duration)
 	Run()
 	Close()
+	CloseWait(int)
 }
 
 // 服務器連接接口
@@ -26,6 +27,7 @@ type IServConn interface {
 type ISession interface {
 	Send([]byte) error
 	Close()
+	CloseWaitSecs(int)
 	GetId() uint64
 	SetData(string, interface{})
 	GetData(string) interface{}

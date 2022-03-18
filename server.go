@@ -3,6 +3,7 @@ package gsnet
 import (
 	"context"
 	"reflect"
+	"sync"
 	"time"
 )
 
@@ -29,12 +30,15 @@ type Server struct {
 	sessMap           map[uint64]*Session
 	ctx               context.Context
 	cancel            context.CancelFunc
+	waitWg            sync.WaitGroup
+	endLoopCh         chan struct{}
 }
 
 func NewServer(newFunc NewSessionHandlerFunc, options ...Option) *Server {
 	s := &Server{
 		newHandlerFunc: newFunc,
 		sessMap:        make(map[uint64]*Session),
+		endLoopCh:      make(chan struct{}),
 	}
 	s.init(options...)
 	return s
@@ -45,6 +49,7 @@ func NewServerWithHandler(handler ISessionHandler, options ...Option) *Server {
 	s := &Server{
 		sessHandlerType: rf,
 		sessMap:         make(map[uint64]*Session),
+		endLoopCh:       make(chan struct{}),
 	}
 	s.init(options...)
 	return s
@@ -102,6 +107,8 @@ func (s *Server) Start() {
 	if ticker != nil {
 		for o {
 			select {
+			case <-s.endLoopCh:
+				o = false
 			case conn, o = <-s.acceptor.GetNewConnChan():
 				if !o { // 已关闭
 					continue
@@ -120,6 +127,8 @@ func (s *Server) Start() {
 	} else {
 		for o {
 			select {
+			case <-s.endLoopCh:
+				o = false
 			case conn, o = <-s.acceptor.GetNewConnChan():
 				if !o {
 					continue
@@ -134,8 +143,10 @@ func (s *Server) Start() {
 
 // 結束
 func (s *Server) End() {
-	s.acceptor.Close()
 	s.cancel()
+	s.waitWg.Wait()
+	close(s.endLoopCh)
+	s.acceptor.Close()
 }
 
 func (s *Server) getSessCloseInfoChan() chan *sessionCloseInfo {
@@ -169,6 +180,7 @@ func (s *Server) handleConn(conn IServConn) {
 	s.sessionIdCounter += 1
 	sess := NewSession(conn, s.sessionIdCounter)
 	s.sessMap[sess.id] = sess
+	s.waitWg.Add(1)
 
 	// 會話處理綫程
 	go func(conn IServConn) {
@@ -202,14 +214,19 @@ func (s *Server) handleConn(conn IServConn) {
 			}
 			if err != nil {
 				if !IsNoDisconnectError(err) {
-					break
+					run = false
+				} else {
+					handler.OnError(err)
 				}
-				handler.OnError(err)
 			}
 		}
 
 		handler.OnDisconnect(sess, err)
-		sess.Close()
+		if s.options.connCloseWaitSecs > 0 {
+			sess.CloseWaitSecs(s.options.connCloseWaitSecs)
+		} else {
+			sess.Close()
+		}
 
 		s.getSessCloseInfoChan() <- &sessionCloseInfo{sessionId: sess.id, err: err}
 	}(conn)
@@ -219,5 +236,7 @@ func (s *Server) handleClose(err *sessionCloseInfo) {
 	_, o := s.sessMap[err.sessionId]
 	if o {
 		delete(s.sessMap, err.sessionId)
+		s.waitWg.Done()
+		getLogger().Info("@@@ handleClose sess count ", len(s.sessMap), ", sessionId: ", err.sessionId)
 	}
 }

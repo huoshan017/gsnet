@@ -11,9 +11,6 @@ type MsgHandlerBase struct {
 
 func NewMsgHandlerBase(msgDecoder IMsgDecoder) *MsgHandlerBase {
 	h := &MsgHandlerBase{}
-	if msgDecoder == nil {
-		msgDecoder = &DefaultMsgDecoder{}
-	}
 	h.init(msgDecoder)
 	return h
 }
@@ -45,4 +42,8 @@ func (h *MsgHandlerBase) OnData(sess ISession, data []byte) error {
 func (h *MsgHandlerBase) Send(sess ISession, msgid uint32, msgdata []byte) error {
 	data := h.msgDecoder.Encode(msgid, msgdata)
 	return sess.Send(data)
+}
+
+func NewDefaultMsgHandlerBase() *MsgHandlerBase {
+	return NewMsgHandlerBase(&DefaultMsgDecoder{})
 }

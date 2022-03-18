@@ -28,6 +28,10 @@ func (s *Session) Close() {
 	s.conn.Close()
 }
 
+func (s *Session) CloseWaitSecs(secs int) {
+	s.conn.CloseWait(secs)
+}
+
 func (s *Session) GetId() uint64 {
 	return s.id
 }

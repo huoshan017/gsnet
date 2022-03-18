@@ -66,6 +66,18 @@ func NewConn(conn net.Conn, options Options) *Conn {
 		c.options.dataProto = &DefaultDataProto{}
 	}
 
+	if tcpConn, ok := c.conn.(*net.TCPConn); ok {
+		if c.options.noDelay {
+			tcpConn.SetNoDelay(c.options.noDelay)
+		}
+		if c.options.keepAlived {
+			tcpConn.SetKeepAlive(c.options.keepAlived)
+		}
+		if c.options.keepAlivedPeriod > 0 {
+			tcpConn.SetKeepAlivePeriod(c.options.keepAlivedPeriod)
+		}
+	}
+
 	return c
 }
 
@@ -102,7 +114,13 @@ func (c *Conn) readLoop() {
 		if closed || err != nil {
 			break
 		}
-		c.recvCh <- body
+
+		select {
+		case err = <-c.errWriteCh:
+		case <-c.closeCh:
+			err = ErrConnClosed
+		case c.recvCh <- body:
+		}
 	}
 	// 停止定时器
 	if c.ticker != nil {
@@ -210,11 +228,23 @@ func (c *Conn) _write(data []byte) (closed bool, err error) {
 
 // 正常关闭
 func (c *Conn) Close() {
+	c.closeWait(0)
+}
+
+// 等待關閉
+func (c *Conn) CloseWait(secs int) {
+	c.closeWait(secs)
+}
+
+// 關閉
+func (c *Conn) closeWait(secs int) {
 	if !atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
 		return
 	}
+	if secs != 0 {
+		c.conn.(*net.TCPConn).SetLinger(secs)
+	}
 	c.conn.Close()
-	// 关闭发送通道
 	close(c.sendCh)
 	close(c.closeCh)
 }
@@ -224,7 +254,7 @@ func (c *Conn) IsClosed() bool {
 	return atomic.LoadInt32(&c.closed) > 0
 }
 
-// 发送数据
+// 发送数据，必須與Close函數在同一goroutine調用
 func (c *Conn) Send(data []byte) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return ErrConnClosed
@@ -235,8 +265,7 @@ func (c *Conn) Send(data []byte) error {
 			return ErrConnClosed
 		}
 		return err
-	default:
-		c.sendCh <- data
+	case c.sendCh <- data:
 	}
 	return nil
 }
@@ -342,7 +371,7 @@ func (c *ServConn) Wait(ctx context.Context) ([]byte, error) {
 		return nil, ErrConnClosed
 	}
 
-	if c.ticker == nil {
+	if c.ticker == nil && c.options.tickHandle != nil {
 		c.ticker = time.NewTicker(DefaultConnTick)
 	}
 

@@ -8,14 +8,10 @@ type MsgClient struct {
 	dispatcher *MsgDispatcher
 }
 
-func NewMsgClient(options ...Option) *MsgClient {
+func NewMsgClient(msgDecoder IMsgDecoder, options ...Option) *MsgClient {
 	c := &MsgClient{}
 	c.Client = NewClient(c.dispatcher, options...)
-	if c.options.msgDecoder == nil {
-		c.dispatcher = NewMsgDispatcher(&DefaultMsgDecoder{})
-	} else {
-		c.dispatcher = NewMsgDispatcher(c.options.msgDecoder)
-	}
+	c.dispatcher = NewMsgDispatcher(msgDecoder)
 	c.Client.handler = c.dispatcher
 	return c
 }
@@ -43,4 +39,8 @@ func (c *MsgClient) RegisterHandle(msgid uint32, handle func(ISession, []byte) e
 func (c *MsgClient) Send(msgid uint32, data []byte) error {
 	sess := c.Client.sess
 	return c.dispatcher.SendMsg(sess, msgid, data)
+}
+
+func NewDefaultMsgClient(options ...Option) *MsgClient {
+	return NewMsgClient(&DefaultMsgDecoder{}, options...)
 }

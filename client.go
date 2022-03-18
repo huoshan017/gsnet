@@ -38,13 +38,7 @@ func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(
 }
 
 func (c *Client) newConnector() *Connector {
-	c.conn = NewConnector(&Options{
-		readBuffSize:  c.options.readBuffSize,
-		writeBuffSize: c.options.writeBuffSize,
-		recvChanLen:   c.options.recvChanLen,
-		sendChanLen:   c.options.sendChanLen,
-		dataProto:     c.options.dataProto,
-	})
+	c.conn = NewConnector(&c.options.Options)
 	return c.conn
 }
 
@@ -120,7 +114,11 @@ func (c *Client) Run() {
 }
 
 func (c *Client) Close() {
-	c.conn.Close()
+	if c.options.connCloseWaitSecs > 0 {
+		c.conn.CloseWait(c.options.connCloseWaitSecs)
+	} else {
+		c.conn.Close()
+	}
 }
 
 func (c *Client) IsConnecting() bool {

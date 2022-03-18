@@ -44,7 +44,7 @@ func (h *testServerHandler) OnTick(sess ISession, tick time.Duration) {
 
 func (h *testServerHandler) OnError(err error) {
 	if h.state == 1 {
-		h.t.Logf("occur err: %v", err)
+		h.t.Logf("server occur err: %v @@@ @@@", err)
 	}
 }
 
@@ -84,9 +84,11 @@ func testServer(t *testing.T, state int32, typ int32) {
 		panic("server invalid type !!!!!!")
 	}
 
-	for _, s := range ts {
-		defer s.End()
-	}
+	defer func() {
+		for _, s := range ts {
+			s.End()
+		}
+	}()
 
 	for _, s := range ts {
 		err := s.Listen(testAddress)
@@ -101,7 +103,7 @@ func testServer(t *testing.T, state int32, typ int32) {
 
 	t.Logf("test server is running")
 
-	clientNum := 1000
+	clientNum := 4000
 	var wg sync.WaitGroup
 	wg.Add(clientNum)
 
@@ -109,6 +111,7 @@ func testServer(t *testing.T, state int32, typ int32) {
 	for i := 0; i < clientNum; i++ {
 		tc := createTestClient(t, 2)
 		go func(c *Client, idx int) {
+			defer wg.Done()
 			err := c.Connect(testAddress)
 			if err != nil {
 				t.Errorf("client for test server connect address %v err: %v", testAddress, err)
@@ -120,15 +123,14 @@ func testServer(t *testing.T, state int32, typ int32) {
 				c.Run()
 			}(c)
 			for i := 0; i < 1000; i++ {
-				err := c.Send([]byte("abcdefg"))
+				err := c.Send([]byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,"))
 				if err != nil {
 					t.Errorf("client for test server send data err: %v", err)
-					return
+					break
 				}
 			}
 			c.Close()
 			t.Logf("client %v test done", idx)
-			wg.Done()
 		}(tc, i)
 	}
 
@@ -139,8 +141,8 @@ func TestServer(t *testing.T) {
 	// 创建并启动服务器
 	testServer(t, 1, 0)
 	t.Logf("test server done")
-	testServer(t, 1, 1)
-	t.Logf("test server with handler done")
-	testServer(t, 1, 2)
-	t.Logf("test server with reuse port")
+	//testServer(t, 1, 1)
+	//t.Logf("test server with handler done")
+	//testServer(t, 1, 2)
+	//t.Logf("test server with reuse port")
 }

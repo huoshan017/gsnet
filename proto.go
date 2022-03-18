@@ -9,7 +9,6 @@ type IDataProto interface {
 	Decompress([]byte) ([]byte, bool)
 	Encrypt([]byte) []byte
 	Decrypt([]byte) ([]byte, bool)
-	Duplicate() IDataProto
 }
 
 type IMsgDecoder interface {
@@ -61,10 +60,6 @@ func (p DefaultDataProto) Encrypt(data []byte) []byte {
 
 func (p DefaultDataProto) Decrypt(data []byte) ([]byte, bool) {
 	return data, true
-}
-
-func (p DefaultDataProto) Duplicate() IDataProto {
-	return &DefaultDataProto{}
 }
 
 // 默认消息协议

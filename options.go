@@ -7,16 +7,19 @@ import (
 
 // 选项结构
 type Options struct {
-	readTimeout   time.Duration
-	writeTimeout  time.Duration
-	tickSpan      time.Duration
-	tickHandle    func(time.Duration)
-	dataProto     IDataProto
-	msgDecoder    IMsgDecoder
-	sendChanLen   int
-	recvChanLen   int
-	writeBuffSize int
-	readBuffSize  int
+	noDelay           bool
+	keepAlived        bool
+	keepAlivedPeriod  time.Duration
+	readTimeout       time.Duration
+	writeTimeout      time.Duration
+	tickSpan          time.Duration
+	tickHandle        func(time.Duration)
+	dataProto         IDataProto
+	sendChanLen       int
+	recvChanLen       int
+	writeBuffSize     int
+	readBuffSize      int
+	connCloseWaitSecs int // 連接關閉等待時間(秒)
 
 	// todo 以下是需要实现的配置逻辑
 	flushWriteInterval       time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
@@ -26,6 +29,18 @@ type Options struct {
 
 // 选项
 type Option func(*Options)
+
+func (options *Options) SetNodelay(noDelay bool) {
+	options.noDelay = noDelay
+}
+
+func (options *Options) SetKeepAlived(keepAlived bool) {
+	options.keepAlived = keepAlived
+}
+
+func (options *Options) SetKeepAlivedPeriod(keepAlivedPeriod time.Duration) {
+	options.keepAlivedPeriod = keepAlivedPeriod
+}
 
 func (options *Options) SetReadTimeout(timeout time.Duration) {
 	options.readTimeout = timeout
@@ -47,10 +62,6 @@ func (options *Options) SetDataProto(proto IDataProto) {
 	options.dataProto = proto
 }
 
-func (options *Options) SetMsgDecoder(decoder IMsgDecoder) {
-	options.msgDecoder = decoder
-}
-
 func (options *Options) SetSendChanLen(chanLen int) {
 	options.sendChanLen = chanLen
 }
@@ -65,6 +76,28 @@ func (options *Options) SetWriteBuffSize(size int) {
 
 func (options *Options) SetReadBuffSize(size int) {
 	options.readBuffSize = size
+}
+
+func (options *Options) SetConnCloseWaitSecs(secs int) {
+	options.connCloseWaitSecs = secs
+}
+
+func WithNoDelay(noDelay bool) Option {
+	return func(options *Options) {
+		options.SetNodelay(noDelay)
+	}
+}
+
+func WithKeepAlived(keepAlived bool) Option {
+	return func(options *Options) {
+		options.SetKeepAlived(keepAlived)
+	}
+}
+
+func WithKeepAlivedPeriod(keepAlivedPeriod time.Duration) Option {
+	return func(options *Options) {
+		options.SetKeepAlivedPeriod(keepAlivedPeriod)
+	}
 }
 
 func WithReadTimeout(timeout time.Duration) Option {
@@ -91,12 +124,6 @@ func WithDataProto(proto IDataProto) Option {
 	}
 }
 
-func WithMsgDecoder(decoder IMsgDecoder) Option {
-	return func(options *Options) {
-		options.SetMsgDecoder(decoder)
-	}
-}
-
 func WithSendChanLen(chanLen int) Option {
 	return func(options *Options) {
 		options.SetSendChanLen(chanLen)
@@ -118,6 +145,12 @@ func WithWriteBuffSize(size int) Option {
 func WithReadBuffSize(size int) Option {
 	return func(options *Options) {
 		options.SetReadBuffSize(size)
+	}
+}
+
+func WithConnCloseWaitSecs(secs int) Option {
+	return func(options *Options) {
+		options.SetConnCloseWaitSecs(secs)
 	}
 }
 
