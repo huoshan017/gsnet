@@ -1,4 +1,4 @@
-package gsnet
+package common
 
 import (
 	"io"
@@ -19,7 +19,7 @@ type Logger interface {
 
 var gslog Logger
 
-func getLogger() Logger {
+func GetLogger() Logger {
 	if gslog == nil {
 		SetLogger(newDefaultLogger())
 	}

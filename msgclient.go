@@ -1,30 +1,35 @@
 package gsnet
 
-import "time"
+import (
+	"time"
+
+	"github.com/huoshan017/gsnet/client"
+	"github.com/huoshan017/gsnet/common"
+)
 
 // 消息客户端
 type MsgClient struct {
-	*Client
-	dispatcher *MsgDispatcher
+	*client.Client
+	dispatcher *common.MsgDispatcher
 }
 
-func NewMsgClient(msgDecoder IMsgDecoder, options ...Option) *MsgClient {
+func NewMsgClient(msgDecoder common.IMsgDecoder, options ...common.Option) *MsgClient {
 	c := &MsgClient{}
-	c.Client = NewClient(c.dispatcher, options...)
-	c.dispatcher = NewMsgDispatcher(msgDecoder)
-	c.Client.handler = c.dispatcher
+	dispatcher := common.NewMsgDispatcher(msgDecoder)
+	c.Client = client.NewClient(dispatcher, options...)
+	c.dispatcher = dispatcher
 	return c
 }
 
-func (c *MsgClient) SetConnectHandle(handle func(ISession)) {
+func (c *MsgClient) SetConnectHandle(handle func(common.ISession)) {
 	c.dispatcher.SetConnectHandle(handle)
 }
 
-func (c *MsgClient) SetDisconnectHandle(handle func(ISession, error)) {
+func (c *MsgClient) SetDisconnectHandle(handle func(common.ISession, error)) {
 	c.dispatcher.SetDisconnectHandle(handle)
 }
 
-func (c *MsgClient) SetTickHandle(handle func(ISession, time.Duration)) {
+func (c *MsgClient) SetTickHandle(handle func(common.ISession, time.Duration)) {
 	c.dispatcher.SetTickHandle(handle)
 }
 
@@ -32,15 +37,14 @@ func (c *MsgClient) SetErrorHandle(handle func(error)) {
 	c.dispatcher.SetErrorHandle(handle)
 }
 
-func (c *MsgClient) RegisterHandle(msgid uint32, handle func(ISession, []byte) error) {
+func (c *MsgClient) RegisterHandle(msgid uint32, handle func(common.ISession, []byte) error) {
 	c.dispatcher.RegisterHandle(msgid, handle)
 }
 
 func (c *MsgClient) Send(msgid uint32, data []byte) error {
-	sess := c.Client.sess
-	return c.dispatcher.SendMsg(sess, msgid, data)
+	return c.dispatcher.SendMsg(c.GetSession(), msgid, data)
 }
 
-func NewDefaultMsgClient(options ...Option) *MsgClient {
-	return NewMsgClient(&DefaultMsgDecoder{}, options...)
+func NewDefaultMsgClient(options ...common.Option) *MsgClient {
+	return NewMsgClient(&common.DefaultMsgDecoder{}, options...)
 }

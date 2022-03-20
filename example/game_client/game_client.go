@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet"
+	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/example/game_proto"
 )
 
@@ -70,17 +71,17 @@ func (p *Player) send(msgid uint32, msgdata []byte) error {
 	return p.owner.GetNet().Send(msgid, msgdata)
 }
 
-func (p *Player) registerHandle(msgid uint32, handle func(gsnet.ISession, []byte) error) {
+func (p *Player) registerHandle(msgid uint32, handle func(common.ISession, []byte) error) {
 	p.owner.GetNet().RegisterHandle(msgid, handle)
 }
 
-func (p *Player) onEnterGame(sess gsnet.ISession, data []byte) error {
+func (p *Player) onEnterGame(sess common.ISession, data []byte) error {
 	p.state = PlayerStateEntered
 	fmt.Println("Player entered game")
 	return nil
 }
 
-func (p *Player) onExitGame(sess gsnet.ISession, data []byte) error {
+func (p *Player) onExitGame(sess common.ISession, data []byte) error {
 	p.state = PlayerStateNotEnter
 	p.owner.GetNet().Close()
 	fmt.Println("Player exited game")
@@ -116,7 +117,7 @@ func (c *GameClient) GetNet() *gsnet.MsgClient {
 }
 
 func (c *GameClient) Init(conf *config) error {
-	net := gsnet.NewDefaultMsgClient(gsnet.WithTickSpan(time.Millisecond))
+	net := gsnet.NewDefaultMsgClient(common.WithTickSpan(time.Millisecond))
 	err := net.Connect(conf.addr)
 	if err != nil {
 		fmt.Println("connect ", conf.addr, " failed")

@@ -1,8 +1,11 @@
-package gsnet
+package test
 
 import (
 	"testing"
 	"time"
+
+	"github.com/huoshan017/gsnet/client"
+	"github.com/huoshan017/gsnet/common"
 )
 
 func TestConnector(t *testing.T) {
@@ -16,7 +19,7 @@ func TestConnector(t *testing.T) {
 
 	go ts.Start()
 
-	connector := NewConnector(&Options{})
+	connector := client.NewConnector(&common.Options{})
 	err = connector.Connect(testAddress)
 	if err != nil {
 		t.Errorf("test connector connect address %v err: %v", testAddress, err)

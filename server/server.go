@@ -1,10 +1,12 @@
-package gsnet
+package server
 
 import (
 	"context"
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/huoshan017/gsnet/common"
 )
 
 const (
@@ -22,54 +24,54 @@ type sessionCloseInfo struct {
 type Server struct {
 	acceptor          *Acceptor
 	sessHandlerType   reflect.Type
-	newHandlerFunc    NewSessionHandlerFunc
+	newHandlerFunc    common.NewSessionHandlerFunc
 	mainTickHandle    func(time.Duration)
-	options           ServiceOptions
+	options           common.ServiceOptions
 	sessCloseInfoChan chan *sessionCloseInfo
 	sessionIdCounter  uint64
-	sessMap           map[uint64]*Session
+	sessMap           map[uint64]*common.Session
 	ctx               context.Context
 	cancel            context.CancelFunc
 	waitWg            sync.WaitGroup
 	endLoopCh         chan struct{}
 }
 
-func NewServer(newFunc NewSessionHandlerFunc, options ...Option) *Server {
+func NewServer(newFunc common.NewSessionHandlerFunc, options ...common.Option) *Server {
 	s := &Server{
 		newHandlerFunc: newFunc,
-		sessMap:        make(map[uint64]*Session),
+		sessMap:        make(map[uint64]*common.Session),
 		endLoopCh:      make(chan struct{}),
 	}
 	s.init(options...)
 	return s
 }
 
-func NewServerWithHandler(handler ISessionHandler, options ...Option) *Server {
+func NewServerWithHandler(handler common.ISessionHandler, options ...common.Option) *Server {
 	rf := reflect.TypeOf(handler)
 	s := &Server{
 		sessHandlerType: rf,
-		sessMap:         make(map[uint64]*Session),
+		sessMap:         make(map[uint64]*common.Session),
 		endLoopCh:       make(chan struct{}),
 	}
 	s.init(options...)
 	return s
 }
 
-func (s *Server) init(options ...Option) {
+func (s *Server) init(options ...common.Option) {
 	for _, option := range options {
 		option(&s.options.Options)
 	}
-	if s.options.connMaxCount <= 0 {
-		s.options.connMaxCount = DefaultServerMaxConnCount
+	if s.options.GetConnMaxCount() <= 0 {
+		s.options.SetConnMaxCount(DefaultServerMaxConnCount)
 	}
-	if s.options.errChanLen <= 0 {
-		s.options.errChanLen = DefaultSessionCloseChanLen
+	if s.options.GetErrChanLen() <= 0 {
+		s.options.SetErrChanLen(DefaultSessionCloseChanLen)
 	}
-	if s.options.sessionHandleTick <= 0 {
-		s.options.sessionHandleTick = DefaultSessionHandleTick
+	if s.options.GetSessionHandleTick() <= 0 {
+		s.options.SetSessionHandleTick(DefaultSessionHandleTick)
 	}
 	s.acceptor = NewAcceptor(options...)
-	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.errChanLen)
+	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.GetErrChanLen())
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 }
 
@@ -89,7 +91,7 @@ func (s *Server) Start() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				getLogger().WithStack(err)
+				common.GetLogger().WithStack(err)
 			}
 		}()
 		s.acceptor.Serve()
@@ -97,12 +99,12 @@ func (s *Server) Start() {
 
 	var ticker *time.Ticker
 	var lastTime time.Time
-	if s.mainTickHandle != nil && s.options.tickSpan > 0 {
-		ticker = time.NewTicker(s.options.tickSpan)
+	if s.mainTickHandle != nil && s.options.GetTickSpan() > 0 {
+		ticker = time.NewTicker(s.options.GetTickSpan())
 		lastTime = time.Now()
 	}
 
-	var conn IServConn
+	var conn common.IServConn
 	var o bool = true
 	if ticker != nil {
 		for o {
@@ -143,19 +145,19 @@ func (s *Server) Start() {
 
 // 結束
 func (s *Server) End() {
+	s.acceptor.Close()
 	s.cancel()
 	s.waitWg.Wait()
 	close(s.endLoopCh)
-	s.acceptor.Close()
 }
 
 func (s *Server) getSessCloseInfoChan() chan *sessionCloseInfo {
 	return s.sessCloseInfoChan
 }
 
-func (s *Server) handleConn(conn IServConn) {
-	if len(s.sessMap) >= s.options.connMaxCount {
-		getLogger().Info("gsnet: connection to server is maximum")
+func (s *Server) handleConn(conn common.IServConn) {
+	if len(s.sessMap) >= s.options.GetConnMaxCount() {
+		common.GetLogger().Info("gsnet: connection to server is maximum")
 		return
 	}
 
@@ -163,37 +165,37 @@ func (s *Server) handleConn(conn IServConn) {
 	conn.Run()
 
 	// 创建會話處理器
-	var handler ISessionHandler
+	var handler common.ISessionHandler
 	if s.newHandlerFunc == nil {
 		v := reflect.New(s.sessHandlerType.Elem())
 		it := v.Interface()
-		handler = it.(ISessionHandler)
+		handler = it.(common.ISessionHandler)
 	} else {
-		if s.options.createHandlerFuncArgs == nil {
+		if s.options.GetNewSessionHandlerFuncArgs() == nil {
 			handler = s.newHandlerFunc()
 		} else {
-			handler = s.newHandlerFunc(s.options.createHandlerFuncArgs...)
+			handler = s.newHandlerFunc(s.options.GetNewSessionHandlerFuncArgs()...)
 		}
 	}
 
 	// 創建會話
 	s.sessionIdCounter += 1
-	sess := NewSession(conn, s.sessionIdCounter)
-	s.sessMap[sess.id] = sess
+	sess := common.NewSession(conn, s.sessionIdCounter)
+	s.sessMap[sess.GetId()] = sess
 	s.waitWg.Add(1)
 
 	// 會話處理綫程
-	go func(conn IServConn) {
+	go func(conn common.IServConn) {
 		defer func() {
 			if err := recover(); err != nil {
-				getLogger().WithStack(err)
+				common.GetLogger().WithStack(err)
 			}
 		}()
 
 		handler.OnConnect(sess)
 
 		// 会话处理时间间隔设置到连接
-		conn.SetTick(s.options.sessionHandleTick)
+		conn.SetTick(s.options.GetSessionHandleTick())
 
 		var (
 			lastTime time.Time = time.Now()
@@ -213,7 +215,7 @@ func (s *Server) handleConn(conn IServConn) {
 				}
 			}
 			if err != nil {
-				if !IsNoDisconnectError(err) {
+				if !common.IsNoDisconnectError(err) {
 					run = false
 				} else {
 					handler.OnError(err)
@@ -222,13 +224,13 @@ func (s *Server) handleConn(conn IServConn) {
 		}
 
 		handler.OnDisconnect(sess, err)
-		if s.options.connCloseWaitSecs > 0 {
-			sess.CloseWaitSecs(s.options.connCloseWaitSecs)
+		if s.options.GetConnCloseWaitSecs() > 0 {
+			sess.CloseWaitSecs(s.options.GetConnCloseWaitSecs())
 		} else {
 			sess.Close()
 		}
 
-		s.getSessCloseInfoChan() <- &sessionCloseInfo{sessionId: sess.id, err: err}
+		s.getSessCloseInfoChan() <- &sessionCloseInfo{sessionId: sess.GetId(), err: err}
 	}(conn)
 }
 
@@ -237,6 +239,6 @@ func (s *Server) handleClose(err *sessionCloseInfo) {
 	if o {
 		delete(s.sessMap, err.sessionId)
 		s.waitWg.Done()
-		getLogger().Info("@@@ handleClose sess count ", len(s.sessMap), ", sessionId: ", err.sessionId)
+		common.GetLogger().Info("handleClose sess count ", len(s.sessMap), ", sessionId: ", err.sessionId)
 	}
 }

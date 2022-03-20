@@ -1,4 +1,4 @@
-package gsnet
+package common
 
 import (
 	"bufio"
@@ -90,7 +90,7 @@ func (c *Conn) Run() {
 func (c *Conn) readLoop() {
 	defer func() {
 		if err := recover(); err != nil {
-			getLogger().WithStack(err)
+			GetLogger().WithStack(err)
 		}
 	}()
 
@@ -98,19 +98,18 @@ func (c *Conn) readLoop() {
 	var closed bool
 	header := make([]byte, c.options.dataProto.GetHeaderLen())
 	for err == nil {
-		closed, err = c._read(header)
+		closed, err = c.readBytes(header)
 		if err != nil || closed {
 			break
 		}
-		c.options.dataProto.SetHeader(header)
 		// todo  1. 判断长度是否超过限制 2. 用内存池来优化
-		bodyLen := c.options.dataProto.GetBodyLen()
+		bodyLen := c.options.dataProto.GetBodyLen(header)
 		if bodyLen > MaxDataBodyLength {
 			err = ErrBodyLenInvalid
 			break
 		}
 		body := make([]byte, bodyLen)
-		closed, err = c._read(body)
+		closed, err = c.readBytes(body)
 		if closed || err != nil {
 			break
 		}
@@ -137,7 +136,7 @@ func (c *Conn) readLoop() {
 }
 
 // 读数据包
-func (c *Conn) _read(data []byte) (closed bool, err error) {
+func (c *Conn) readBytes(data []byte) (closed bool, err error) {
 	var n int
 	for n < len(data) {
 		select {
@@ -167,19 +166,19 @@ func (c *Conn) _read(data []byte) (closed bool, err error) {
 func (c *Conn) writeLoop() {
 	defer func() {
 		if err := recover(); err != nil {
-			getLogger().WithStack(err)
+			GetLogger().WithStack(err)
 		}
 	}()
 	var err error
 	for d := range c.sendCh {
 		closed := false
 		// 写入数据头
-		closed, err = c._write(c.options.dataProto.EncodeBodyLen(d))
+		closed, err = c.writeBytes(c.options.dataProto.EncodeBodyLen(d))
 		if err != nil || closed {
 			break
 		}
 		// 写入数据
-		closed, err = c._write(d)
+		closed, err = c.writeBytes(d)
 		if err != nil || closed {
 			break
 		}
@@ -202,7 +201,7 @@ func (c *Conn) writeLoop() {
 }
 
 // 写数据包
-func (c *Conn) _write(data []byte) (closed bool, err error) {
+func (c *Conn) writeBytes(data []byte) (closed bool, err error) {
 	var n int
 	for n < len(data) {
 		select {
@@ -340,11 +339,11 @@ func (c *Conn) _recvErr() error {
 	return nil
 }
 
-func (c *Conn) getRecvCh() chan []byte {
+func (c *Conn) GetRecvCh() chan []byte {
 	return c.recvCh
 }
 
-func (c *Conn) getErrCh() chan error {
+func (c *Conn) GetErrCh() chan error {
 	return c.errCh
 }
 

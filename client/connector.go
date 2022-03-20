@@ -1,9 +1,11 @@
-package gsnet
+package client
 
 import (
 	"net"
 	"sync/atomic"
 	"time"
+
+	"github.com/huoshan017/gsnet/common"
 )
 
 const (
@@ -14,15 +16,15 @@ const (
 )
 
 type Connector struct {
-	*Conn
-	options         *Options
+	*common.Conn
+	options         *common.Options
 	asyncResultCh   chan error
 	connectCallback func(error)
 	state           int32
 }
 
 // 创建连接器
-func NewConnector(options *Options) *Connector {
+func NewConnector(options *common.Options) *Connector {
 	c := &Connector{
 		options:       options,
 		asyncResultCh: make(chan error),
@@ -52,7 +54,7 @@ func (c *Connector) ConnectAsync(address string, timeout time.Duration, connectC
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				getLogger().WithStack(err)
+				common.GetLogger().WithStack(err)
 			}
 		}()
 		c.connectCallback = connectCB
@@ -132,7 +134,7 @@ func (c *Connector) connect(address string, timeout time.Duration) error {
 		return err
 	}
 	atomic.StoreInt32(&c.state, ConnStateConnected)
-	c.Conn = NewConn(conn, *c.options)
+	c.Conn = common.NewConn(conn, *c.options)
 	c.Run()
 	return nil
 }

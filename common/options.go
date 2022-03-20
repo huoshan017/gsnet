@@ -1,4 +1,4 @@
-package gsnet
+package common
 
 import (
 	"time"
@@ -30,52 +30,104 @@ type Options struct {
 // 选项
 type Option func(*Options)
 
+func (options *Options) GetNodelay() bool {
+	return options.noDelay
+}
+
 func (options *Options) SetNodelay(noDelay bool) {
 	options.noDelay = noDelay
+}
+
+func (options *Options) GetKeepAlived() bool {
+	return options.keepAlived
 }
 
 func (options *Options) SetKeepAlived(keepAlived bool) {
 	options.keepAlived = keepAlived
 }
 
+func (options *Options) GetKeepAlivedPeriod() time.Duration {
+	return options.keepAlivedPeriod
+}
+
 func (options *Options) SetKeepAlivedPeriod(keepAlivedPeriod time.Duration) {
 	options.keepAlivedPeriod = keepAlivedPeriod
+}
+
+func (options *Options) GetReadTimeout() time.Duration {
+	return options.readTimeout
 }
 
 func (options *Options) SetReadTimeout(timeout time.Duration) {
 	options.readTimeout = timeout
 }
 
+func (options *Options) GetWriteTimeout() time.Duration {
+	return options.writeTimeout
+}
+
 func (options *Options) SetWriteTimeout(timeout time.Duration) {
 	options.writeTimeout = timeout
+}
+
+func (options *Options) GetTickSpan() time.Duration {
+	return options.tickSpan
 }
 
 func (options *Options) SetTickSpan(span time.Duration) {
 	options.tickSpan = span
 }
 
+func (options *Options) GetTickHandle() func(time.Duration) {
+	return options.tickHandle
+}
+
 func (options *Options) SetTickHandle(handle func(time.Duration)) {
 	options.tickHandle = handle
+}
+
+func (options *Options) GetDataProto() IDataProto {
+	return options.dataProto
 }
 
 func (options *Options) SetDataProto(proto IDataProto) {
 	options.dataProto = proto
 }
 
+func (options *Options) GetSendChanLen() int {
+	return options.sendChanLen
+}
+
 func (options *Options) SetSendChanLen(chanLen int) {
 	options.sendChanLen = chanLen
+}
+
+func (options *Options) GetRecvChanLen() int {
+	return options.recvChanLen
 }
 
 func (options *Options) SetRecvChanLen(chanLen int) {
 	options.recvChanLen = chanLen
 }
 
+func (options *Options) GetWriteBuffSize() int {
+	return options.writeBuffSize
+}
+
 func (options *Options) SetWriteBuffSize(size int) {
 	options.writeBuffSize = size
 }
 
+func (options *Options) GetReadBuffSize() int {
+	return options.readBuffSize
+}
+
 func (options *Options) SetReadBuffSize(size int) {
 	options.readBuffSize = size
+}
+
+func (options *Options) GetConnCloseWaitSecs() int {
+	return options.connCloseWaitSecs
 }
 
 func (options *Options) SetConnCloseWaitSecs(secs int) {
@@ -174,28 +226,56 @@ type ServiceOptions struct {
 	sessionHandleTick     time.Duration // 会话逻辑处理时间间隔
 }
 
+func (options *ServiceOptions) GetConnMaxCount() int {
+	return options.connMaxCount
+}
+
 func (options *ServiceOptions) SetConnMaxCount(count int) {
 	options.connMaxCount = count
+}
+
+func (options *ServiceOptions) GetConnChanLen() int {
+	return options.connChanLen
 }
 
 func (options *ServiceOptions) SetConnChanLen(chanLen int) {
 	options.connChanLen = chanLen
 }
 
+func (options *ServiceOptions) GetNewSessionHandlerFuncArgs() []interface{} {
+	return options.createHandlerFuncArgs
+}
+
 func (options *ServiceOptions) SetNewSessionHandlerFuncArgs(args ...interface{}) {
 	options.createHandlerFuncArgs = args
+}
+
+func (options *ServiceOptions) GetReuseAddr() bool {
+	return options.reuseAddr
 }
 
 func (options *ServiceOptions) SetReuseAddr(enable bool) {
 	options.reuseAddr = enable
 }
 
+func (options *ServiceOptions) GetReusePort() bool {
+	return options.reusePort
+}
+
 func (options *ServiceOptions) SetReusePort(enable bool) {
 	options.reusePort = enable
 }
 
+func (options *ServiceOptions) GetErrChanLen() int {
+	return options.errChanLen
+}
+
 func (options *ServiceOptions) SetErrChanLen(length int) {
 	options.errChanLen = length
+}
+
+func (options *ServiceOptions) GetSessionHandleTick() time.Duration {
+	return options.sessionHandleTick
 }
 
 func (options *ServiceOptions) SetSessionHandleTick(tick time.Duration) {

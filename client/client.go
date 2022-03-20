@@ -1,19 +1,21 @@
-package gsnet
+package client
 
 import (
 	"time"
+
+	"github.com/huoshan017/gsnet/common"
 )
 
 // 数据客户端
 type Client struct {
 	conn     *Connector
-	sess     ISession
-	handler  ISessionHandler
-	options  ClientOptions
+	sess     common.ISession
+	handler  common.ISessionHandler
+	options  common.ClientOptions
 	lastTime time.Time
 }
 
-func NewClient(handler ISessionHandler, options ...Option) *Client {
+func NewClient(handler common.ISessionHandler, options ...common.Option) *Client {
 	c := &Client{
 		handler: handler,
 	}
@@ -46,7 +48,7 @@ func (c *Client) doConnectResult(err error) {
 	if err == nil && c.handler != nil {
 		c.handler.OnConnect(c.sess)
 	}
-	c.sess = NewSessionNoId(c.conn)
+	c.sess = common.NewSessionNoId(c.conn)
 }
 
 func (c *Client) Send(data []byte) error {
@@ -62,14 +64,14 @@ func (c *Client) Update() error {
 
 	d, err := c.conn.RecvNonblock()
 	// 没有数据
-	if err == ErrRecvChanEmpty {
+	if err == common.ErrRecvChanEmpty {
 		return nil
 	}
 	if err == nil && (d != nil || len(d) > 0) {
 		err = c.handler.OnData(c.sess, d)
 	}
 	if err != nil {
-		if !IsNoDisconnectError(err) {
+		if !common.IsNoDisconnectError(err) {
 			c.handler.OnDisconnect(c.sess, err)
 		} else {
 			c.handler.OnError(err)
@@ -81,8 +83,8 @@ func (c *Client) Update() error {
 
 func (c *Client) Run() {
 	var ticker *time.Ticker
-	if c.handler != nil && c.options.tickSpan > 0 {
-		ticker = time.NewTicker(c.options.tickSpan)
+	if c.handler != nil && c.options.GetTickSpan() > 0 {
+		ticker = time.NewTicker(c.options.GetTickSpan())
 		c.lastTime = time.Now()
 	}
 
@@ -105,7 +107,7 @@ func (c *Client) Run() {
 		ticker.Stop()
 	}
 
-	if err != nil && !IsNoDisconnectError(err) {
+	if err != nil && !common.IsNoDisconnectError(err) {
 		if c.handler != nil {
 			c.handler.OnDisconnect(c.sess, err)
 		}
@@ -114,11 +116,15 @@ func (c *Client) Run() {
 }
 
 func (c *Client) Close() {
-	if c.options.connCloseWaitSecs > 0 {
-		c.conn.CloseWait(c.options.connCloseWaitSecs)
+	if c.options.GetConnCloseWaitSecs() > 0 {
+		c.conn.CloseWait(c.options.GetConnCloseWaitSecs())
 	} else {
 		c.conn.Close()
 	}
+}
+
+func (c *Client) GetSession() common.ISession {
+	return c.sess
 }
 
 func (c *Client) IsConnecting() bool {
@@ -151,10 +157,10 @@ func (c *Client) handle(ticker *time.Ticker) error {
 	var err error
 	if ticker != nil {
 		select {
-		case d = <-c.conn.getRecvCh():
+		case d = <-c.conn.GetRecvCh():
 		case <-ticker.C:
 			c.handleTick()
-		case err = <-c.conn.getErrCh():
+		case err = <-c.conn.GetErrCh():
 		}
 	} else {
 		d, err = c.conn.Recv()
@@ -163,7 +169,7 @@ func (c *Client) handle(ticker *time.Ticker) error {
 		err = c.handler.OnData(c.sess, d)
 	}
 	if err != nil {
-		if IsNoDisconnectError(err) {
+		if common.IsNoDisconnectError(err) {
 			err = nil
 		} else {
 			if c.handler != nil {

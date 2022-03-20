@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet"
+	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/example/game_proto"
+	"github.com/huoshan017/gsnet/server"
 
 	cmap "github.com/orcaman/concurrent-map"
 )
@@ -22,7 +24,7 @@ type Player struct {
 	id      int
 	account string
 	token   string
-	sess    gsnet.ISession
+	sess    common.ISession
 }
 
 func NewPlayer() *Player {
@@ -75,12 +77,12 @@ type config struct {
 
 type DefaultMsgHandler struct {
 	gsnet.MsgHandlerBase
-	msgDecoder gsnet.IMsgDecoder
+	msgDecoder common.IMsgDecoder
 }
 
-func CreateDefaultMsgHandler(args ...interface{}) gsnet.ISessionHandler {
+func CreateDefaultMsgHandler(args ...interface{}) common.ISessionHandler {
 	h := &DefaultMsgHandler{}
-	h.msgDecoder = &gsnet.DefaultMsgDecoder{}
+	h.msgDecoder = &common.DefaultMsgDecoder{}
 	h.MsgHandlerBase = *gsnet.NewMsgHandlerBase(h.msgDecoder)
 	h.MsgHandlerBase.RegisterHandle(game_proto.MsgIdGamePlayerEnterReq, h.onPlayerEnterGame)
 	h.MsgHandlerBase.RegisterHandle(game_proto.MsgIdGamePlayerExitReq, h.onPlayerExitGame)
@@ -88,26 +90,26 @@ func CreateDefaultMsgHandler(args ...interface{}) gsnet.ISessionHandler {
 	return h
 }
 
-func (h *DefaultMsgHandler) OnConnect(sess gsnet.ISession) {
+func (h *DefaultMsgHandler) OnConnect(sess common.ISession) {
 	log.Printf("session %v connected", sess.GetId())
 }
 
-func (h *DefaultMsgHandler) OnDisconnect(sess gsnet.ISession, err error) {
+func (h *DefaultMsgHandler) OnDisconnect(sess common.ISession, err error) {
 	log.Printf("session %v disconnected", sess.GetId())
 }
 
-func (h *DefaultMsgHandler) OnTick(sess gsnet.ISession, tick time.Duration) {
+func (h *DefaultMsgHandler) OnTick(sess common.ISession, tick time.Duration) {
 }
 
 func (h *DefaultMsgHandler) OnError(err error) {
 	log.Printf("err %v", err)
 }
 
-func (h *DefaultMsgHandler) onHandShake(sess gsnet.ISession, data []byte) error {
+func (h *DefaultMsgHandler) onHandShake(sess common.ISession, data []byte) error {
 	return nil
 }
 
-func (h *DefaultMsgHandler) onPlayerEnterGame(sess gsnet.ISession, data []byte) error {
+func (h *DefaultMsgHandler) onPlayerEnterGame(sess common.ISession, data []byte) error {
 	var req game_proto.GamePlayerEnterReq
 	err := json.Unmarshal(data, &req)
 	var resp game_proto.GamePlayerEnterResp
@@ -158,7 +160,7 @@ func (h *DefaultMsgHandler) onPlayerEnterGame(sess gsnet.ISession, data []byte) 
 	return nil
 }
 
-func (h *DefaultMsgHandler) onPlayerExitGame(sess gsnet.ISession, data []byte) error {
+func (h *DefaultMsgHandler) onPlayerExitGame(sess common.ISession, data []byte) error {
 	d := sess.GetData("player")
 	if d == nil {
 		return errors.New("game_service: no invalid session")
@@ -178,19 +180,19 @@ func (h *DefaultMsgHandler) onPlayerExitGame(sess gsnet.ISession, data []byte) e
 }
 
 type GameService struct {
-	net *gsnet.Server
+	net *server.Server
 }
 
 func NewGameService() *GameService {
 	return &GameService{}
 }
 
-func (s *GameService) GetNet() *gsnet.Server {
+func (s *GameService) GetNet() *server.Server {
 	return s.net
 }
 
 func (s *GameService) Init(conf *config) bool {
-	net := gsnet.NewServer(CreateDefaultMsgHandler)
+	net := server.NewServer(CreateDefaultMsgHandler)
 	err := net.Listen(conf.addr)
 	if err != nil {
 		fmt.Println("game service listen addr ", conf.addr, " err: ", err)

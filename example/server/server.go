@@ -6,7 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/huoshan017/gsnet"
+	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/server"
 )
 
 func main() {
@@ -19,7 +20,7 @@ func main() {
 	flag.Parse()
 
 	addr := *ip_str + ":" + *port_str
-	acceptor := gsnet.NewAcceptor()
+	acceptor := server.NewAcceptor()
 	err := acceptor.Listen(addr)
 	if err != nil {
 		fmt.Println("acceptor listen addr: ", addr, " err: ", err)
@@ -33,7 +34,7 @@ func main() {
 
 	c := 0
 	var o bool = true
-	var conn gsnet.IConn
+	var conn common.IConn
 	for o {
 		select {
 		case conn, o = <-acceptor.GetNewConnChan():
@@ -42,7 +43,7 @@ func main() {
 			}
 			conn.Run()
 			c += 1
-			go func(no int, conn gsnet.IConn) {
+			go func(no int, conn common.IConn) {
 				fmt.Println("connection ", no)
 				for {
 					data, e := conn.Recv()

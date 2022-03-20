@@ -1,4 +1,4 @@
-package gsnet
+package common
 
 import "time"
 

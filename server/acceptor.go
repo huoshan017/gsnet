@@ -1,17 +1,18 @@
-package gsnet
+package server
 
 import (
 	"context"
 	"net"
 	"time"
 
+	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/control"
 )
 
 type Acceptor struct {
 	listener net.Listener
-	connCh   chan IServConn
-	options  ServiceOptions
+	connCh   chan common.IServConn
+	options  common.ServiceOptions
 	closeCh  chan struct{}
 	closed   bool
 }
@@ -20,26 +21,26 @@ const (
 	DefaultConnChanLen = 100
 )
 
-func NewAcceptor(options ...Option) *Acceptor {
+func NewAcceptor(options ...common.Option) *Acceptor {
 	s := &Acceptor{
 		closeCh: make(chan struct{}),
 	}
 	for _, option := range options {
 		option(&s.options.Options)
 	}
-	if s.options.connChanLen <= 0 {
-		s.options.connChanLen = DefaultConnChanLen
-		s.connCh = make(chan IServConn, s.options.connChanLen)
+	if s.options.GetConnChanLen() <= 0 {
+		s.options.SetConnChanLen(DefaultConnChanLen)
+		s.connCh = make(chan common.IServConn, s.options.GetConnChanLen())
 	}
 	return s
 }
 
 func (s *Acceptor) Listen(addr string) error {
 	var ctrlOptions control.CtrlOptions
-	if s.options.reuseAddr {
+	if s.options.GetReuseAddr() {
 		ctrlOptions.ReuseAddr = 1
 	}
-	if s.options.reusePort {
+	if s.options.GetReusePort() {
 		ctrlOptions.ReusePort = 1
 	}
 	var lc = net.ListenConfig{
@@ -92,13 +93,13 @@ func (s *Acceptor) serve(listener net.Listener) error {
 			close(s.connCh)
 			break
 		}
-		c := NewServConn(conn, s.options.Options)
+		c := common.NewServConn(conn, s.options.Options)
 		s.connCh <- c
 	}
 	return err
 }
 
-func (s *Acceptor) GetNewConnChan() chan IServConn {
+func (s *Acceptor) GetNewConnChan() chan common.IServConn {
 	return s.connCh
 }
 

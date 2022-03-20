@@ -6,25 +6,26 @@ import (
 	"os"
 	"time"
 
-	"github.com/huoshan017/gsnet"
+	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/server"
 )
 
 type PlayerHandler struct {
 }
 
-func (h *PlayerHandler) OnConnect(s gsnet.ISession) {
+func (h *PlayerHandler) OnConnect(s common.ISession) {
 
 }
 
-func (h *PlayerHandler) OnDisconnect(s gsnet.ISession, err error) {
+func (h *PlayerHandler) OnDisconnect(s common.ISession, err error) {
 
 }
 
-func (h *PlayerHandler) OnData(s gsnet.ISession, data []byte) error {
+func (h *PlayerHandler) OnData(s common.ISession, data []byte) error {
 	return s.Send(data)
 }
 
-func (h *PlayerHandler) OnTick(s gsnet.ISession, tick time.Duration) {
+func (h *PlayerHandler) OnTick(s common.ISession, tick time.Duration) {
 
 }
 
@@ -32,7 +33,7 @@ func (h *PlayerHandler) OnError(err error) {
 
 }
 
-func NewPlayerHandler(args ...interface{}) gsnet.ISessionHandler {
+func NewPlayerHandler(args ...interface{}) common.ISessionHandler {
 	return &PlayerHandler{}
 }
 
@@ -46,7 +47,7 @@ func main() {
 	flag.Parse()
 
 	addr := *ip_str + ":" + *port_str
-	playerService := gsnet.NewServer(NewPlayerHandler)
+	playerService := server.NewServer(NewPlayerHandler)
 	err := playerService.Listen(addr)
 	if err != nil {
 		fmt.Println("player service listen ", addr, " err: ", err)

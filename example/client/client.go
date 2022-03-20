@@ -7,7 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/huoshan017/gsnet"
+	"github.com/huoshan017/gsnet/client"
+	"github.com/huoshan017/gsnet/common"
 )
 
 func main() {
@@ -35,9 +36,9 @@ func main() {
 	rand.Seed(time.Now().Unix())
 	for n := 1; n <= *player_num; n++ {
 		go func(no int) {
-			var options gsnet.Options
-			options.SetDataProto(&gsnet.DefaultDataProto{})
-			conn := gsnet.NewConnector(&options)
+			var options common.Options
+			options.SetDataProto(&common.DefaultDataProto{})
+			conn := client.NewConnector(&options)
 			err := conn.Connect(addr)
 			if err != nil {
 				fmt.Println("connector Connect err: ", err)

@@ -1,49 +1,53 @@
 package gsnet
 
+import (
+	"github.com/huoshan017/gsnet/common"
+)
+
 type MsgData struct {
 }
 
 // 基礎消息处理器
 type MsgHandlerBase struct {
-	msgDecoder IMsgDecoder
-	handles    map[uint32]func(ISession, []byte) error
+	msgDecoder common.IMsgDecoder
+	handles    map[uint32]func(common.ISession, []byte) error
 }
 
-func NewMsgHandlerBase(msgDecoder IMsgDecoder) *MsgHandlerBase {
+func NewMsgHandlerBase(msgDecoder common.IMsgDecoder) *MsgHandlerBase {
 	h := &MsgHandlerBase{}
 	h.init(msgDecoder)
 	return h
 }
 
-func (h *MsgHandlerBase) init(msgDecoder IMsgDecoder) {
+func (h *MsgHandlerBase) init(msgDecoder common.IMsgDecoder) {
 	h.msgDecoder = msgDecoder
-	h.handles = make(map[uint32]func(ISession, []byte) error)
+	h.handles = make(map[uint32]func(common.ISession, []byte) error)
 }
 
-func (h *MsgHandlerBase) RegisterHandle(msgid uint32, handle func(ISession, []byte) error) {
+func (h *MsgHandlerBase) RegisterHandle(msgid uint32, handle func(common.ISession, []byte) error) {
 	h.handles[msgid] = handle
 }
 
-func (h *MsgHandlerBase) OnMessage(sess ISession, msg MsgData) error {
+func (h *MsgHandlerBase) OnMessage(sess common.ISession, msg MsgData) error {
 	return nil
 }
 
-func (h *MsgHandlerBase) OnData(sess ISession, data []byte) error {
+func (h *MsgHandlerBase) OnData(sess common.ISession, data []byte) error {
 	msgid, msgdata := h.msgDecoder.Decode(data)
 	handle, o := h.handles[msgid]
 	if !o {
-		e := ErrNoMsgHandleFunc(msgid)
-		CheckAndRegisterNoDisconnectError(e)
+		e := common.ErrNoMsgHandleFunc(msgid)
+		common.CheckAndRegisterNoDisconnectError(e)
 		return e
 	}
 	return handle(sess, msgdata)
 }
 
-func (h *MsgHandlerBase) Send(sess ISession, msgid uint32, msgdata []byte) error {
+func (h *MsgHandlerBase) Send(sess common.ISession, msgid uint32, msgdata []byte) error {
 	data := h.msgDecoder.Encode(msgid, msgdata)
 	return sess.Send(data)
 }
 
 func NewDefaultMsgHandlerBase() *MsgHandlerBase {
-	return NewMsgHandlerBase(&DefaultMsgDecoder{})
+	return NewMsgHandlerBase(&common.DefaultMsgDecoder{})
 }

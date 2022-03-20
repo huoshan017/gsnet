@@ -1,4 +1,4 @@
-package gsnet
+package common
 
 type Session struct {
 	conn    IConn
