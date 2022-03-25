@@ -18,24 +18,32 @@ func TestClient(t *testing.T) {
 
 	t.Logf("server for test client running")
 
-	tc := createTestClient(t, 1)
+	sendNum := 10
+	sd := createNolockSendDataInfo(int32(sendNum))
+	tc := createTestClient2(t, 1, sd)
 	err = tc.Connect(testAddress)
 	if err != nil {
 		t.Errorf("test client connect err: %+v", err)
 		return
 	}
+	defer tc.Close()
+
 	go tc.Run()
 
 	t.Logf("test client running")
 
-	for i := 0; i < 10000; i++ {
-		err := tc.Send([]byte("abcdefghijklmnopqrstuvwxyz0123456789"))
+	for i := 0; i < sendNum; i++ {
+		d := []byte("abcdefghijklmnopqrstuvwxyz0123456789")
+		err := tc.Send(d)
 		if err != nil {
 			t.Errorf("test client send err: %+v", err)
 			return
 		}
+		sd.appendSendData(d)
 		time.Sleep(time.Millisecond)
 	}
+
+	time.Sleep(time.Second)
 
 	t.Logf("test done")
 }

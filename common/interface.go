@@ -11,16 +11,10 @@ type IConn interface {
 	RecvNonblock() ([]byte, error)
 	Send([]byte) error
 	SendNonblock(buf []byte) error
-	SetTick(tick time.Duration)
 	Run()
+	Wait(ctx context.Context) ([]byte, error)
 	Close()
 	CloseWait(int)
-}
-
-// 服務器連接接口
-type IServConn interface {
-	IConn
-	Wait(ctx context.Context) ([]byte, error)
 }
 
 // 会话接口

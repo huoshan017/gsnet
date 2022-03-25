@@ -3,6 +3,7 @@ package common
 import (
 	"bufio"
 	"context"
+	"io"
 	"net"
 	"sync/atomic"
 	"time"
@@ -11,6 +12,8 @@ import (
 const (
 	DefaultConnRecvChanLen = 100
 	DefaultConnSendChanLen = 100
+	DefaultReadTimeout     = time.Second * 5
+	DefaultWriteTimeout    = time.Second * 5
 	MaxDataBodyLength      = 128 * 1024
 	MinConnTick            = 10 * time.Millisecond
 	DefaultConnTick        = 30 * time.Millisecond
@@ -78,6 +81,10 @@ func NewConn(conn net.Conn, options Options) *Conn {
 		}
 	}
 
+	if c.options.tickSpan > 0 && c.options.tickSpan < MinConnTick {
+		c.options.tickSpan = MinConnTick
+	}
+
 	return c
 }
 
@@ -95,69 +102,63 @@ func (c *Conn) readLoop() {
 	}()
 
 	var err error
-	var closed bool
 	header := make([]byte, c.options.dataProto.GetHeaderLen())
 	for err == nil {
-		closed, err = c.readBytes(header)
-		if err != nil || closed {
+		err = c.readBytes(header)
+		if err != nil {
 			break
 		}
+
 		// todo  1. 判断长度是否超过限制 2. 用内存池来优化
 		bodyLen := c.options.dataProto.GetBodyLen(header)
 		if bodyLen > MaxDataBodyLength {
 			err = ErrBodyLenInvalid
 			break
 		}
+
 		body := make([]byte, bodyLen)
-		closed, err = c.readBytes(body)
-		if closed || err != nil {
+		err = c.readBytes(body)
+		if err != nil {
 			break
 		}
 
 		select {
 		case err = <-c.errWriteCh:
 		case <-c.closeCh:
-			err = ErrConnClosed
+			err = c.genErrConnClosed()
 		case c.recvCh <- body:
 		}
 	}
-	// 停止定时器
-	if c.ticker != nil {
-		c.ticker.Stop()
-	}
-	// 关闭接收通道
-	close(c.recvCh)
 	// 错误写入通道
 	if err != nil {
 		c.errCh <- err
 	}
 	// 关闭错误通道
 	close(c.errCh)
+	// 关闭接收通道
+	close(c.recvCh)
 }
 
 // 读数据包
-func (c *Conn) readBytes(data []byte) (closed bool, err error) {
-	var n int
-	for n < len(data) {
-		select {
-		case <-c.closeCh:
-			closed = true
-			return
-		case err = <-c.errWriteCh: // 接收写协程的错误
-			return
-		default:
-		}
+func (c *Conn) readBytes(data []byte) (err error) {
+	select {
+	case <-c.closeCh:
+		err = c.genErrConnClosed()
+	case err = <-c.errWriteCh: // 接收写协程的错误
+	default:
+	}
 
-		if c.options.readTimeout != 0 {
-			c.conn.SetReadDeadline(time.Now().Add(c.options.readTimeout))
-		}
+	if err != nil {
+		return
+	}
 
-		var nn int
-		nn, err = c.reader.Read(data[n:])
-		if err != nil {
-			return
-		}
-		n += nn
+	if c.options.readTimeout != 0 {
+		c.conn.SetReadDeadline(time.Now().Add(c.options.readTimeout))
+	}
+
+	_, err = io.ReadFull(c.reader, data)
+	if err != nil {
+		GetLogger().Infof("gsnet: io.ReadFull err: %v", err)
 	}
 	return
 }
@@ -171,25 +172,25 @@ func (c *Conn) writeLoop() {
 	}()
 	var err error
 	for d := range c.sendCh {
-		closed := false
 		// 写入数据头
-		closed, err = c.writeBytes(c.options.dataProto.EncodeBodyLen(d))
-		if err != nil || closed {
+		err = c.writeBytes(c.options.dataProto.EncodeBodyLen(d))
+		if err != nil {
 			break
 		}
 		// 写入数据
-		closed, err = c.writeBytes(d)
-		if err != nil || closed {
+		err = c.writeBytes(d)
+		if err != nil {
 			break
 		}
+		// 数据还在缓冲
 		if c.writer.Buffered() > 0 {
 			if c.options.writeTimeout != 0 {
 				c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
 			}
 			err = c.writer.Flush()
-		}
-		if err != nil {
-			break
+			if err != nil {
+				break
+			}
 		}
 	}
 	// 错误写入通道由读协程接收
@@ -201,26 +202,21 @@ func (c *Conn) writeLoop() {
 }
 
 // 写数据包
-func (c *Conn) writeBytes(data []byte) (closed bool, err error) {
-	var n int
-	for n < len(data) {
-		select {
-		case <-c.closeCh:
-			closed = true
-			return
-		default:
-		}
+func (c *Conn) writeBytes(data []byte) (err error) {
+	select {
+	case <-c.closeCh:
+		err = c.genErrConnClosed()
+		return
+	default:
+	}
 
-		if c.options.writeTimeout != 0 {
-			c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
-		}
+	if c.options.writeTimeout != 0 {
+		c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+	}
 
-		var nn int
-		nn, err = c.writer.Write(data[n:])
-		if err != nil {
-			return
-		}
-		n += nn
+	_, err = c.writer.Write(data)
+	if err != nil {
+		GetLogger().Infof("gsnet: w.writer.Write err: %v", err)
 	}
 	return
 }
@@ -243,9 +239,14 @@ func (c *Conn) closeWait(secs int) {
 	if secs != 0 {
 		c.conn.(*net.TCPConn).SetLinger(secs)
 	}
+	// 连接断开
 	c.conn.Close()
-	close(c.sendCh)
+	// 停止定时器
+	if c.ticker != nil {
+		c.ticker.Stop()
+	}
 	close(c.closeCh)
+	close(c.sendCh)
 }
 
 // 是否关闭
@@ -256,14 +257,17 @@ func (c *Conn) IsClosed() bool {
 // 发送数据，必須與Close函數在同一goroutine調用
 func (c *Conn) Send(data []byte) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
-		return ErrConnClosed
+		return c.genErrConnClosed()
 	}
+	var err error
 	select {
-	case err, o := <-c.errCh:
-		if !o {
-			return ErrConnClosed
+	case err = <-c.errCh:
+		if err == nil {
+			return c.genErrConnClosed()
 		}
 		return err
+	case <-c.closeCh:
+		return c.genErrConnClosed()
 	case c.sendCh <- data:
 	}
 	return nil
@@ -272,13 +276,15 @@ func (c *Conn) Send(data []byte) error {
 // 非阻塞发送
 func (c *Conn) SendNonblock(data []byte) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
-		return ErrConnClosed
+		return c.genErrConnClosed()
 	}
-	err := c._recvErr()
+	err := c.recvErr()
 	if err != nil {
 		return err
 	}
 	select {
+	case <-c.closeCh:
+		return c.genErrConnClosed()
 	case c.sendCh <- data:
 	default:
 		return ErrSendChanFull
@@ -289,16 +295,16 @@ func (c *Conn) SendNonblock(data []byte) error {
 // 接收数据
 func (c *Conn) Recv() ([]byte, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
-		return nil, ErrConnClosed
+		return nil, c.genErrConnClosed()
 	}
-	err := c._recvErr()
+	err := c.recvErr()
 	if err != nil {
 		return nil, err
 	}
 
-	data, o := <-c.recvCh
-	if !o {
-		return nil, ErrConnClosed
+	data := <-c.recvCh
+	if data == nil {
+		return nil, c.genErrConnClosed()
 	}
 	return data, nil
 }
@@ -308,17 +314,16 @@ func (c *Conn) RecvNonblock() ([]byte, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
 	}
-	err := c._recvErr()
+	err := c.recvErr()
 	if err != nil {
 		return nil, err
 	}
 
 	var data []byte
-	var o bool
 	select {
-	case data, o = <-c.recvCh:
-		if !o {
-			return nil, ErrConnClosed
+	case data = <-c.recvCh:
+		if data == nil {
+			return nil, c.genErrConnClosed()
 		}
 	default:
 		return nil, ErrRecvChanEmpty
@@ -327,69 +332,66 @@ func (c *Conn) RecvNonblock() ([]byte, error) {
 }
 
 // 接收错误
-func (c *Conn) _recvErr() error {
+func (c *Conn) recvErr() error {
 	select {
-	case err, o := <-c.errCh:
-		if !o {
-			return ErrConnClosed
+	case err := <-c.errCh:
+		if err == nil {
+			return c.genErrConnClosed()
 		}
 		return err
+	case <-c.closeCh:
+		return c.genErrConnClosed()
 	default:
 	}
 	return nil
 }
 
-func (c *Conn) GetRecvCh() chan []byte {
-	return c.recvCh
-}
-
-func (c *Conn) GetErrCh() chan error {
-	return c.errCh
-}
-
-func (c *Conn) SetTick(tick time.Duration) {
-	if tick < MinConnTick {
-		tick = MinConnTick
-	}
-	c.ticker = time.NewTicker(tick)
-}
-
-type ServConn struct {
-	Conn
-}
-
-func NewServConn(conn net.Conn, options Options) *ServConn {
-	return &ServConn{
-		Conn: *NewConn(conn, options),
-	}
+func (c *Conn) genErrConnClosed() error {
+	//debug.PrintStack()
+	return ErrConnClosed
 }
 
 // 等待选择结果
-func (c *ServConn) Wait(ctx context.Context) ([]byte, error) {
+func (c *Conn) Wait(ctx context.Context) ([]byte, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
 	}
 
-	if c.ticker == nil && c.options.tickHandle != nil {
-		c.ticker = time.NewTicker(DefaultConnTick)
+	if c.ticker == nil && c.options.tickSpan > 0 {
+		c.ticker = time.NewTicker(c.options.tickSpan)
 	}
 
 	var (
-		d   []byte
+		d   []byte = nil
 		err error
-		o   bool
 	)
-	select {
-	case <-ctx.Done():
-		err = ErrCancelWait
-	case d, o = <-c.recvCh:
-		if !o {
-			err = ErrConnClosed
+
+	if c.ticker != nil {
+		select {
+		case <-ctx.Done():
+			err = ErrCancelWait
+		case d = <-c.recvCh:
+			if d == nil {
+				err = ErrConnClosed
+			}
+		case <-c.ticker.C:
+		case err = <-c.errCh:
+			if err == nil {
+				err = ErrConnClosed
+			}
 		}
-	case <-c.ticker.C:
-	case err, o = <-c.errCh:
-		if !o {
-			err = ErrConnClosed
+	} else {
+		select {
+		case <-ctx.Done():
+			err = ErrCancelWait
+		case d = <-c.recvCh:
+			if d == nil {
+				err = ErrConnClosed
+			}
+		case err = <-c.errCh:
+			if err == nil {
+				err = ErrConnClosed
+			}
 		}
 	}
 	return d, err

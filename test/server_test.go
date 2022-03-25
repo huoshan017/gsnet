@@ -2,7 +2,9 @@ package test
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/server"
@@ -40,34 +42,38 @@ func testServer(t *testing.T, state int32, typ int32) {
 	t.Logf("test server is running")
 
 	clientNum := 4000
+	sendNum := 1000
+	n := int32(0)
 	var wg sync.WaitGroup
 	wg.Add(clientNum)
 
 	// 创建一堆客户端
 	for i := 0; i < clientNum; i++ {
-		tc := createTestClient(t, 2)
-		go func(c *client.Client, idx int) {
+		go func(idx int) {
 			defer wg.Done()
+
+			sd := createSendDataInfo(int32(sendNum))
+			c := createTestClient(t, 2, sd)
 			err := c.Connect(testAddress)
 			if err != nil {
-				t.Errorf("client for test server connect address %v err: %v", testAddress, err)
+				nn := atomic.AddInt32(&n, 1)
+				t.Logf("client idx(%v) count(%v) for test server connect address %v err: %v", idx, nn, testAddress, err)
 				return
 			}
 			t.Logf("client %v connected server", idx)
-			// 另起goroutine执行Client的Run函数
-			go func(c *client.Client) {
-				c.Run()
-			}(c)
-			for i := 0; i < 1000; i++ {
-				err := c.Send([]byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,"))
-				if err != nil {
-					t.Errorf("client for test server send data err: %v", err)
-					break
-				}
-			}
-			c.Close()
-			t.Logf("client %v test done", idx)
-		}(tc, i)
+
+			defer c.Close()
+
+			go func() {
+				sd.waitEnd()
+				c.Quit()
+			}()
+
+			c.Run()
+
+			nn := atomic.AddInt32(&n, 1)
+			t.Logf("client idx(%v) count(%v) test done", idx, nn)
+		}(i)
 	}
 
 	wg.Wait()
@@ -81,6 +87,73 @@ func TestServer(t *testing.T) {
 	//t.Logf("test server with handler done")
 	//testServer(t, 1, 2)
 	//t.Logf("test server with reuse port")
+}
+
+func TestServer2(t *testing.T) {
+	srv := createTestServer(t, 1)
+	err := srv.Listen(testAddress)
+	if err != nil {
+		t.Errorf("test server listen address %v err: %v", testAddress, err)
+		return
+	}
+	defer srv.End()
+
+	go func(s *server.Server) {
+		s.Start()
+	}(srv)
+
+	t.Logf("test server is running")
+
+	clientNum := 5000
+	sendNum := 1000
+	n := int32(0)
+	var wg sync.WaitGroup
+	wg.Add(clientNum)
+
+	// 创建一堆客户端
+	for i := 0; i < clientNum; i++ {
+		go func(idx int) {
+			defer wg.Done()
+
+			sd := createNolockSendDataInfo(int32(sendNum))
+			c := createTestClient2(t, 2, sd)
+			err := c.Connect(testAddress)
+			if err != nil {
+				nn := atomic.AddInt32(&n, 1)
+				t.Logf("client idx(%v) count(%v) for test server connect address %v err: %v", idx, nn, testAddress, err)
+				return
+			}
+			t.Logf("client %v connected server", idx)
+			defer c.Close()
+
+			ss := 0
+			for {
+				if ss < sendNum {
+					d := randBytes(100)
+					err := c.Send(d)
+					if err != nil {
+						nn := atomic.AddInt32(&n, 1)
+						t.Logf("client idx(%v) count(%v) for test server send data err: %v", idx, nn, err)
+						return
+					}
+					sd.appendSendData(d)
+					ss += 1
+				}
+				err = c.Update()
+				if err != nil {
+					return
+				}
+				if sd.getComparedNum() >= int32(sendNum) {
+					break
+				}
+				time.Sleep(time.Millisecond * 1)
+			}
+			nn := atomic.AddInt32(&n, 1)
+			t.Logf("client idx(%v) count(%v) test done", idx, nn)
+		}(i)
+	}
+
+	wg.Wait()
 }
 
 func BenchmarkServer(b *testing.B) {

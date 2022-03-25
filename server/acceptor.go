@@ -11,8 +11,8 @@ import (
 
 type Acceptor struct {
 	listener net.Listener
-	connCh   chan common.IServConn
-	options  common.ServiceOptions
+	connCh   chan common.IConn
+	options  ServerOptions
 	closeCh  chan struct{}
 	closed   bool
 }
@@ -30,7 +30,7 @@ func NewAcceptor(options ...common.Option) *Acceptor {
 	}
 	if s.options.GetConnChanLen() <= 0 {
 		s.options.SetConnChanLen(DefaultConnChanLen)
-		s.connCh = make(chan common.IServConn, s.options.GetConnChanLen())
+		s.connCh = make(chan common.IConn, s.options.GetConnChanLen())
 	}
 	return s
 }
@@ -93,13 +93,13 @@ func (s *Acceptor) serve(listener net.Listener) error {
 			close(s.connCh)
 			break
 		}
-		c := common.NewServConn(conn, s.options.Options)
+		c := common.NewConn(conn, s.options.Options)
 		s.connCh <- c
 	}
 	return err
 }
 
-func (s *Acceptor) GetNewConnChan() chan common.IServConn {
+func (s *Acceptor) GetNewConnChan() chan common.IConn {
 	return s.connCh
 }
 

@@ -24,9 +24,9 @@ type sessionCloseInfo struct {
 type Server struct {
 	acceptor          *Acceptor
 	sessHandlerType   reflect.Type
-	newHandlerFunc    common.NewSessionHandlerFunc
+	newHandlerFunc    NewSessionHandlerFunc
 	mainTickHandle    func(time.Duration)
-	options           common.ServiceOptions
+	options           ServerOptions
 	sessCloseInfoChan chan *sessionCloseInfo
 	sessionIdCounter  uint64
 	sessMap           map[uint64]*common.Session
@@ -36,7 +36,7 @@ type Server struct {
 	endLoopCh         chan struct{}
 }
 
-func NewServer(newFunc common.NewSessionHandlerFunc, options ...common.Option) *Server {
+func NewServer(newFunc NewSessionHandlerFunc, options ...common.Option) *Server {
 	s := &Server{
 		newHandlerFunc: newFunc,
 		sessMap:        make(map[uint64]*common.Session),
@@ -104,7 +104,7 @@ func (s *Server) Start() {
 		lastTime = time.Now()
 	}
 
-	var conn common.IServConn
+	var conn common.IConn
 	var o bool = true
 	if ticker != nil {
 		for o {
@@ -155,7 +155,7 @@ func (s *Server) getSessCloseInfoChan() chan *sessionCloseInfo {
 	return s.sessCloseInfoChan
 }
 
-func (s *Server) handleConn(conn common.IServConn) {
+func (s *Server) handleConn(conn common.IConn) {
 	if len(s.sessMap) >= s.options.GetConnMaxCount() {
 		common.GetLogger().Info("gsnet: connection to server is maximum")
 		return
@@ -185,7 +185,7 @@ func (s *Server) handleConn(conn common.IServConn) {
 	s.waitWg.Add(1)
 
 	// 會話處理綫程
-	go func(conn common.IServConn) {
+	go func(conn common.IConn) {
 		defer func() {
 			if err := recover(); err != nil {
 				common.GetLogger().WithStack(err)
@@ -193,9 +193,6 @@ func (s *Server) handleConn(conn common.IServConn) {
 		}()
 
 		handler.OnConnect(sess)
-
-		// 会话处理时间间隔设置到连接
-		conn.SetTick(s.options.GetSessionHandleTick())
 
 		var (
 			lastTime time.Time = time.Now()
@@ -225,9 +222,9 @@ func (s *Server) handleConn(conn common.IServConn) {
 
 		handler.OnDisconnect(sess, err)
 		if s.options.GetConnCloseWaitSecs() > 0 {
-			sess.CloseWaitSecs(s.options.GetConnCloseWaitSecs())
+			conn.CloseWait(s.options.GetConnCloseWaitSecs())
 		} else {
-			sess.Close()
+			conn.Close()
 		}
 
 		s.getSessCloseInfoChan() <- &sessionCloseInfo{sessionId: sess.GetId(), err: err}

@@ -20,7 +20,7 @@ type DefaultDataProto struct {
 }
 
 func (p DefaultDataProto) GetHeaderLen() uint8 {
-	return 4
+	return 3
 }
 
 func (p DefaultDataProto) GetBodyLen(header []byte) uint32 {
@@ -33,7 +33,7 @@ func (p DefaultDataProto) GetBodyLen(header []byte) uint32 {
 func (p DefaultDataProto) EncodeBodyLen(data []byte) []byte {
 	dl := len(data)
 	// todo 用内存池优化
-	bh := make([]byte, 4)
+	bh := make([]byte, 3)
 	bh[0] = byte(dl >> 16 & 0xff)
 	bh[1] = byte(dl >> 8 & 0xff)
 	bh[2] = byte(dl & 0xff)

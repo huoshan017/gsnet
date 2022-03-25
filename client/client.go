@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
@@ -11,14 +12,17 @@ type Client struct {
 	conn     *Connector
 	sess     common.ISession
 	handler  common.ISessionHandler
-	options  common.ClientOptions
+	options  ClientOptions
 	lastTime time.Time
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 func NewClient(handler common.ISessionHandler, options ...common.Option) *Client {
 	c := &Client{
 		handler: handler,
 	}
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	for _, option := range options {
 		option(&c.options.Options)
 	}
@@ -26,15 +30,23 @@ func NewClient(handler common.ISessionHandler, options ...common.Option) *Client
 }
 
 func (c *Client) Connect(addr string) error {
-	c.newConnector()
-	err := c.conn.Connect(addr)
+	conn := c.newConnector()
+	err := conn.Connect(addr)
+	c.doConnectResult(err)
+	return err
+}
+
+func (c *Client) ConnectWithTimeout(addr string, timeout time.Duration) error {
+	conn := c.newConnector()
+	err := conn.ConnectWithTimeout(addr, timeout)
 	c.doConnectResult(err)
 	return err
 }
 
 func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(error)) {
-	c.newConnector()
-	c.conn.ConnectAsync(addr, timeout, func(err error) {
+	conn := c.newConnector()
+	conn.ConnectAsync(addr, timeout, func(err error) {
+		callback(err)
 		c.doConnectResult(err)
 	})
 }
@@ -73,38 +85,21 @@ func (c *Client) Update() error {
 	if err != nil {
 		if !common.IsNoDisconnectError(err) {
 			c.handler.OnDisconnect(c.sess, err)
+			c.conn.Close()
 		} else {
 			c.handler.OnError(err)
 		}
-		c.conn.Close()
 	}
 	return err
 }
 
 func (c *Client) Run() {
-	var ticker *time.Ticker
-	if c.handler != nil && c.options.GetTickSpan() > 0 {
-		ticker = time.NewTicker(c.options.GetTickSpan())
-		c.lastTime = time.Now()
-	}
-
 	var err error
 	for {
-		if ticker != nil {
-			err = c.handle(ticker)
-			if err != nil {
-				break
-			}
-		} else {
-			err = c.handle(nil)
-			if err != nil {
-				break
-			}
+		err = c.handle()
+		if err != nil {
+			break
 		}
-	}
-
-	if ticker != nil {
-		ticker.Stop()
 	}
 
 	if err != nil && !common.IsNoDisconnectError(err) {
@@ -115,12 +110,20 @@ func (c *Client) Run() {
 	}
 }
 
+func (c *Client) Quit() {
+	c.cancel()
+}
+
 func (c *Client) Close() {
 	if c.options.GetConnCloseWaitSecs() > 0 {
 		c.conn.CloseWait(c.options.GetConnCloseWaitSecs())
 	} else {
 		c.conn.Close()
 	}
+}
+
+func (c *Client) CloseWait(secs int) {
+	c.conn.CloseWait(secs)
 }
 
 func (c *Client) GetSession() common.ISession {
@@ -152,29 +155,21 @@ func (c *Client) IsDisconnecting() bool {
 	return c.conn.IsDisconnecting()
 }
 
-func (c *Client) handle(ticker *time.Ticker) error {
-	var d []byte
+func (c *Client) handle() error {
+	var data []byte
 	var err error
-	if ticker != nil {
-		select {
-		case d = <-c.conn.GetRecvCh():
-		case <-ticker.C:
+	data, err = c.conn.Wait(c.ctx)
+	if err == nil {
+		if data != nil {
+			err = c.handler.OnData(c.sess, data)
+		} else {
 			c.handleTick()
-		case err = <-c.conn.GetErrCh():
 		}
-	} else {
-		d, err = c.conn.Recv()
-	}
-	if err == nil && (d != nil || len(d) > 0) {
-		err = c.handler.OnData(c.sess, d)
 	}
 	if err != nil {
-		if common.IsNoDisconnectError(err) {
-			err = nil
+		if !common.IsNoDisconnectError(err) {
 		} else {
-			if c.handler != nil {
-				c.handler.OnError(err)
-			}
+			c.handler.OnError(err)
 		}
 	}
 	return err
