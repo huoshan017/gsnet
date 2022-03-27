@@ -8,13 +8,13 @@ type MsgDispatcher struct {
 	disconnectHandle func(ISession, error)
 	tickHandle       func(ISession, time.Duration)
 	errHandle        func(error)
-	handleMap        map[uint32]func(ISession, []byte) error
+	handleMap        map[uint32]func(ISession, interface{}) error
 	msgDecoder       IMsgDecoder
 }
 
 func NewMsgDispatcher(msgDecoder IMsgDecoder) *MsgDispatcher {
 	d := &MsgDispatcher{}
-	d.handleMap = make(map[uint32]func(ISession, []byte) error)
+	d.handleMap = make(map[uint32]func(ISession, interface{}) error)
 	d.msgDecoder = msgDecoder
 	return d
 }
@@ -35,7 +35,7 @@ func (d *MsgDispatcher) SetErrorHandle(handle func(error)) {
 	d.errHandle = handle
 }
 
-func (d *MsgDispatcher) RegisterHandle(msgid uint32, handle func(ISession, []byte) error) {
+func (d *MsgDispatcher) RegisterHandle(msgid uint32, handle func(ISession, interface{}) error) {
 	d.handleMap[msgid] = handle
 }
 
@@ -57,8 +57,12 @@ func (d *MsgDispatcher) OnTick(s ISession, tick time.Duration) {
 	}
 }
 
-func (d *MsgDispatcher) OnData(s ISession, data []byte) error {
-	msgid, msgdata := d.msgDecoder.Decode(data)
+func (d *MsgDispatcher) OnData(s ISession, data interface{}) error {
+	dd, o := data.([]byte)
+	if !o {
+		panic("gsnet: data type must be []byte")
+	}
+	msgid, msgdata := d.msgDecoder.Decode(dd)
 	h, o := d.handleMap[msgid]
 	if !o {
 		e := ErrNoMsgHandleFunc(msgid)

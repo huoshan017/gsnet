@@ -196,7 +196,7 @@ func (s *Server) handleConn(conn common.IConn) {
 
 		var (
 			lastTime time.Time = time.Now()
-			data     []byte
+			data     interface{}
 			err      error
 			run      bool = true
 		)

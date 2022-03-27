@@ -37,7 +37,7 @@ func (c *MsgClient) SetErrorHandle(handle func(error)) {
 	c.dispatcher.SetErrorHandle(handle)
 }
 
-func (c *MsgClient) RegisterHandle(msgid uint32, handle func(common.ISession, []byte) error) {
+func (c *MsgClient) RegisterHandle(msgid uint32, handle func(common.ISession, interface{}) error) {
 	c.dispatcher.RegisterHandle(msgid, handle)
 }
 

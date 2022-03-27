@@ -28,14 +28,6 @@ func createSendDataInfo(cnum int32) *sendDataInfo {
 	return &sendDataInfo{
 		list:  make([][]byte, 0),
 		cnum:  cnum,
-		numCh: make(chan int32),
-	}
-}
-
-func createNolockSendDataInfo(cnum int32) *sendDataInfo {
-	return &sendDataInfo{
-		list:  make([][]byte, 0),
-		cnum:  cnum,
 		numCh: make(chan int32, 1),
 	}
 }
@@ -122,8 +114,16 @@ func (h *testClientHandler) OnDisconnect(sess common.ISession, err error) {
 	}
 }
 
-func (h *testClientHandler) OnData(sess common.ISession, data []byte) error {
-	if o, e := h.sendDataList.compareData(data, true); !o {
+func (h *testClientHandler) OnData(sess common.ISession, data interface{}) error {
+	var (
+		d []byte
+		o bool
+		e error
+	)
+	if d, o = data.([]byte); !o {
+		panic("data type must be []byte")
+	}
+	if o, e = h.sendDataList.compareData(d, true); !o {
 		err := fmt.Errorf("compare err: %v", e)
 		if h.t != nil {
 			panic(err)
@@ -168,8 +168,8 @@ func createTestClient2(t *testing.T, state int32, userData interface{}) *client.
 	return client.NewClient(h)
 }
 
-func createBenchmarkClient(b *testing.B, state int32) *client.Client {
-	return client.NewClient(newTestClientHandler(b, state))
+func createBenchmarkClient(b *testing.B, state int32, userData interface{}) *client.Client {
+	return client.NewClient(newTestClientHandler(b, state, userData))
 }
 
 type testServerHandler struct {
@@ -209,7 +209,7 @@ func (h *testServerHandler) OnDisconnect(sess common.ISession, err error) {
 	}
 }
 
-func (h *testServerHandler) OnData(sess common.ISession, data []byte) error {
+func (h *testServerHandler) OnData(sess common.ISession, data interface{}) error {
 	err := sess.Send(data)
 	if err != nil {
 		str := fmt.Sprintf("OnData with session %v send err: %v", sess.GetId(), err)

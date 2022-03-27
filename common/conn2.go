@@ -9,33 +9,25 @@ import (
 	"time"
 )
 
-const (
-	DefaultConnRecvChanLen = 100
-	DefaultConnSendChanLen = 100
-	DefaultReadTimeout     = time.Second * 5
-	DefaultWriteTimeout    = time.Second * 5
-	MaxDataBodyLength      = 128 * 1024
-	MinConnTick            = 10 * time.Millisecond
-	DefaultConnTick        = 30 * time.Millisecond
-)
+const ()
 
-type Conn struct {
+type Conn2 struct {
 	conn       net.Conn
 	options    Options
 	writer     *bufio.Writer
 	reader     *bufio.Reader
-	recvCh     chan interface{} // 缓存从网络接收的数据，对应一个接收者一个发送者
-	sendCh     chan interface{} // 缓存发往网络的数据，对应一个接收者一个发送者
-	closeCh    chan struct{}    // 关闭通道
-	closed     int32            // 是否关闭
-	errCh      chan error       // 错误通道
-	errWriteCh chan error       // 写错误通道
-	ticker     *time.Ticker     // 定时器
+	recvCh     chan []byte   // 缓存从网络接收的数据，对应一个接收者一个发送者
+	sendCh     chan []byte   // 缓存发往网络的数据，对应一个接收者一个发送者
+	closeCh    chan struct{} // 关闭通道
+	closed     int32         // 是否关闭
+	errCh      chan error    // 错误通道
+	errWriteCh chan error    // 写错误通道
+	ticker     *time.Ticker  // 定时器
 }
 
 // 创建新连接
-func NewConn(conn net.Conn, options Options) *Conn {
-	c := &Conn{
+func NewConn2(conn net.Conn, options Options) *Conn2 {
+	c := &Conn2{
 		conn:       conn,
 		options:    options,
 		closeCh:    make(chan struct{}),
@@ -58,12 +50,12 @@ func NewConn(conn net.Conn, options Options) *Conn {
 	if c.options.recvChanLen <= 0 {
 		c.options.recvChanLen = DefaultConnRecvChanLen
 	}
-	c.recvCh = make(chan interface{}, c.options.recvChanLen)
+	c.recvCh = make(chan []byte, c.options.recvChanLen)
 
 	if c.options.sendChanLen <= 0 {
 		c.options.sendChanLen = DefaultConnSendChanLen
 	}
-	c.sendCh = make(chan interface{}, c.options.sendChanLen)
+	c.sendCh = make(chan []byte, c.options.sendChanLen)
 
 	if c.options.dataProto == nil {
 		c.options.dataProto = &DefaultDataProto{}
@@ -88,13 +80,13 @@ func NewConn(conn net.Conn, options Options) *Conn {
 	return c
 }
 
-func (c *Conn) Run() {
+func (c *Conn2) Run() {
 	go c.readLoop()
 	go c.writeLoop()
 }
 
 // 读循环
-func (c *Conn) readLoop() {
+func (c *Conn2) readLoop() {
 	defer func() {
 		if err := recover(); err != nil {
 			GetLogger().WithStack(err)
@@ -140,7 +132,7 @@ func (c *Conn) readLoop() {
 }
 
 // 读数据包
-func (c *Conn) readBytes(data []byte) (err error) {
+func (c *Conn2) readBytes(data []byte) (err error) {
 	select {
 	case <-c.closeCh:
 		err = c.genErrConnClosed()
@@ -164,18 +156,14 @@ func (c *Conn) readBytes(data []byte) (err error) {
 }
 
 // 写循环
-func (c *Conn) writeLoop() {
+func (c *Conn2) writeLoop() {
 	defer func() {
 		if err := recover(); err != nil {
 			GetLogger().WithStack(err)
 		}
 	}()
 	var err error
-	for i := range c.sendCh {
-		d, o := i.([]byte)
-		if !o {
-			panic("gsnet: send channel data type must '[]byte'")
-		}
+	for d := range c.sendCh {
 		// 写入数据头
 		err = c.writeBytes(c.options.dataProto.EncodeBodyLen(d))
 		if err != nil {
@@ -206,7 +194,7 @@ func (c *Conn) writeLoop() {
 }
 
 // 写数据包
-func (c *Conn) writeBytes(data []byte) (err error) {
+func (c *Conn2) writeBytes(data []byte) (err error) {
 	select {
 	case <-c.closeCh:
 		err = c.genErrConnClosed()
@@ -226,17 +214,17 @@ func (c *Conn) writeBytes(data []byte) (err error) {
 }
 
 // 正常关闭
-func (c *Conn) Close() {
+func (c *Conn2) Close() {
 	c.closeWait(0)
 }
 
 // 等待關閉
-func (c *Conn) CloseWait(secs int) {
+func (c *Conn2) CloseWait(secs int) {
 	c.closeWait(secs)
 }
 
 // 關閉
-func (c *Conn) closeWait(secs int) {
+func (c *Conn2) closeWait(secs int) {
 	if !atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
 		return
 	}
@@ -254,12 +242,12 @@ func (c *Conn) closeWait(secs int) {
 }
 
 // 是否关闭
-func (c *Conn) IsClosed() bool {
+func (c *Conn2) IsClosed() bool {
 	return atomic.LoadInt32(&c.closed) > 0
 }
 
 // 发送数据，必須與Close函數在同一goroutine調用
-func (c *Conn) Send(data interface{}) error {
+func (c *Conn2) Send(data []byte) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
 	}
@@ -278,7 +266,7 @@ func (c *Conn) Send(data interface{}) error {
 }
 
 // 非阻塞发送
-func (c *Conn) SendNonblock(data interface{}) error {
+func (c *Conn2) SendNonblock(data []byte) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
 	}
@@ -297,7 +285,7 @@ func (c *Conn) SendNonblock(data interface{}) error {
 }
 
 // 接收数据
-func (c *Conn) Recv() (interface{}, error) {
+func (c *Conn2) Recv() ([]byte, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, c.genErrConnClosed()
 	}
@@ -314,7 +302,7 @@ func (c *Conn) Recv() (interface{}, error) {
 }
 
 // 非阻塞接收数据
-func (c *Conn) RecvNonblock() (interface{}, error) {
+func (c *Conn2) RecvNonblock() ([]byte, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
 	}
@@ -323,7 +311,7 @@ func (c *Conn) RecvNonblock() (interface{}, error) {
 		return nil, err
 	}
 
-	var data interface{}
+	var data []byte
 	select {
 	case data = <-c.recvCh:
 		if data == nil {
@@ -336,7 +324,7 @@ func (c *Conn) RecvNonblock() (interface{}, error) {
 }
 
 // 接收错误
-func (c *Conn) recvErr() error {
+func (c *Conn2) recvErr() error {
 	select {
 	case err := <-c.errCh:
 		if err == nil {
@@ -350,13 +338,13 @@ func (c *Conn) recvErr() error {
 	return nil
 }
 
-func (c *Conn) genErrConnClosed() error {
+func (c *Conn2) genErrConnClosed() error {
 	//debug.PrintStack()
 	return ErrConnClosed
 }
 
 // 等待选择结果
-func (c *Conn) Wait(ctx context.Context) (interface{}, error) {
+func (c *Conn2) Wait(ctx context.Context) ([]byte, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
 	}
@@ -366,7 +354,7 @@ func (c *Conn) Wait(ctx context.Context) (interface{}, error) {
 	}
 
 	var (
-		d   interface{} = nil
+		d   []byte = nil
 		err error
 	)
 

@@ -20,7 +20,7 @@ func NewSessionNoId(conn IConn) *Session {
 	}
 }
 
-func (s *Session) Send(data []byte) error {
+func (s *Session) Send(data interface{}) error {
 	return s.conn.Send(data)
 }
 

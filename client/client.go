@@ -79,7 +79,7 @@ func (c *Client) Update() error {
 	if err == common.ErrRecvChanEmpty {
 		return nil
 	}
-	if err == nil && (d != nil || len(d) > 0) {
+	if err == nil {
 		err = c.handler.OnData(c.sess, d)
 	}
 	if err != nil {
@@ -156,8 +156,10 @@ func (c *Client) IsDisconnecting() bool {
 }
 
 func (c *Client) handle() error {
-	var data []byte
-	var err error
+	var (
+		data interface{}
+		err  error
+	)
 	data, err = c.conn.Wait(c.ctx)
 	if err == nil {
 		if data != nil {

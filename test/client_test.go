@@ -19,7 +19,7 @@ func TestClient(t *testing.T) {
 	t.Logf("server for test client running")
 
 	sendNum := 10
-	sd := createNolockSendDataInfo(int32(sendNum))
+	sd := createSendDataInfo(int32(sendNum))
 	tc := createTestClient2(t, 1, sd)
 	err = tc.Connect(testAddress)
 	if err != nil {
@@ -61,7 +61,9 @@ func BenchmarkClient(b *testing.B) {
 
 	b.Logf("server for benchmark client running")
 
-	bc := createBenchmarkClient(b, 1)
+	sendNum := 10
+	sd := createSendDataInfo(int32(sendNum))
+	bc := createBenchmarkClient(b, 1, sd)
 	err = bc.Connect(testAddress)
 	if err != nil {
 		b.Errorf("benchmark client connect err: %+v", err)

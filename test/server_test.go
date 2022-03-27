@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/server"
 )
 
@@ -115,7 +114,7 @@ func TestServer2(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 
-			sd := createNolockSendDataInfo(int32(sendNum))
+			sd := createSendDataInfo(int32(sendNum))
 			c := createTestClient2(t, 2, sd)
 			err := c.Connect(testAddress)
 			if err != nil {
@@ -172,34 +171,38 @@ func BenchmarkServer(b *testing.B) {
 	b.Logf("benchmark server is running")
 
 	clientNum := 4000
+	sendNum := 1000
+	n := int32(0)
 	var wg sync.WaitGroup
 	wg.Add(clientNum)
 
 	// 创建一堆客户端
 	for i := 0; i < clientNum; i++ {
-		tc := createBenchmarkClient(b, 2)
-		go func(c *client.Client, idx int) {
+
+		go func(idx int) {
 			defer wg.Done()
+
+			sd := createSendDataInfo(int32(sendNum))
+			c := createBenchmarkClient(b, 2, sd)
 			err := c.Connect(testAddress)
 			if err != nil {
 				b.Errorf("client for benchmark server connect address %v err: %v", testAddress, err)
 				return
 			}
 			b.Logf("client %v connected server", idx)
-			// 另起goroutine执行Client的Run函数
-			go func(c *client.Client) {
-				c.Run()
-			}(c)
-			for i := 0; i < 1000; i++ {
-				err := c.Send([]byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,"))
-				if err != nil {
-					b.Errorf("client for benchmark server send data err: %v", err)
-					break
-				}
-			}
-			c.Close()
-			b.Logf("client %v test done", idx)
-		}(tc, i)
+
+			defer c.Close()
+
+			go func() {
+				sd.waitEnd()
+				c.Quit()
+			}()
+
+			c.Run()
+
+			nn := atomic.AddInt32(&n, 1)
+			b.Logf("client idx(%v) count(%v) test done", idx, nn)
+		}(i)
 	}
 
 	wg.Wait()

@@ -21,7 +21,7 @@ func (h *PlayerHandler) OnDisconnect(s common.ISession, err error) {
 
 }
 
-func (h *PlayerHandler) OnData(s common.ISession, data []byte) error {
+func (h *PlayerHandler) OnData(s common.ISession, data interface{}) error {
 	return s.Send(data)
 }
 

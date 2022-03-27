@@ -61,15 +61,20 @@ func main() {
 					fmt.Println("connector send data err: ", err)
 					return
 				}
-				var recv_data []byte
+				var recv_data interface{}
 				recv_data, err = conn.Recv()
 				if err != nil {
 					fmt.Println("connector ", no, " recv data err: ", err)
 					return
 				}
-				if string(recv_data) != string(data[s:e]) {
+
+				rd, o := recv_data.([]byte)
+				if !o {
+					panic("recv_data type must []byte")
+				}
+				if string(rd) != string(data[s:e]) {
 					str := fmt.Sprintf("invalid received string len %v != len %v, connector %v compared num %v",
-						len(string(recv_data)), len(string(data[s:e])), no, comp_num)
+						len(string(rd)), len(string(data[s:e])), no, comp_num)
 					panic(str)
 				}
 

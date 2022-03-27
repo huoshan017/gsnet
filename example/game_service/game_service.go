@@ -105,13 +105,17 @@ func (h *DefaultMsgHandler) OnError(err error) {
 	log.Printf("err %v", err)
 }
 
-func (h *DefaultMsgHandler) onHandShake(sess common.ISession, data []byte) error {
+func (h *DefaultMsgHandler) onHandShake(sess common.ISession, data interface{}) error {
 	return nil
 }
 
-func (h *DefaultMsgHandler) onPlayerEnterGame(sess common.ISession, data []byte) error {
+func (h *DefaultMsgHandler) onPlayerEnterGame(sess common.ISession, data interface{}) error {
+	d, o := data.([]byte)
+	if !o {
+		panic("data type must be []byte")
+	}
 	var req game_proto.GamePlayerEnterReq
-	err := json.Unmarshal(data, &req)
+	err := json.Unmarshal(d, &req)
 	var resp game_proto.GamePlayerEnterResp
 	if err != nil {
 		resp.Result = -1
@@ -160,7 +164,7 @@ func (h *DefaultMsgHandler) onPlayerEnterGame(sess common.ISession, data []byte)
 	return nil
 }
 
-func (h *DefaultMsgHandler) onPlayerExitGame(sess common.ISession, data []byte) error {
+func (h *DefaultMsgHandler) onPlayerExitGame(sess common.ISession, data interface{}) error {
 	d := sess.GetData("player")
 	if d == nil {
 		return errors.New("game_service: no invalid session")

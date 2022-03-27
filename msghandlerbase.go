@@ -10,7 +10,7 @@ type MsgData struct {
 // 基礎消息处理器
 type MsgHandlerBase struct {
 	msgDecoder common.IMsgDecoder
-	handles    map[uint32]func(common.ISession, []byte) error
+	handles    map[uint32]func(common.ISession, interface{}) error
 }
 
 func NewMsgHandlerBase(msgDecoder common.IMsgDecoder) *MsgHandlerBase {
@@ -21,10 +21,10 @@ func NewMsgHandlerBase(msgDecoder common.IMsgDecoder) *MsgHandlerBase {
 
 func (h *MsgHandlerBase) init(msgDecoder common.IMsgDecoder) {
 	h.msgDecoder = msgDecoder
-	h.handles = make(map[uint32]func(common.ISession, []byte) error)
+	h.handles = make(map[uint32]func(common.ISession, interface{}) error)
 }
 
-func (h *MsgHandlerBase) RegisterHandle(msgid uint32, handle func(common.ISession, []byte) error) {
+func (h *MsgHandlerBase) RegisterHandle(msgid uint32, handle func(common.ISession, interface{}) error) {
 	h.handles[msgid] = handle
 }
 
@@ -32,8 +32,12 @@ func (h *MsgHandlerBase) OnMessage(sess common.ISession, msg MsgData) error {
 	return nil
 }
 
-func (h *MsgHandlerBase) OnData(sess common.ISession, data []byte) error {
-	msgid, msgdata := h.msgDecoder.Decode(data)
+func (h *MsgHandlerBase) OnData(sess common.ISession, data interface{}) error {
+	d, o := data.([]byte)
+	if !o {
+		panic("gsnet: data type must be []byte")
+	}
+	msgid, msgdata := h.msgDecoder.Decode(d)
 	handle, o := h.handles[msgid]
 	if !o {
 		e := common.ErrNoMsgHandleFunc(msgid)
