@@ -80,5 +80,5 @@ func (d *MsgDispatcher) OnError(err error) {
 
 func (d *MsgDispatcher) SendMsg(s ISession, msgid uint32, msgdata []byte) error {
 	data := d.msgDecoder.Encode(msgid, msgdata)
-	return s.Send(data)
+	return s.Send(data, true)
 }

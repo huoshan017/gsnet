@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/common/packet"
 )
 
 // 数据客户端
@@ -25,6 +26,12 @@ func NewClient(handler common.ISessionHandler, options ...common.Option) *Client
 	c.ctx, c.cancel = context.WithCancel(context.Background())
 	for _, option := range options {
 		option(&c.options.Options)
+	}
+	if c.options.GetPacketPool() == nil {
+		c.options.SetPacketPool(packet.GetDefaultPacketPool())
+	}
+	if c.options.GetPacketBuilder() == nil {
+		c.options.SetPacketBuilder(packet.GetDefaultPacketBuilder())
 	}
 	return c
 }
@@ -60,11 +67,11 @@ func (c *Client) doConnectResult(err error) {
 	if err == nil && c.handler != nil {
 		c.handler.OnConnect(c.sess)
 	}
-	c.sess = common.NewSessionNoId(c.conn)
+	c.sess = common.NewSessionNoId(c.conn.GetConn())
 }
 
-func (c *Client) Send(data []byte) error {
-	return c.conn.Send(data)
+func (c *Client) Send(data []byte, copyData bool) error {
+	return c.conn.Send(data, copyData)
 }
 
 func (c *Client) Update() error {
@@ -74,14 +81,16 @@ func (c *Client) Update() error {
 		return nil
 	}
 
-	d, err := c.conn.RecvNonblock()
+	packet, err := c.conn.RecvNonblock()
 	// 没有数据
 	if err == common.ErrRecvChanEmpty {
+		c.options.GetPacketPool().Put(packet)
 		return nil
 	}
 	if err == nil {
-		err = c.handler.OnData(c.sess, d)
+		err = c.handler.OnPacket(c.sess, packet)
 	}
+	c.options.GetPacketPool().Put(packet)
 	if err != nil {
 		if !common.IsNoDisconnectError(err) {
 			c.handler.OnDisconnect(c.sess, err)
@@ -157,17 +166,18 @@ func (c *Client) IsDisconnecting() bool {
 
 func (c *Client) handle() error {
 	var (
-		data interface{}
-		err  error
+		pak packet.IPacket
+		err error
 	)
-	data, err = c.conn.Wait(c.ctx)
+	pak, err = c.conn.Wait(c.ctx)
 	if err == nil {
-		if data != nil {
-			err = c.handler.OnData(c.sess, data)
+		if pak != nil {
+			err = c.handler.OnPacket(c.sess, pak)
 		} else {
 			c.handleTick()
 		}
 	}
+	c.options.GetPacketPool().Put(pak)
 	if err != nil {
 		if !common.IsNoDisconnectError(err) {
 		} else {

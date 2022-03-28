@@ -34,7 +34,7 @@ func TestClient(t *testing.T) {
 
 	for i := 0; i < sendNum; i++ {
 		d := []byte("abcdefghijklmnopqrstuvwxyz0123456789")
-		err := tc.Send(d)
+		err := tc.Send(d, false)
 		if err != nil {
 			t.Errorf("test client send err: %+v", err)
 			return
@@ -74,7 +74,7 @@ func BenchmarkClient(b *testing.B) {
 	b.Logf("benchmark client running")
 
 	for i := 0; i < 10000; i++ {
-		err := bc.Send([]byte("abcdefghijklmnopqrstuvwxyz0123456789"))
+		err := bc.Send([]byte("abcdefghijklmnopqrstuvwxyz0123456789"), false)
 		if err != nil {
 			b.Errorf("benchmark client send err: %+v", err)
 			return

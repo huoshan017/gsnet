@@ -21,18 +21,16 @@ const (
 	DefaultConnChanLen = 100
 )
 
-func NewAcceptor(options ...common.Option) *Acceptor {
-	s := &Acceptor{
+func NewAcceptor(options ServerOptions) *Acceptor {
+	a := &Acceptor{
+		options: options,
 		closeCh: make(chan struct{}),
 	}
-	for _, option := range options {
-		option(&s.options.Options)
+	if a.options.GetConnChanLen() <= 0 {
+		a.options.SetConnChanLen(DefaultConnChanLen)
+		a.connCh = make(chan common.IConn, a.options.GetConnChanLen())
 	}
-	if s.options.GetConnChanLen() <= 0 {
-		s.options.SetConnChanLen(DefaultConnChanLen)
-		s.connCh = make(chan common.IConn, s.options.GetConnChanLen())
-	}
-	return s
+	return a
 }
 
 func (s *Acceptor) Listen(addr string) error {
@@ -93,7 +91,13 @@ func (s *Acceptor) serve(listener net.Listener) error {
 			close(s.connCh)
 			break
 		}
-		c := common.NewConn(conn, s.options.Options)
+		var c common.IConn
+		switch s.options.GetConnDataType() {
+		case 2:
+			c = common.NewConn2(conn, s.options.Options)
+		default:
+			c = common.NewConn(conn, s.options.Options)
+		}
 		s.connCh <- c
 	}
 	return err

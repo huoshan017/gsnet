@@ -20,8 +20,8 @@ func NewSessionNoId(conn IConn) *Session {
 	}
 }
 
-func (s *Session) Send(data interface{}) error {
-	return s.conn.Send(data)
+func (s *Session) Send(data []byte, toCopy bool) error {
+	return s.conn.Send(data, toCopy)
 }
 
 func (s *Session) Close() {

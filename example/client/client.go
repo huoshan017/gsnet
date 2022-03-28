@@ -57,7 +57,7 @@ func main() {
 					e, s = s, e
 				}
 				fmt.Println("connector ", no, " ready to send data length is ", len(data[s:e]), ", compared ", comp_num)
-				if err = conn.Send(data[s:e]); err != nil {
+				if err = conn.Send(data[s:e], true); err != nil {
 					fmt.Println("connector send data err: ", err)
 					return
 				}

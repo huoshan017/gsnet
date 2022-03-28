@@ -9,11 +9,13 @@ import (
 
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/common/packet"
 	"github.com/huoshan017/gsnet/server"
 )
 
 const (
-	testAddress = "127.0.0.1:9999"
+	connDataType = 2 // 连接数据类型
+	testAddress  = "127.0.0.1:9999"
 )
 
 type sendDataInfo struct {
@@ -59,10 +61,7 @@ func (info *sendDataInfo) compareForward(toLock bool) {
 }
 
 func (info *sendDataInfo) waitEnd() int32 {
-	var num int32
-	select {
-	case num = <-info.numCh:
-	}
+	num := <-info.numCh
 	return num
 }
 
@@ -114,16 +113,13 @@ func (h *testClientHandler) OnDisconnect(sess common.ISession, err error) {
 	}
 }
 
-func (h *testClientHandler) OnData(sess common.ISession, data interface{}) error {
+func (h *testClientHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
 	var (
-		d []byte
 		o bool
 		e error
 	)
-	if d, o = data.([]byte); !o {
-		panic("data type must be []byte")
-	}
-	if o, e = h.sendDataList.compareData(d, true); !o {
+	data := *packet.Data()
+	if o, e = h.sendDataList.compareData(data, true); !o {
 		err := fmt.Errorf("compare err: %v", e)
 		if h.t != nil {
 			panic(err)
@@ -136,7 +132,7 @@ func (h *testClientHandler) OnData(sess common.ISession, data interface{}) error
 
 func (h *testClientHandler) OnTick(sess common.ISession, tick time.Duration) {
 	d := randBytes(100)
-	err := sess.Send(d)
+	err := sess.Send(d, false)
 	if err != nil {
 		if h.t != nil {
 			h.t.Logf("sess send data err: %v", err)
@@ -160,16 +156,16 @@ func (h *testClientHandler) OnError(err error) {
 
 func createTestClient(t *testing.T, state int32, userData interface{}) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientHandler(t, state, userData), common.WithTickSpan(time.Millisecond*10))
+	return client.NewClient(newTestClientHandler(t, state, userData), common.WithTickSpan(time.Millisecond*10), common.WithConnDataType(connDataType))
 }
 
 func createTestClient2(t *testing.T, state int32, userData interface{}) *client.Client {
 	h := newTestClientHandler(t, state, userData)
-	return client.NewClient(h)
+	return client.NewClient(h, common.WithConnDataType(connDataType))
 }
 
 func createBenchmarkClient(b *testing.B, state int32, userData interface{}) *client.Client {
-	return client.NewClient(newTestClientHandler(b, state, userData))
+	return client.NewClient(newTestClientHandler(b, state, userData), common.WithConnDataType(connDataType))
 }
 
 type testServerHandler struct {
@@ -209,8 +205,8 @@ func (h *testServerHandler) OnDisconnect(sess common.ISession, err error) {
 	}
 }
 
-func (h *testServerHandler) OnData(sess common.ISession, data interface{}) error {
-	err := sess.Send(data)
+func (h *testServerHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
+	err := sess.Send(*packet.Data(), true)
 	if err != nil {
 		str := fmt.Sprintf("OnData with session %v send err: %v", sess.GetId(), err)
 		if h.state == 1 {
@@ -239,14 +235,14 @@ func (h *testServerHandler) OnError(err error) {
 }
 
 func createTestServer(t *testing.T, state int32) *server.Server {
-	return server.NewServer(newTestServerHandler, server.WithNewSessionHandlerFuncArgs(t, state), common.WithReadBuffSize(10*4096), common.WithWriteBuffSize(5*4096))
+	return server.NewServer(newTestServerHandler, server.WithNewSessionHandlerFuncArgs(t, state), common.WithReadBuffSize(10*4096), common.WithWriteBuffSize(5*4096), common.WithConnDataType(connDataType))
 }
 
 func createTestServerWithHandler(t *testing.T, state int32) *server.Server {
 	return server.NewServerWithHandler(&testServerHandler{
 		t:     t,
 		state: state,
-	})
+	}, common.WithConnDataType(connDataType))
 }
 
 func createTestServerWithReusePort(t *testing.T, state int32) []*server.Server {
@@ -254,11 +250,11 @@ func createTestServerWithReusePort(t *testing.T, state int32) []*server.Server {
 		server.NewServerWithHandler(&testServerHandler{
 			t:     t,
 			state: state,
-		}, server.WithReuseAddr(true)),
+		}, server.WithReuseAddr(true), common.WithConnDataType(connDataType)),
 		server.NewServerWithHandler(&testServerHandler{
 			t:     t,
 			state: state,
-		}, server.WithReuseAddr(true)),
+		}, server.WithReuseAddr(true), common.WithConnDataType(connDataType)),
 	}
 }
 
@@ -266,7 +262,7 @@ func createBenchmarkServerWithHandler(b *testing.B, state int32) *server.Server 
 	return server.NewServerWithHandler(&testServerHandler{
 		b:     b,
 		state: state,
-	})
+	}, common.WithConnDataType(connDataType))
 }
 
 var letters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")

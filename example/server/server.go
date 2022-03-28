@@ -20,7 +20,7 @@ func main() {
 	flag.Parse()
 
 	addr := *ip_str + ":" + *port_str
-	acceptor := server.NewAcceptor()
+	acceptor := server.NewAcceptor(server.ServerOptions{})
 	err := acceptor.Listen(addr)
 	if err != nil {
 		fmt.Println("acceptor listen addr: ", addr, " err: ", err)
@@ -46,13 +46,13 @@ func main() {
 			go func(no int, conn common.IConn) {
 				fmt.Println("connection ", no)
 				for {
-					data, e := conn.Recv()
+					packet, e := conn.Recv()
 					if e != nil {
 						conn.Close()
 						fmt.Println("conn ", no, " recv err: ", e)
 						break
 					}
-					e = conn.Send(data)
+					e = conn.Send(*packet.Data(), true)
 					if e != nil {
 						conn.Close()
 						fmt.Println("conn ", no, " send err: ", e)

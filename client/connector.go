@@ -1,11 +1,13 @@
 package client
 
 import (
+	"context"
 	"net"
 	"sync/atomic"
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/common/packet"
 )
 
 const (
@@ -16,7 +18,7 @@ const (
 )
 
 type Connector struct {
-	*common.Conn
+	conn            common.IConn
 	options         *common.Options
 	asyncResultCh   chan error
 	connectCallback func(error)
@@ -66,6 +68,10 @@ func (c *Connector) ConnectAsync(address string, timeout time.Duration, connectC
 	atomic.StoreInt32(&c.state, ConnStateConnecting)
 }
 
+func (c *Connector) GetConn() common.IConn {
+	return c.conn
+}
+
 // 等待结果，wait参数为等待时间，如何这个时间内有了结果就提前返回
 func (c *Connector) WaitResult(wait time.Duration) {
 	var timer *time.Timer
@@ -95,9 +101,38 @@ func (c *Connector) WaitResult(wait time.Duration) {
 	}
 }
 
+func (c *Connector) Recv() (packet.IPacket, error) {
+	return c.conn.Recv()
+}
+
+func (c *Connector) RecvNonblock() (packet.IPacket, error) {
+	return c.conn.RecvNonblock()
+}
+
+func (c *Connector) Send(data []byte, copyData bool) error {
+	return c.conn.Send(data, copyData)
+}
+
+func (c *Connector) SendNonblock(data []byte, copyData bool) error {
+	return c.conn.SendNonblock(data, copyData)
+}
+
+func (c *Connector) Run() {
+	c.conn.Run()
+}
+
+func (c *Connector) Wait(ctx context.Context) (packet.IPacket, error) {
+	return c.conn.Wait(ctx)
+}
+
+func (c *Connector) CloseWait(secs int) {
+	c.conn.CloseWait(secs)
+	atomic.StoreInt32(&c.state, ConnStateNotConnect)
+}
+
 // 关闭
 func (c *Connector) Close() {
-	c.Conn.Close()
+	c.conn.Close()
 	atomic.StoreInt32(&c.state, ConnStateNotConnect)
 }
 
@@ -134,7 +169,13 @@ func (c *Connector) connect(address string, timeout time.Duration) error {
 		return err
 	}
 	atomic.StoreInt32(&c.state, ConnStateConnected)
-	c.Conn = common.NewConn(conn, *c.options)
-	c.Run()
+	switch c.options.GetConnDataType() {
+	case 2:
+		c.conn = common.NewConn2(conn, *c.options)
+	default:
+		c.conn = common.NewConn(conn, *c.options)
+	}
+
+	c.conn.Run()
 	return nil
 }

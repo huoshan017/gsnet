@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/common/packet"
 )
 
 const (
@@ -70,7 +71,13 @@ func (s *Server) init(options ...common.Option) {
 	if s.options.GetSessionHandleTick() <= 0 {
 		s.options.SetSessionHandleTick(DefaultSessionHandleTick)
 	}
-	s.acceptor = NewAcceptor(options...)
+	if s.options.GetPacketPool() == nil {
+		s.options.SetPacketPool(packet.GetDefaultPacketPool())
+	}
+	if s.options.GetPacketBuilder() == nil {
+		s.options.SetPacketBuilder(packet.GetDefaultPacketBuilder())
+	}
+	s.acceptor = NewAcceptor(s.options)
 	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.GetErrChanLen())
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 }
@@ -196,21 +203,22 @@ func (s *Server) handleConn(conn common.IConn) {
 
 		var (
 			lastTime time.Time = time.Now()
-			data     interface{}
+			pak      packet.IPacket
 			err      error
 			run      bool = true
 		)
 		for run {
-			data, err = conn.Wait(s.ctx)
+			pak, err = conn.Wait(s.ctx)
 			if err == nil {
-				if data != nil {
-					err = handler.OnData(sess, data)
+				if pak != nil {
+					err = handler.OnPacket(sess, pak)
 				} else {
 					now := time.Now()
 					handler.OnTick(sess, now.Sub(lastTime))
 					lastTime = now
 				}
 			}
+			s.options.GetPacketPool().Put(pak)
 			if err != nil {
 				if !common.IsNoDisconnectError(err) {
 					run = false

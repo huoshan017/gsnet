@@ -2,6 +2,8 @@ package common
 
 import (
 	"time"
+
+	"github.com/huoshan017/gsnet/common/packet"
 )
 
 // 选项结构
@@ -18,6 +20,9 @@ type Options struct {
 	writeBuffSize     int
 	readBuffSize      int
 	connCloseWaitSecs int // 連接關閉等待時間(秒)
+	packetPool        packet.IPacketPool
+	packetBuilder     packet.IPacketBuilder
+	connDataType      int // 连接数据结构类型
 
 	// todo 以下是需要实现的配置逻辑
 	flushWriteInterval time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
@@ -123,6 +128,30 @@ func (options *Options) SetConnCloseWaitSecs(secs int) {
 	options.connCloseWaitSecs = secs
 }
 
+func (options *Options) GetPacketPool() packet.IPacketPool {
+	return options.packetPool
+}
+
+func (options *Options) SetPacketPool(packetPool packet.IPacketPool) {
+	options.packetPool = packetPool
+}
+
+func (options *Options) GetPacketBuilder() packet.IPacketBuilder {
+	return options.packetBuilder
+}
+
+func (options *Options) SetPacketBuilder(packetBuilder packet.IPacketBuilder) {
+	options.packetBuilder = packetBuilder
+}
+
+func (options *Options) GetConnDataType() int {
+	return options.connDataType
+}
+
+func (options *Options) SetConnDataType(typ int) {
+	options.connDataType = typ
+}
+
 func WithNoDelay(noDelay bool) Option {
 	return func(options *Options) {
 		options.SetNodelay(noDelay)
@@ -192,5 +221,23 @@ func WithReadBuffSize(size int) Option {
 func WithConnCloseWaitSecs(secs int) Option {
 	return func(options *Options) {
 		options.SetConnCloseWaitSecs(secs)
+	}
+}
+
+func WithPacketPool(packetPool packet.IPacketPool) Option {
+	return func(options *Options) {
+		options.SetPacketPool(packetPool)
+	}
+}
+
+func WithPacketBuilder(packetBuilder packet.IPacketBuilder) Option {
+	return func(options *Options) {
+		options.SetPacketBuilder(packetBuilder)
+	}
+}
+
+func WithConnDataType(typ int) Option {
+	return func(options *Options) {
+		options.SetConnDataType(typ)
 	}
 }

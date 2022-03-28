@@ -15,6 +15,8 @@ import (
 	"github.com/huoshan017/gsnet/example/game_proto"
 	"github.com/huoshan017/gsnet/server"
 
+	"github.com/huoshan017/gsnet/common/packet"
+
 	cmap "github.com/orcaman/concurrent-map"
 )
 
@@ -105,17 +107,13 @@ func (h *DefaultMsgHandler) OnError(err error) {
 	log.Printf("err %v", err)
 }
 
-func (h *DefaultMsgHandler) onHandShake(sess common.ISession, data interface{}) error {
+func (h *DefaultMsgHandler) onHandShake(sess common.ISession, packet packet.IPacket) error {
 	return nil
 }
 
-func (h *DefaultMsgHandler) onPlayerEnterGame(sess common.ISession, data interface{}) error {
-	d, o := data.([]byte)
-	if !o {
-		panic("data type must be []byte")
-	}
+func (h *DefaultMsgHandler) onPlayerEnterGame(sess common.ISession, packet packet.IPacket) error {
 	var req game_proto.GamePlayerEnterReq
-	err := json.Unmarshal(d, &req)
+	err := json.Unmarshal(*packet.Data(), &req)
 	var resp game_proto.GamePlayerEnterResp
 	if err != nil {
 		resp.Result = -1
@@ -164,7 +162,7 @@ func (h *DefaultMsgHandler) onPlayerEnterGame(sess common.ISession, data interfa
 	return nil
 }
 
-func (h *DefaultMsgHandler) onPlayerExitGame(sess common.ISession, data interface{}) error {
+func (h *DefaultMsgHandler) onPlayerExitGame(sess common.ISession, packet packet.IPacket) error {
 	d := sess.GetData("player")
 	if d == nil {
 		return errors.New("game_service: no invalid session")

@@ -129,7 +129,7 @@ func TestServer2(t *testing.T) {
 			for {
 				if ss < sendNum {
 					d := randBytes(100)
-					err := c.Send(d)
+					err := c.Send(d, false)
 					if err != nil {
 						nn := atomic.AddInt32(&n, 1)
 						t.Logf("client idx(%v) count(%v) for test server send data err: %v", idx, nn, err)

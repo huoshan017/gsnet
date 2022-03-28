@@ -7,21 +7,29 @@ import (
 )
 
 func TestBufferPool(t *testing.T) {
+	dataCh := make(chan *[]byte, 1000)
+	endCh := make(chan struct{})
 	rand.Seed(time.Now().Unix() + time.Now().UnixNano())
-	for n := 0; n < 100; n++ {
-		go func() {
-			for i := 0; i < 100000; i++ {
-				n := rand.Int31n(128*1024 + 1)
-				if n == 0 {
-					continue
-				}
-				buf := GetBuffPool().Alloc(n)
-				b := (*buf)[:n]
-				b[0] = 1
-				GetBuffPool().Free(buf)
+	go func() {
+		for i := 0; i < 10000000; i++ {
+			n := rand.Int31n(128*1024 + 1)
+			if n == 0 {
+				continue
 			}
-		}()
-	}
+			buf := GetBuffPool().Alloc(n)
+			dataCh <- buf
+		}
+		close(dataCh)
+	}()
+	go func() {
+		for buf := range dataCh {
+			b := *buf
+			b[0] = 1
+			GetBuffPool().Free(buf)
+		}
+		close(endCh)
+	}()
+	<-endCh
 }
 
 func BenchmarkBufferPool(b *testing.B) {
