@@ -276,6 +276,18 @@ func (c *Conn) Send(data []byte, toCopy bool) error {
 	return nil
 }
 
+func (c *Conn) SendPoolBuffer(*[]byte, packet.MemoryManagementType) error {
+	return ErrNotImplement("Conn.SendPoolBuffer")
+}
+
+func (c *Conn) SendBytesArray([][]byte, bool) error {
+	return ErrNotImplement("Conn.SendBytesArray")
+}
+
+func (c *Conn) SendPoolBufferArray([]*[]byte, packet.MemoryManagementType) error {
+	return ErrNotImplement("Conn.SendPoolBufferArray")
+}
+
 // 非阻塞发送
 func (c *Conn) SendNonblock(data []byte, toCopy bool) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
@@ -398,4 +410,12 @@ func (c *Conn) Wait(ctx context.Context) (packet.IPacket, error) {
 		}
 	}
 	return d, err
+}
+
+func (c *Conn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
 }

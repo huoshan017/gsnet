@@ -1,0 +1,1 @@
+protoc.exe --gofast_out=./ --proto_path=./ test.proto 

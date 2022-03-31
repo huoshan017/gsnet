@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option go_package="../tproto";
+package tproto;
+
+message MsgPing {
+    string Content = 1;
+}
+
+message MsgPong {
+    string Content = 1;
+}

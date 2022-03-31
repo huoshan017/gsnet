@@ -93,10 +93,10 @@ func (s *Acceptor) serve(listener net.Listener) error {
 		}
 		var c common.IConn
 		switch s.options.GetConnDataType() {
-		case 2:
-			c = common.NewConn2(conn, s.options.Options)
-		default:
+		case 1:
 			c = common.NewConn(conn, s.options.Options)
+		default:
+			c = common.NewConn2(conn, s.options.Options)
 		}
 		s.connCh <- c
 	}

@@ -1,7 +1,6 @@
 package packet
 
 import (
-	"errors"
 	"io"
 	"sync"
 
@@ -12,13 +11,10 @@ const (
 	DefaultPacketHeaderLen = 3
 )
 
-var (
-	ErrBodyLenInvalid = errors.New("gsnet: receive body length too long")
-)
-
 // pool for type `Packet`
 type DefaultPacketPool struct {
-	pool *sync.Pool
+	pool         *sync.Pool
+	usingPackets sync.Map // 保存分配的Packet地址
 }
 
 func NewDefaultPacketPool() *DefaultPacketPool {
@@ -33,12 +29,16 @@ func NewDefaultPacketPool() *DefaultPacketPool {
 
 func (p *DefaultPacketPool) Get() IPacket {
 	pak := p.pool.Get().(IPacket)
+	p.usingPackets.Store(pak, true)
 	return pak
 }
 
 func (p *DefaultPacketPool) Put(pak IPacket) {
 	// 不是*Packet类型
 	if _, o := interface{}(pak).(*Packet); !o {
+		return
+	}
+	if _, o := p.usingPackets.LoadAndDelete(pak); !o {
 		return
 	}
 	pool.GetBuffPool().Free(pak.Data())
@@ -57,21 +57,56 @@ func NewDefaultPacketBuilder(options PacketOptions) *DefaultPacketBuilder {
 	return pb
 }
 
-func (pc *DefaultPacketBuilder) EncodeWriteTo(pType PacketType, rawData []byte, writer io.Writer) error {
-	dataLen := 3 + len(rawData)
+func (pc *DefaultPacketBuilder) EncodeWriteTo(pType PacketType, data []byte, writer io.Writer) error {
+	dataLen := 3 + len(data)
 	var d = [DefaultPacketHeaderLen + 3]byte{}
-	// data length
-	d[0] = byte(dataLen >> 16 & 0xff)
-	d[1] = byte(dataLen >> 8 & 0xff)
-	d[2] = byte(dataLen & 0xff)
-
-	d[3] = byte(pType)            // packet type
-	d[4] = byte(pc.options.CType) // compress type
-	d[5] = byte(pc.options.EType) // encryption type
-
+	pc.formatHeader(d[:], pType, dataLen)
+	// todo 压缩处理和加密处理
 	_, err := writer.Write(d[:])
 	if err == nil {
-		_, err = writer.Write(rawData)
+		_, err = writer.Write(data)
+	}
+	return err
+}
+
+func (pc *DefaultPacketBuilder) EncodeBytesArrayWriteTo(pType PacketType, datas [][]byte, writer io.Writer) error {
+	var d = [DefaultPacketHeaderLen + 3]byte{}
+	var dataLen int
+	for i := 0; i < len(datas); i++ {
+		dataLen += len(datas[i])
+	}
+	dataLen += 3
+	pc.formatHeader(d[:], pType, dataLen)
+	// todo 压缩处理和加密处理
+	_, err := writer.Write(d[:])
+	if err == nil {
+		for i := 0; i < len(datas); i++ {
+			_, err = writer.Write(datas[i])
+			if err != nil {
+				break
+			}
+		}
+	}
+	return err
+}
+
+func (pc *DefaultPacketBuilder) EncodeBytesPointerArrayWriteTo(pType PacketType, pBytesArray []*[]byte, writer io.Writer) error {
+	var d = [DefaultPacketHeaderLen + 3]byte{}
+	var dataLen int
+	for i := 0; i < len(pBytesArray); i++ {
+		dataLen += len(*pBytesArray[i])
+	}
+	dataLen += 3
+	pc.formatHeader(d[:], pType, dataLen)
+	// todo 压缩处理和加密处理
+	_, err := writer.Write(d[:])
+	if err == nil {
+		for i := 0; i < len(*pBytesArray[i]); i++ {
+			_, err = writer.Write(*pBytesArray[i])
+			if err != nil {
+				break
+			}
+		}
 	}
 	return err
 }
@@ -98,13 +133,33 @@ func (pc *DefaultPacketBuilder) DecodeReadFrom(reader io.Reader) (IPacket, error
 	if err != nil {
 		return nil, err
 	}
+	// 压缩类型
+	ctype := CompressType(header[4])
+	switch ctype {
+	// todo 增加压缩类型的处理
+	}
+	// 加密类型
+	etype := EncryptionType(header[5])
+	switch etype {
+	// todo 增加加密类型的处理
+	}
 	p := pc.options.PacketPool.Get()
 	pak := interface{}(p).(*Packet)
 	pak.typ = PacketType(header[3])
-	pak.cType = CompressType(header[4])
-	pak.eType = EncryptionType(header[5])
+	pak.mType = MemoryManagementPoolFrameworkFree
 	pak.SetData(pData)
 	return pak, nil
+}
+
+func (pc DefaultPacketBuilder) formatHeader(header []byte, pType PacketType, dataLen int) {
+	// data length
+	header[0] = byte(dataLen >> 16 & 0xff)
+	header[1] = byte(dataLen >> 8 & 0xff)
+	header[2] = byte(dataLen & 0xff)
+
+	header[3] = byte(pType)            // packet type
+	header[4] = byte(pc.options.CType) // compress type
+	header[5] = byte(pc.options.EType) // encryption type
 }
 
 // 默认的packet池和packet构建器

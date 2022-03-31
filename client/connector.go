@@ -113,14 +113,6 @@ func (c *Connector) Send(data []byte, copyData bool) error {
 	return c.conn.Send(data, copyData)
 }
 
-func (c *Connector) SendNonblock(data []byte, copyData bool) error {
-	return c.conn.SendNonblock(data, copyData)
-}
-
-func (c *Connector) Run() {
-	c.conn.Run()
-}
-
 func (c *Connector) Wait(ctx context.Context) (packet.IPacket, error) {
 	return c.conn.Wait(ctx)
 }
@@ -170,10 +162,10 @@ func (c *Connector) connect(address string, timeout time.Duration) error {
 	}
 	atomic.StoreInt32(&c.state, ConnStateConnected)
 	switch c.options.GetConnDataType() {
-	case 2:
-		c.conn = common.NewConn2(conn, *c.options)
-	default:
+	case 1:
 		c.conn = common.NewConn(conn, *c.options)
+	default:
+		c.conn = common.NewConn2(conn, *c.options)
 	}
 
 	c.conn.Run()

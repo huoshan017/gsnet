@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	connDataType = 2 // 连接数据类型
+	connDataType = 0 // 连接数据类型
 	testAddress  = "127.0.0.1:9999"
 )
 

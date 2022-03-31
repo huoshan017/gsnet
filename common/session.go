@@ -1,5 +1,7 @@
 package common
 
+import "github.com/huoshan017/gsnet/common/packet"
+
 type Session struct {
 	conn    IConn
 	id      uint64
@@ -22,6 +24,18 @@ func NewSessionNoId(conn IConn) *Session {
 
 func (s *Session) Send(data []byte, toCopy bool) error {
 	return s.conn.Send(data, toCopy)
+}
+
+func (s *Session) SendBytesArray(bytesArray [][]byte, toCopy bool) error {
+	return s.conn.SendBytesArray(bytesArray, toCopy)
+}
+
+func (s *Session) SendPoolBuffer(pBytes *[]byte, mmType packet.MemoryManagementType) error {
+	return s.conn.SendPoolBuffer(pBytes, mmType)
+}
+
+func (s *Session) SendPoolBufferArray(pBytesArray []*[]byte, mmType packet.MemoryManagementType) error {
+	return s.conn.SendPoolBufferArray(pBytesArray, mmType)
 }
 
 func (s *Session) Close() {
