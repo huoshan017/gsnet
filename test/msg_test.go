@@ -170,19 +170,19 @@ func newPBMsgClient2(t *testing.T) (*msg.MsgClient, error) {
 
 func newPBMsgServer2(t *testing.T) (*msg.MsgServer, error) {
 	s := msg.NewPBMsgServer(idMsgMapper)
-	s.SetConnectedHandle(func(sess common.ISession) {
+	s.SetSessionConnectedHandle(func(sess common.ISession) {
 		t.Logf("session %v connected", sess.GetId())
 	})
-	s.SetDisconnectedHandle(func(sess common.ISession, err error) {
+	s.SetSessionDisconnectedHandle(func(sess common.ISession, err error) {
 		t.Logf("session %v disconnected", sess.GetId())
 	})
-	s.SetTickHandle(func(sess common.ISession, tick time.Duration) {
+	s.SetSessionTickHandle(func(sess common.ISession, tick time.Duration) {
 
 	})
-	s.SetErrorHandle(func(err error) {
+	s.SetSessionErrorHandle(func(err error) {
 		t.Logf("session err: %v", err)
 	})
-	s.SetMsgHandle(MsgIdPing, func(sess *msg.MsgSession, msg interface{}) error {
+	s.SetMsgSessionHandle(MsgIdPing, func(sess *msg.MsgSession, msg interface{}) error {
 		m, o := msg.(*tproto.MsgPing)
 		if !o {
 			t.Errorf("server receive message must Ping")
