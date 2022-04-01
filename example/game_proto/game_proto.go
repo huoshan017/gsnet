@@ -1,12 +1,14 @@
 package game_proto
 
+import "github.com/huoshan017/gsnet/msg"
+
 const (
-	MsgIdHandShakeReq        = 1
-	MsgIdHandShakeAck        = 2
-	MsgIdGamePlayerEnterReq  = 100
-	MsgIdGamePlayerEnterResp = 101
-	MsgIdGamePlayerExitReq   = 102
-	MsgIdGamePlayerExitResp  = 103
+	MsgIdHandShakeReq        = msg.MsgIdType(1)
+	MsgIdHandShakeAck        = msg.MsgIdType(2)
+	MsgIdGamePlayerEnterReq  = msg.MsgIdType(100)
+	MsgIdGamePlayerEnterResp = msg.MsgIdType(101)
+	MsgIdGamePlayerExitReq   = msg.MsgIdType(102)
+	MsgIdGamePlayerExitResp  = msg.MsgIdType(103)
 )
 
 type HandShakeReq struct {

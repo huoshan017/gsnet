@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/huoshan017/gsnet"
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/example/game_proto"
+	"github.com/huoshan017/gsnet/msg"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 )
 
 type IOwner interface {
-	GetNet() *gsnet.MsgClient
+	GetNet() *msg.MsgClient
 }
 
 type Player struct {
@@ -67,21 +67,21 @@ func (p *Player) SendExitGame() error {
 	return nil
 }
 
-func (p *Player) send(msgid uint32, msgdata []byte) error {
+func (p *Player) send(msgid msg.MsgIdType, msgdata []byte) error {
 	return p.owner.GetNet().Send(msgid, msgdata)
 }
 
-func (p *Player) registerHandle(msgid uint32, handle func(common.ISession, interface{}) error) {
-	p.owner.GetNet().RegisterHandle(msgid, handle)
+func (p *Player) registerHandle(msgid msg.MsgIdType, handle func(*msg.MsgSession, interface{}) error) {
+	p.owner.GetNet().RegisterMsgHandle(msgid, handle)
 }
 
-func (p *Player) onEnterGame(sess common.ISession, data interface{}) error {
+func (p *Player) onEnterGame(sess *msg.MsgSession, data interface{}) error {
 	p.state = PlayerStateEntered
 	fmt.Println("Player entered game")
 	return nil
 }
 
-func (p *Player) onExitGame(sess common.ISession, data interface{}) error {
+func (p *Player) onExitGame(sess *msg.MsgSession, data interface{}) error {
 	p.state = PlayerStateNotEnter
 	p.owner.GetNet().Close()
 	fmt.Println("Player exited game")
@@ -103,7 +103,7 @@ type config struct {
 
 type GameClient struct {
 	self *Player
-	net  *gsnet.MsgClient
+	net  *msg.MsgClient
 }
 
 func NewGameClient() *GameClient {
@@ -112,12 +112,13 @@ func NewGameClient() *GameClient {
 	return client
 }
 
-func (c *GameClient) GetNet() *gsnet.MsgClient {
+func (c *GameClient) GetNet() *msg.MsgClient {
 	return c.net
 }
 
 func (c *GameClient) Init(conf *config) error {
-	net := gsnet.NewDefaultMsgClient(common.WithTickSpan(time.Millisecond))
+	var idMsgMapper = msg.CreateIdMsgMapper()
+	net := msg.NewGobMsgClient(idMsgMapper, common.WithTickSpan(time.Millisecond))
 	err := net.Connect(conf.addr)
 	if err != nil {
 		fmt.Println("connect ", conf.addr, " failed")

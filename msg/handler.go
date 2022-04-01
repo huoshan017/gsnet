@@ -7,11 +7,10 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/common/packet"
-	"github.com/huoshan017/gsnet/common/pool"
 )
 
 var (
-	ErrMsgIdMapTypeNotFound = errors.New("gsnet: type map to message id not found")
+	ErrMsgIdMapperTypeNotFound = errors.New("gsnet: type map to message id not found")
 )
 
 /*
@@ -81,20 +80,19 @@ func (ma *IdMsgMapper) GetReflectNewObject(id MsgIdType) interface{} {
 }
 
 type msgHandler struct {
-	common.ISessionHandler
 	connectHandle    func(common.ISession)
 	disconnectHandle func(common.ISession, error)
 	tickHandle       func(common.ISession, time.Duration)
 	errHandle        func(error)
-	handleMap        map[MsgIdType]func(common.ISession, interface{}) error
-	codec            IMsgCodec
-	mapper           *IdMsgMapper
+	handleMap        map[MsgIdType]func(*MsgSession, interface{}) error
+	sess             *MsgSession
 }
 
 func newMsgHandler(codec IMsgCodec, mapper *IdMsgMapper) *msgHandler {
-	d := &msgHandler{}
-	d.handleMap = make(map[MsgIdType]func(common.ISession, interface{}) error)
-	d.codec = codec
+	d := &msgHandler{
+		handleMap: make(map[MsgIdType]func(*MsgSession, interface{}) error),
+		sess:      &MsgSession{codec: codec, mapper: mapper},
+	}
 	return d
 }
 
@@ -114,7 +112,7 @@ func (d *msgHandler) SetErrorHandle(handle func(error)) {
 	d.errHandle = handle
 }
 
-func (d *msgHandler) RegisterHandle(msgid MsgIdType, handle func(common.ISession, interface{}) error) {
+func (d *msgHandler) RegisterHandle(msgid MsgIdType, handle func(*MsgSession, interface{}) error) {
 	d.handleMap[msgid] = handle
 }
 
@@ -143,64 +141,30 @@ func (d *msgHandler) OnError(err error) {
 }
 
 func (d *msgHandler) OnPacket(s common.ISession, pak packet.IPacket) error {
-	//msgid, msgdata := d.msgDecoder.Decode(*pak.Data())
-	var (
-		msgid   MsgIdType
-		msgdata []byte
-	)
-	data := *pak.Data()
-	msgid, msgdata = splitIdAndMsg(data)
-	msgobj := d.mapper.GetReflectNewObject(msgid)
-	if msgobj == nil {
-		return ErrMsgIdMapTypeNotFound
+	msgid, msgobj, err := d.sess.splitIdAndMsg(*pak.Data())
+	if err != nil {
+		return err
 	}
-	d.codec.Decode(msgdata, msgobj)
 	h, o := d.handleMap[msgid]
 	if !o {
 		e := common.ErrNoMsgHandleFunc(uint32(msgid))
 		common.CheckAndRegisterNoDisconnectError(e)
 		return e
 	}
-	return h(s, msgobj)
+	d.sess.sess = s
+	return h(d.sess, msgobj)
 }
 
 func (d *msgHandler) SendMsg(s common.ISession, msgid MsgIdType, msgobj interface{}) error {
-	//data := d.msgDecoder.Encode(msgid, msgdata)
-	msgdata, err := d.codec.Encode(msgobj)
-	if err != nil {
-		return err
-	}
-	//data := make([]byte, 4+len(msgdata))
-	pData := pool.GetBuffPool().Alloc(int32(4 + len(msgdata)))
-	genMsgIdHeader(msgid, *pData)
-	copy((*pData)[4:], msgdata[:])
-	return s.SendPoolBuffer(pData, packet.MemoryManagementPoolUserManualFree)
+	d.sess.sess = s
+	return d.sess.SendMsg(msgid, msgobj)
 }
 
 func (d *msgHandler) SendMsgNoCopy(s common.ISession, msgid MsgIdType, msgobj interface{}) error {
-	msgdata, err := d.codec.Encode(msgobj)
-	if err != nil {
-		return err
-	}
-	idHeader := make([]byte, 4)
-	genMsgIdHeader(msgid, idHeader)
-	return s.SendBytesArray([][]byte{idHeader, msgdata}, false)
-}
-
-func splitIdAndMsg(data []byte) (msgid MsgIdType, msgdata []byte) {
-	for i := 0; i < 4; i++ {
-		msgid += MsgIdType(data[i] << (8 * (4 - i - 1)))
-	}
-	msgdata = data[4:]
-	return
-}
-
-func genMsgIdHeader(msgid MsgIdType, idHeader []byte) {
-	for i := 0; i < 4; i++ {
-		idHeader[i] = byte(msgid >> (8 * (4 - i - 1)))
-	}
+	d.sess.sess = s
+	return d.sess.SendMsgNoCopy(msgid, msgobj)
 }
 
 func init() {
-	common.RegisterNoDisconnectError(ErrMsgIdMapTypeNotFound)
+	common.RegisterNoDisconnectError(ErrMsgIdMapperTypeNotFound)
 }

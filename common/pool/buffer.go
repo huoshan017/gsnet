@@ -38,12 +38,14 @@ var (
 	*/
 )
 
+// BufferPool struct
 type BufferPool struct {
 	buffSizeArray [][oneLayerSize]int32
 	pools         [][oneLayerSize]*sync.Pool
 	maxSizePool   *sync.Pool
 }
 
+// NewBufferPool create new BufferPool instance
 func NewBufferPool() *BufferPool {
 	buffPool := &BufferPool{
 		buffSizeArray: make([][oneLayerSize]int32, len(layerStartSizeArray)),
@@ -70,6 +72,7 @@ func NewBufferPool() *BufferPool {
 	return buffPool
 }
 
+// BufferPool.Alloc allocate memory with size and return it's pointer
 func (bp *BufferPool) Alloc(size int32) *[]byte {
 	pool := bp.findPool(size)
 	if pool == nil {
@@ -81,6 +84,7 @@ func (bp *BufferPool) Alloc(size int32) *[]byte {
 	return &buf
 }
 
+// BufferPool.Free free memory with bytes pointer
 func (bp *BufferPool) Free(buffer *[]byte) {
 	pool := bp.findPool(int32(cap(*buffer)))
 	if pool == nil {
@@ -89,6 +93,7 @@ func (bp *BufferPool) Free(buffer *[]byte) {
 	pool.Put(buffer)
 }
 
+// BufferPool.findPool get pool with size
 func (bp *BufferPool) findPool(size int32) *sync.Pool {
 	if size > maxBufSize {
 		return nil
@@ -128,12 +133,14 @@ func (bp *BufferPool) findPool(size int32) *sync.Pool {
 	return bp.pools[left][size]
 }
 
+// default BufferPool
 var defaultBuffPool *BufferPool
 
 func init() {
 	defaultBuffPool = NewBufferPool()
 }
 
+// GetBuffPool get default BufferPool
 func GetBuffPool() *BufferPool {
 	return defaultBuffPool
 }

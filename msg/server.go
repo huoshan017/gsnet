@@ -7,54 +7,146 @@ import (
 	"github.com/huoshan017/gsnet/server"
 )
 
+type ServerSessionHandles struct {
+	connectedHandle    func(common.ISession)
+	disconnectedHandle func(common.ISession, error)
+	tickHandle         func(common.ISession, time.Duration)
+	errorHandle        func(error)
+	msgHandles         map[MsgIdType]func(*MsgSession, interface{}) error
+}
+
+func CreateServerSessionHandles() *ServerSessionHandles {
+	return &ServerSessionHandles{
+		msgHandles: make(map[MsgIdType]func(*MsgSession, interface{}) error),
+	}
+}
+
+func (h *ServerSessionHandles) SetConnectedHandle(handle func(common.ISession)) {
+	h.connectedHandle = handle
+}
+
+func (h *ServerSessionHandles) SetDisconnectedHandle(handle func(common.ISession, error)) {
+	h.disconnectedHandle = handle
+}
+
+func (h *ServerSessionHandles) SetTickHandle(handle func(common.ISession, time.Duration)) {
+	h.tickHandle = handle
+}
+
+func (h *ServerSessionHandles) SetErrorHandle(handle func(error)) {
+	h.errorHandle = handle
+}
+
+func (h *ServerSessionHandles) SetMsgHandle(msgid MsgIdType, handle func(*MsgSession, interface{}) error) {
+	h.msgHandles[msgid] = handle
+}
+
+func (h *ServerSessionHandles) SetMsgHandleList(list []struct {
+	Id     MsgIdType
+	Handle func(*MsgSession, interface{}) error
+}) {
+	for _, d := range list {
+		h.msgHandles[d.Id] = d.Handle
+	}
+}
+
+func newMsgHandlerWithServer(args ...interface{}) common.ISessionHandler {
+	codec := args[0].(IMsgCodec)
+	handles := args[1].(*ServerSessionHandles)
+	mapper := args[2].(*IdMsgMapper)
+	handler := newMsgHandler(codec, mapper)
+	handler.SetConnectHandle(handles.connectedHandle)
+	handler.SetDisconnectHandle(handles.disconnectedHandle)
+	handler.SetTickHandle(handles.tickHandle)
+	handler.SetErrorHandle(handles.errorHandle)
+	for msgid, msghandle := range handles.msgHandles {
+		handler.RegisterHandle(msgid, msghandle)
+	}
+	return handler
+}
+
 // MsgServer struct
 type MsgServer struct {
 	*server.Server
-	handler *msgHandler
+	created    bool
+	options    []common.Option
+	createArgs []interface{}
+	handles    *ServerSessionHandles
+}
+
+// NewMsgServerDirectly create new message server directly
+func NewMsgServerDirectly(msgCodec IMsgCodec, handles *ServerSessionHandles, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	funcArgs := []interface{}{msgCodec, handles, idMsgMapper}
+	options = append(options, server.WithNewSessionHandlerFuncArgs(funcArgs...))
+	s := &MsgServer{
+		Server:  server.NewServer(newMsgHandlerWithServer, options...),
+		created: true,
+	}
+	return s
 }
 
 // NewMsgServer create new message server
 func NewMsgServer(msgCodec IMsgCodec, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
-	s := &MsgServer{}
-	handler := newMsgHandler(msgCodec, idMsgMapper)
-	s.Server = server.NewServerWithHandler(handler, options...)
-	s.handler = handler
+	s := &MsgServer{createArgs: []interface{}{msgCodec, idMsgMapper}, options: options, handles: CreateServerSessionHandles()}
 	return s
 }
 
-// MsgServer.SetConnectHandle set connected handle with session
-func (c *MsgServer) SetConnectHandle(handle func(common.ISession)) {
-	c.handler.SetConnectHandle(handle)
+func (s *MsgServer) SetSessionConnectedHandle(handle func(common.ISession)) {
+	if s.created {
+		return
+	}
+	s.handles.connectedHandle = handle
 }
 
-// MsgServer.SetDisconnectHandle set disconnect handle with session and error
-func (c *MsgServer) SetDisconnectHandle(handle func(common.ISession, error)) {
-	c.handler.SetDisconnectHandle(handle)
+func (s *MsgServer) SetSessionDisconnectedHandle(handle func(common.ISession, error)) {
+	if s.created {
+		return
+	}
+	s.handles.disconnectedHandle = handle
 }
 
-// MsgServer.SetTickHandle set tick timer handle with session
-func (c *MsgServer) SetTickHandle(handle func(common.ISession, time.Duration)) {
-	c.handler.SetTickHandle(handle)
+func (s *MsgServer) SetSessionTickHandle(handle func(common.ISession, time.Duration)) {
+	if s.created {
+		return
+	}
+	s.handles.tickHandle = handle
 }
 
-// MsgServer.SetErrorHandle set error handle
-func (c *MsgServer) SetErrorHandle(handle func(error)) {
-	c.handler.SetErrorHandle(handle)
+func (s *MsgServer) SetSessionErrorHandle(handle func(error)) {
+	if s.created {
+		return
+	}
+	s.handles.errorHandle = handle
 }
 
-// MsgServer.RegisterMsgHandle register handle for msg id
-func (c *MsgServer) RegisterMsgHandle(msgid MsgIdType, handle func(common.ISession, interface{}) error) {
-	c.handler.RegisterHandle(msgid, handle)
+func (s *MsgServer) SetMsgSessionHandle(msgid MsgIdType, handle func(*MsgSession, interface{}) error) {
+	if s.created {
+		return
+	}
+	s.handles.SetMsgHandle(msgid, handle)
 }
 
-// MsgServer.Send send to session a message
-func (c *MsgServer) Send(sess common.ISession, msgid MsgIdType, msg interface{}) error {
-	return c.handler.SendMsg(sess, msgid, msg)
+func (s *MsgServer) SetMsgSessionHandleList(handleList []struct {
+	Id     MsgIdType
+	Handle func(*MsgSession, interface{}) error
+}) {
+	if s.created {
+		return
+	}
+	for _, d := range handleList {
+		s.handles.SetMsgHandle(d.Id, d.Handle)
+	}
 }
 
-// MsgServer.SendNoCopy send to session a message with no copy data inside
-func (c *MsgServer) SendNoCopy(sess common.ISession, msgid MsgIdType, msg interface{}) error {
-	return c.handler.SendMsgNoCopy(sess, msgid, msg)
+// MsgServer.Start start server
+func (s *MsgServer) Listen(address string) error {
+	if s.Server == nil {
+		s.createArgs = append(s.createArgs[:1], append([]interface{}{s.handles}, s.createArgs[1:]...)...)
+		s.options = append(s.options, server.WithNewSessionHandlerFuncArgs(s.createArgs...))
+		s.Server = server.NewServer(newMsgHandlerWithServer, s.options...)
+		s.created = true
+	}
+	return s.Server.Listen(address)
 }
 
 // NewPBMsgServer create a protobuf message server
@@ -63,6 +155,26 @@ func NewPBMsgServer(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServ
 }
 
 // NewJsonMsgServer create a json message server
-func NewJsonMsgServer(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+func NewJsonMsgServerr(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
 	return NewMsgServer(&JsonCodec{}, idMsgMapper, options...)
+}
+
+// NewGobMsgServer create a gob message server
+func NewGobMsgServer(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	return NewMsgServer(&GobCodec{}, idMsgMapper, options...)
+}
+
+// NewPBMsgServer create a protobuf message server directly
+func NewPBMsgServerDirectly(handles *ServerSessionHandles, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	return NewMsgServerDirectly(&ProtobufCodec{}, handles, idMsgMapper, options...)
+}
+
+// NewJsonMsgServer create a json message server directly
+func NewJsonMsgServerDirectly(handles *ServerSessionHandles, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	return NewMsgServerDirectly(&JsonCodec{}, handles, idMsgMapper, options...)
+}
+
+// NewGobMsgServer create a gob message server directly
+func NewGobMsgServerDirectly(handles *ServerSessionHandles, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	return NewMsgServerDirectly(&GobCodec{}, handles, idMsgMapper, options...)
 }

@@ -73,7 +73,7 @@ func BenchmarkClient(b *testing.B) {
 
 	b.Logf("benchmark client running")
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < b.N; i++ {
 		err := bc.Send([]byte("abcdefghijklmnopqrstuvwxyz0123456789"), false)
 		if err != nil {
 			b.Errorf("benchmark client send err: %+v", err)

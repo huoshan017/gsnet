@@ -170,14 +170,13 @@ func BenchmarkServer(b *testing.B) {
 
 	b.Logf("benchmark server is running")
 
-	clientNum := 4000
 	sendNum := 1000
 	n := int32(0)
 	var wg sync.WaitGroup
 	wg.Add(clientNum)
 
 	// 创建一堆客户端
-	for i := 0; i < clientNum; i++ {
+	for i := 0; i < b.N; i++ {
 
 		go func(idx int) {
 			defer wg.Done()

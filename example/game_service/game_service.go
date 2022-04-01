@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,12 +9,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/huoshan017/gsnet"
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/example/game_proto"
-	"github.com/huoshan017/gsnet/server"
-
-	"github.com/huoshan017/gsnet/common/packet"
+	"github.com/huoshan017/gsnet/msg"
 
 	cmap "github.com/orcaman/concurrent-map"
 )
@@ -26,7 +22,7 @@ type Player struct {
 	id      int
 	account string
 	token   string
-	sess    common.ISession
+	sess    *msg.MsgSession
 }
 
 func NewPlayer() *Player {
@@ -77,64 +73,36 @@ type config struct {
 	addr string
 }
 
-type DefaultMsgHandler struct {
-	gsnet.MsgHandlerBase
-	msgDecoder common.IMsgDecoder
-}
+type SessionHandler struct{}
 
-func CreateDefaultMsgHandler(args ...interface{}) common.ISessionHandler {
-	h := &DefaultMsgHandler{}
-	h.msgDecoder = &common.DefaultMsgDecoder{}
-	h.MsgHandlerBase = *gsnet.NewMsgHandlerBase(h.msgDecoder)
-	h.MsgHandlerBase.RegisterHandle(game_proto.MsgIdGamePlayerEnterReq, h.onPlayerEnterGame)
-	h.MsgHandlerBase.RegisterHandle(game_proto.MsgIdGamePlayerExitReq, h.onPlayerExitGame)
-	h.MsgHandlerBase.RegisterHandle(game_proto.MsgIdHandShakeReq, h.onHandShake)
-	return h
-}
-
-func (h *DefaultMsgHandler) OnConnect(sess common.ISession) {
+func (h *SessionHandler) OnConnect(sess common.ISession) {
 	log.Printf("session %v connected", sess.GetId())
 }
 
-func (h *DefaultMsgHandler) OnDisconnect(sess common.ISession, err error) {
+func (h *SessionHandler) OnDisconnect(sess common.ISession, err error) {
 	log.Printf("session %v disconnected", sess.GetId())
 }
 
-func (h *DefaultMsgHandler) OnTick(sess common.ISession, tick time.Duration) {
+func (h *SessionHandler) OnTick(sess common.ISession, tick time.Duration) {
 }
 
-func (h *DefaultMsgHandler) OnError(err error) {
+func (h *SessionHandler) OnError(err error) {
 	log.Printf("err %v", err)
 }
 
-func (h *DefaultMsgHandler) onHandShake(sess common.ISession, packet packet.IPacket) error {
-	return nil
-}
-
-func (h *DefaultMsgHandler) onPlayerEnterGame(sess common.ISession, packet packet.IPacket) error {
-	var req game_proto.GamePlayerEnterReq
-	err := json.Unmarshal(*packet.Data(), &req)
-	var resp game_proto.GamePlayerEnterResp
-	if err != nil {
-		resp.Result = -1
-		d, e := json.Marshal(&resp)
-		if e != nil {
-			return e
-		}
-		return h.Send(sess, game_proto.MsgIdGamePlayerEnterResp, d)
+func (h *SessionHandler) onPlayerEnterGame(sess *msg.MsgSession, msg interface{}) error {
+	req, o := msg.(*game_proto.GamePlayerEnterReq)
+	if !o {
+		panic("onPlayerEnterGame must receive game_proto.GamePlayerEnterReq")
 	}
-
+	var resp game_proto.GamePlayerEnterResp
 	var p *Player
 	// 先判断session中有没保存的数据
 	pd := sess.GetData("player")
 	if pd != nil {
 		// 重复进入
 		resp.Result = -2
-		d, e := json.Marshal(&resp)
-		if e != nil {
-			return e
-		}
-		e = h.Send(sess, game_proto.MsgIdGamePlayerEnterResp, d)
+		e := sess.SendMsg(game_proto.MsgIdGamePlayerEnterResp, &resp)
 		if e != nil {
 			return e
 		}
@@ -153,16 +121,12 @@ func (h *DefaultMsgHandler) onPlayerEnterGame(sess common.ISession, packet packe
 	p.sess = sess
 	playerMgr.Add(p)
 	sess.SetData("player", pd)
-	dd, e := json.Marshal(&game_proto.GamePlayerEnterResp{})
-	if e != nil {
-		return e
-	}
-	h.Send(sess, game_proto.MsgIdGamePlayerEnterResp, dd)
+	sess.SendMsg(game_proto.MsgIdGamePlayerEnterResp, &resp)
 	fmt.Println("Player ", p.account, " entered game")
 	return nil
 }
 
-func (h *DefaultMsgHandler) onPlayerExitGame(sess common.ISession, packet packet.IPacket) error {
+func (h *SessionHandler) onPlayerExitGame(sess *msg.MsgSession, msg interface{}) error {
 	d := sess.GetData("player")
 	if d == nil {
 		return errors.New("game_service: no invalid session")
@@ -172,40 +136,49 @@ func (h *DefaultMsgHandler) onPlayerExitGame(sess common.ISession, packet packet
 		return errors.New("game_service: type cast to Player failed")
 	}
 	var resp game_proto.GamePlayerExitResp
-	dd, e := json.Marshal(&resp)
-	if e != nil {
-		return e
-	}
-	h.Send(sess, game_proto.MsgIdGamePlayerExitResp, dd)
+	sess.SendMsg(game_proto.MsgIdGamePlayerExitResp, &resp)
 	fmt.Println("player ", p.account, " exit game")
 	return nil
 }
 
 type GameService struct {
-	net *server.Server
+	serv        *msg.MsgServer
+	sessHandles *SessionHandler
 }
 
 func NewGameService() *GameService {
 	return &GameService{}
 }
 
-func (s *GameService) GetNet() *server.Server {
-	return s.net
+func (s *GameService) GetNet() *msg.MsgServer {
+	return s.serv
 }
 
 func (s *GameService) Init(conf *config) bool {
-	net := server.NewServer(CreateDefaultMsgHandler)
-	err := net.Listen(conf.addr)
+	serv := msg.NewGobMsgServer(msg.CreateIdMsgMapper())
+	err := serv.Listen(conf.addr)
 	if err != nil {
 		fmt.Println("game service listen addr ", conf.addr, " err: ", err)
 		return false
 	}
-	s.net = net
+	s.serv = serv
+	s.setHandles()
 	return true
 }
 
+func (s *GameService) setHandles() {
+	sessionHandler := &SessionHandler{}
+	s.serv.SetSessionConnectedHandle(sessionHandler.OnConnect)
+	s.serv.SetSessionDisconnectedHandle(sessionHandler.OnDisconnect)
+	s.serv.SetSessionTickHandle(sessionHandler.OnTick)
+	s.serv.SetSessionErrorHandle(sessionHandler.OnError)
+	s.serv.SetMsgSessionHandle(game_proto.MsgIdGamePlayerEnterReq, sessionHandler.onPlayerEnterGame)
+	s.serv.SetMsgSessionHandle(game_proto.MsgIdGamePlayerExitReq, sessionHandler.onPlayerExitGame)
+	s.sessHandles = sessionHandler
+}
+
 func (s *GameService) Start() {
-	s.net.Start()
+	s.serv.Start()
 }
 
 func main() {

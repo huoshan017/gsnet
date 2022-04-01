@@ -15,10 +15,11 @@ type MsgClient struct {
 
 // NewMsgClient create a message client
 func NewMsgClient(msgCodec IMsgCodec, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
-	c := &MsgClient{}
 	handler := newMsgHandler(msgCodec, idMsgMapper)
-	c.Client = client.NewClient(handler, options...)
-	c.handler = handler
+	c := &MsgClient{
+		Client:  client.NewClient(handler, options...),
+		handler: handler,
+	}
 	return c
 }
 
@@ -43,7 +44,7 @@ func (c *MsgClient) SetErrorHandle(handle func(error)) {
 }
 
 // MsgClient.RegisterMsgHandle register a handle for message id
-func (c *MsgClient) RegisterMsgHandle(msgid MsgIdType, handle func(common.ISession, interface{}) error) {
+func (c *MsgClient) RegisterMsgHandle(msgid MsgIdType, handle func(*MsgSession, interface{}) error) {
 	c.handler.RegisterHandle(msgid, handle)
 }
 
@@ -60,4 +61,9 @@ func NewPBMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClie
 // NewJsonMsgClient create json message client
 func NewJsonMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
 	return NewMsgClient(&JsonCodec{}, idMsgMapper, options...)
+}
+
+// NewGobMsgClient create gob message client
+func NewGobMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+	return NewMsgClient(&GobCodec{}, idMsgMapper, options...)
 }
