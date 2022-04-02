@@ -91,6 +91,23 @@ func NewMsgServer(msgCodec IMsgCodec, idMsgMapper *IdMsgMapper, options ...commo
 	return s
 }
 
+func (s *MsgServer) SetSessionHandles(handles struct {
+	ConnectedHandle    func(common.ISession)
+	DisconnectedHandle func(common.ISession, error)
+	TickHandle         func(common.ISession, time.Duration)
+	ErrorHandle        func(error)
+	MsgHandles         map[MsgIdType]func(*MsgSession, interface{}) error
+}) {
+	if s.created {
+		return
+	}
+	s.handles.connectedHandle = handles.ConnectedHandle
+	s.handles.disconnectedHandle = handles.DisconnectedHandle
+	s.handles.tickHandle = handles.TickHandle
+	s.handles.errorHandle = handles.ErrorHandle
+	s.handles.msgHandles = handles.MsgHandles
+}
+
 func (s *MsgServer) SetSessionConnectedHandle(handle func(common.ISession)) {
 	if s.created {
 		return
