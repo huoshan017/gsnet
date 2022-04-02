@@ -12,6 +12,10 @@ type MsgSession struct {
 	mapper *IdMsgMapper
 }
 
+func (s *MsgSession) GetSess() common.ISession {
+	return s.sess
+}
+
 func (s *MsgSession) GetId() uint64 {
 	return s.sess.GetId()
 }

@@ -86,9 +86,9 @@ func (ma *IdMsgMapper) GetReflectNewObject(id MsgIdType) interface{} {
 }
 
 type msgHandler struct {
-	connectHandle    func(common.ISession)
-	disconnectHandle func(common.ISession, error)
-	tickHandle       func(common.ISession, time.Duration)
+	connectHandle    func(*MsgSession)
+	disconnectHandle func(*MsgSession, error)
+	tickHandle       func(*MsgSession, time.Duration)
 	errHandle        func(error)
 	handleMap        map[MsgIdType]func(*MsgSession, interface{}) error
 	sess             *MsgSession
@@ -102,15 +102,15 @@ func newMsgHandler(codec IMsgCodec, mapper *IdMsgMapper) *msgHandler {
 	return d
 }
 
-func (d *msgHandler) SetConnectHandle(handle func(common.ISession)) {
+func (d *msgHandler) SetConnectHandle(handle func(*MsgSession)) {
 	d.connectHandle = handle
 }
 
-func (d *msgHandler) SetDisconnectHandle(handle func(common.ISession, error)) {
+func (d *msgHandler) SetDisconnectHandle(handle func(*MsgSession, error)) {
 	d.disconnectHandle = handle
 }
 
-func (d *msgHandler) SetTickHandle(handle func(common.ISession, time.Duration)) {
+func (d *msgHandler) SetTickHandle(handle func(*MsgSession, time.Duration)) {
 	d.tickHandle = handle
 }
 
@@ -124,19 +124,22 @@ func (d *msgHandler) RegisterHandle(msgid MsgIdType, handle func(*MsgSession, in
 
 func (d *msgHandler) OnConnect(s common.ISession) {
 	if d.connectHandle != nil {
-		d.connectHandle(s)
+		d.sess.sess = s
+		d.connectHandle(d.sess)
 	}
 }
 
 func (d *msgHandler) OnDisconnect(s common.ISession, err error) {
 	if d.disconnectHandle != nil {
-		d.disconnectHandle(s, err)
+		d.sess.sess = s
+		d.disconnectHandle(d.sess, err)
 	}
 }
 
 func (d *msgHandler) OnTick(s common.ISession, tick time.Duration) {
 	if d.tickHandle != nil {
-		d.tickHandle(s, tick)
+		d.sess.sess = s
+		d.tickHandle(d.sess, tick)
 	}
 }
 

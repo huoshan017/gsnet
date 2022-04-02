@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/example/game_proto"
 	"github.com/huoshan017/gsnet/msg"
 
@@ -75,15 +74,15 @@ type config struct {
 
 type SessionHandler struct{}
 
-func (h *SessionHandler) OnConnect(sess common.ISession) {
+func (h *SessionHandler) OnConnect(sess *msg.MsgSession) {
 	log.Printf("session %v connected", sess.GetId())
 }
 
-func (h *SessionHandler) OnDisconnect(sess common.ISession, err error) {
+func (h *SessionHandler) OnDisconnect(sess *msg.MsgSession, err error) {
 	log.Printf("session %v disconnected", sess.GetId())
 }
 
-func (h *SessionHandler) OnTick(sess common.ISession, tick time.Duration) {
+func (h *SessionHandler) OnTick(sess *msg.MsgSession, tick time.Duration) {
 }
 
 func (h *SessionHandler) OnError(err error) {

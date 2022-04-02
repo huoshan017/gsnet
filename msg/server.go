@@ -8,9 +8,9 @@ import (
 )
 
 type ServerSessionHandles struct {
-	connectedHandle    func(common.ISession)
-	disconnectedHandle func(common.ISession, error)
-	tickHandle         func(common.ISession, time.Duration)
+	connectedHandle    func(*MsgSession)
+	disconnectedHandle func(*MsgSession, error)
+	tickHandle         func(*MsgSession, time.Duration)
 	errorHandle        func(error)
 	msgHandles         map[MsgIdType]func(*MsgSession, interface{}) error
 }
@@ -21,15 +21,15 @@ func CreateServerSessionHandles() *ServerSessionHandles {
 	}
 }
 
-func (h *ServerSessionHandles) SetConnectedHandle(handle func(common.ISession)) {
+func (h *ServerSessionHandles) SetConnectedHandle(handle func(*MsgSession)) {
 	h.connectedHandle = handle
 }
 
-func (h *ServerSessionHandles) SetDisconnectedHandle(handle func(common.ISession, error)) {
+func (h *ServerSessionHandles) SetDisconnectedHandle(handle func(*MsgSession, error)) {
 	h.disconnectedHandle = handle
 }
 
-func (h *ServerSessionHandles) SetTickHandle(handle func(common.ISession, time.Duration)) {
+func (h *ServerSessionHandles) SetTickHandle(handle func(*MsgSession, time.Duration)) {
 	h.tickHandle = handle
 }
 
@@ -92,9 +92,9 @@ func NewMsgServer(msgCodec IMsgCodec, idMsgMapper *IdMsgMapper, options ...commo
 }
 
 func (s *MsgServer) SetSessionHandles(handles struct {
-	ConnectedHandle    func(common.ISession)
-	DisconnectedHandle func(common.ISession, error)
-	TickHandle         func(common.ISession, time.Duration)
+	ConnectedHandle    func(*MsgSession)
+	DisconnectedHandle func(*MsgSession, error)
+	TickHandle         func(*MsgSession, time.Duration)
 	ErrorHandle        func(error)
 	MsgHandles         map[MsgIdType]func(*MsgSession, interface{}) error
 }) {
@@ -108,21 +108,21 @@ func (s *MsgServer) SetSessionHandles(handles struct {
 	s.handles.msgHandles = handles.MsgHandles
 }
 
-func (s *MsgServer) SetSessionConnectedHandle(handle func(common.ISession)) {
+func (s *MsgServer) SetSessionConnectedHandle(handle func(*MsgSession)) {
 	if s.created {
 		return
 	}
 	s.handles.connectedHandle = handle
 }
 
-func (s *MsgServer) SetSessionDisconnectedHandle(handle func(common.ISession, error)) {
+func (s *MsgServer) SetSessionDisconnectedHandle(handle func(*MsgSession, error)) {
 	if s.created {
 		return
 	}
 	s.handles.disconnectedHandle = handle
 }
 
-func (s *MsgServer) SetSessionTickHandle(handle func(common.ISession, time.Duration)) {
+func (s *MsgServer) SetSessionTickHandle(handle func(*MsgSession, time.Duration)) {
 	if s.created {
 		return
 	}

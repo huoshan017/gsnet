@@ -37,16 +37,16 @@ func init() {
 func newPBMsgClient(t *testing.T) (*msg.MsgClient, error) {
 	c := msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond))
 
-	c.SetConnectHandle(func(sess common.ISession) {
+	c.SetConnectHandle(func(sess *msg.MsgSession) {
 		t.Logf("connected")
 	})
 
-	c.SetDisconnectHandle(func(sess common.ISession, err error) {
+	c.SetDisconnectHandle(func(sess *msg.MsgSession, err error) {
 		t.Logf("disconnected, err %v", err)
 	})
 
 	var n int
-	c.SetTickHandle(func(sess common.ISession, tick time.Duration) {
+	c.SetTickHandle(func(sess *msg.MsgSession, tick time.Duration) {
 		if n < sendCount {
 			var ping tproto.MsgPing
 			ping.Content = "pingpingping"
@@ -81,13 +81,13 @@ func newPBMsgClient(t *testing.T) (*msg.MsgClient, error) {
 
 func newPBMsgServer(t *testing.T) (*msg.MsgServer, error) {
 	sessionHandles := msg.CreateServerSessionHandles()
-	sessionHandles.SetConnectedHandle(func(sess common.ISession) {
+	sessionHandles.SetConnectedHandle(func(sess *msg.MsgSession) {
 		t.Logf("session %v connected", sess.GetId())
 	})
-	sessionHandles.SetDisconnectedHandle(func(sess common.ISession, err error) {
+	sessionHandles.SetDisconnectedHandle(func(sess *msg.MsgSession, err error) {
 		t.Logf("session %v disconnected", sess.GetId())
 	})
-	sessionHandles.SetTickHandle(func(sess common.ISession, tick time.Duration) {
+	sessionHandles.SetTickHandle(func(sess *msg.MsgSession, tick time.Duration) {
 
 	})
 	sessionHandles.SetErrorHandle(func(err error) {
@@ -116,17 +116,17 @@ func newPBMsgServer(t *testing.T) (*msg.MsgServer, error) {
 func newPBMsgClient2(t *testing.T) (*msg.MsgClient, error) {
 	c := msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond))
 
-	c.SetConnectHandle(func(sess common.ISession) {
+	c.SetConnectHandle(func(sess *msg.MsgSession) {
 		t.Logf("connected")
 	})
 
-	c.SetDisconnectHandle(func(sess common.ISession, err error) {
+	c.SetDisconnectHandle(func(sess *msg.MsgSession, err error) {
 		t.Logf("disconnected, err %v", err)
 	})
 
 	var sn, rn int
 	var sendList [][]byte
-	c.SetTickHandle(func(sess common.ISession, tick time.Duration) {
+	c.SetTickHandle(func(sess *msg.MsgSession, tick time.Duration) {
 		if sn < sendCount {
 			var ping tproto.MsgPing
 			d := randBytes(50)
@@ -170,13 +170,13 @@ func newPBMsgClient2(t *testing.T) (*msg.MsgClient, error) {
 
 func newPBMsgServer2(t *testing.T) (*msg.MsgServer, error) {
 	s := msg.NewPBMsgServer(idMsgMapper)
-	s.SetSessionConnectedHandle(func(sess common.ISession) {
+	s.SetSessionConnectedHandle(func(sess *msg.MsgSession) {
 		t.Logf("session %v connected", sess.GetId())
 	})
-	s.SetSessionDisconnectedHandle(func(sess common.ISession, err error) {
+	s.SetSessionDisconnectedHandle(func(sess *msg.MsgSession, err error) {
 		t.Logf("session %v disconnected", sess.GetId())
 	})
-	s.SetSessionTickHandle(func(sess common.ISession, tick time.Duration) {
+	s.SetSessionTickHandle(func(sess *msg.MsgSession, tick time.Duration) {
 
 	})
 	s.SetSessionErrorHandle(func(err error) {
