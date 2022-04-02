@@ -67,6 +67,12 @@ func CreateIdMsgMapper() *IdMsgMapper {
 	}
 }
 
+func CreateIdMsgMapperWith(m map[MsgIdType]reflect.Type) *IdMsgMapper {
+	return &IdMsgMapper{
+		m: m,
+	}
+}
+
 func (ma *IdMsgMapper) AddMap(id MsgIdType, typ reflect.Type) {
 	ma.m[id] = typ
 }
