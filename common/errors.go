@@ -6,12 +6,11 @@ import (
 )
 
 var (
-	ErrConnClosed      = errors.New("gsnet: connetion is closed")
-	ErrSendChanFull    = errors.New("gsnet: send chan full")
-	ErrRecvChanEmpty   = errors.New("gsnet: recv chan empty")
-	ErrNoMsgHandle     = errors.New("gsnet: no message handle")
-	ErrCancelWait      = errors.New("gsnet: cancel wait")
-	ErrNoMsgHandleFunc = func(msgid uint32) error {
+	ErrConnClosed    = errors.New("gsnet: connetion is closed")
+	ErrSendChanFull  = errors.New("gsnet: send chan full")
+	ErrRecvChanEmpty = errors.New("gsnet: recv chan empty")
+	ErrCancelWait    = errors.New("gsnet: cancel wait")
+	ErrNoMsgHandle   = func(msgid uint32) error {
 		return fmt.Errorf("gsnet: no message %v handle", msgid)
 	}
 	ErrNotImplement = func(funcName string) error {
@@ -24,7 +23,6 @@ var noDisconnectErrMap = make(map[error]struct{})
 func init() {
 	noDisconnectErrMap[ErrSendChanFull] = struct{}{}
 	noDisconnectErrMap[ErrRecvChanEmpty] = struct{}{}
-	noDisconnectErrMap[ErrNoMsgHandle] = struct{}{}
 }
 
 func RegisterNoDisconnectError(err error) {

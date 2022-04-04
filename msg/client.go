@@ -68,3 +68,8 @@ func NewJsonMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgCl
 func NewGobMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
 	return NewMsgClient(&codec.GobCodec{}, idMsgMapper, options...)
 }
+
+// NewThriftMsgClient create thrift message client
+func NewThriftMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+	return NewMsgClient(&codec.ThriftCodec{}, idMsgMapper, options...)
+}

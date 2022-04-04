@@ -1,7 +1,7 @@
 package msg
 
 import (
-	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -10,7 +10,9 @@ import (
 )
 
 var (
-	ErrMsgIdMapperTypeNotFound = errors.New("gsnet: type map to message id not found")
+	ErrMsgIdMapperTypeNotFound = func(msgid MsgIdType) error {
+		return fmt.Errorf("gsnet: type map to message id %v not found", msgid)
+	}
 )
 
 /*
@@ -159,11 +161,8 @@ type msgHandlerClient struct {
 }
 
 func newMsgHandlerClient(codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerClient {
-	d := &msgHandlerCommon{
-		sess: &MsgSession{codec: codec, mapper: mapper},
-	}
 	return &msgHandlerClient{
-		msgHandlerCommon: *d,
+		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper),
 		handleMap:        make(map[MsgIdType]func(*MsgSession, interface{}) error),
 	}
 }
@@ -179,7 +178,7 @@ func (d *msgHandlerClient) OnPacket(s common.ISession, pak packet.IPacket) error
 	}
 	h, o := d.handleMap[msgid]
 	if !o {
-		e := common.ErrNoMsgHandleFunc(uint32(msgid))
+		e := common.ErrNoMsgHandle(uint32(msgid))
 		common.CheckAndRegisterNoDisconnectError(e)
 		return e
 	}
@@ -194,11 +193,8 @@ type msgHandlerServerProxy struct {
 }
 
 func newMsgHandlerServerProxy(sessionHandler IMsgSessionHandler, codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerServerProxy {
-	d := &msgHandlerCommon{
-		sess: &MsgSession{codec: codec, mapper: mapper},
-	}
 	proxy := &msgHandlerServerProxy{
-		msgHandlerCommon: *d,
+		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper),
 		sessionHandler:   sessionHandler,
 	}
 	proxy.msgHandlerCommon.SetConnectHandle(sessionHandler.OnConnected)
@@ -216,8 +212,4 @@ func (d *msgHandlerServerProxy) OnPacket(s common.ISession, pak packet.IPacket) 
 	}
 	d.sess.sess = s
 	return d.msgHandle(d.sess, msgid, msgobj)
-}
-
-func init() {
-	common.RegisterNoDisconnectError(ErrMsgIdMapperTypeNotFound)
 }

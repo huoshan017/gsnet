@@ -62,7 +62,9 @@ func (s *MsgSession) splitIdAndMsg(msgdata []byte) (MsgIdType, interface{}, erro
 	msgid, msgdata := splitIdAndMsg(msgdata)
 	msgobj := s.mapper.GetReflectNewObject(msgid)
 	if msgobj == nil {
-		return 0, nil, ErrMsgIdMapperTypeNotFound
+		e := ErrMsgIdMapperTypeNotFound(msgid)
+		common.CheckAndRegisterNoDisconnectError(e)
+		return 0, nil, e
 	}
 	err := s.codec.Decode(msgdata, msgobj)
 	if err != nil {
