@@ -85,71 +85,94 @@ func (ma *IdMsgMapper) GetReflectNewObject(id MsgIdType) interface{} {
 	return reflect.New(rt.Elem()).Interface()
 }
 
-type msgHandler struct {
+type msgHandlerCommon struct {
 	connectHandle    func(*MsgSession)
 	disconnectHandle func(*MsgSession, error)
 	tickHandle       func(*MsgSession, time.Duration)
 	errHandle        func(error)
-	handleMap        map[MsgIdType]func(*MsgSession, interface{}) error
 	sess             *MsgSession
 }
 
-func newMsgHandler(codec IMsgCodec, mapper *IdMsgMapper) *msgHandler {
-	d := &msgHandler{
-		handleMap: make(map[MsgIdType]func(*MsgSession, interface{}) error),
-		sess:      &MsgSession{codec: codec, mapper: mapper},
+func newMsgHandlerCommon(codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerCommon {
+	d := &msgHandlerCommon{
+		sess: &MsgSession{codec: codec, mapper: mapper},
 	}
 	return d
 }
 
-func (d *msgHandler) SetConnectHandle(handle func(*MsgSession)) {
+func (d *msgHandlerCommon) SetConnectHandle(handle func(*MsgSession)) {
 	d.connectHandle = handle
 }
 
-func (d *msgHandler) SetDisconnectHandle(handle func(*MsgSession, error)) {
+func (d *msgHandlerCommon) SetDisconnectHandle(handle func(*MsgSession, error)) {
 	d.disconnectHandle = handle
 }
 
-func (d *msgHandler) SetTickHandle(handle func(*MsgSession, time.Duration)) {
+func (d *msgHandlerCommon) SetTickHandle(handle func(*MsgSession, time.Duration)) {
 	d.tickHandle = handle
 }
 
-func (d *msgHandler) SetErrorHandle(handle func(error)) {
+func (d *msgHandlerCommon) SetErrorHandle(handle func(error)) {
 	d.errHandle = handle
 }
 
-func (d *msgHandler) RegisterHandle(msgid MsgIdType, handle func(*MsgSession, interface{}) error) {
-	d.handleMap[msgid] = handle
-}
-
-func (d *msgHandler) OnConnect(s common.ISession) {
+func (d *msgHandlerCommon) OnConnect(s common.ISession) {
 	if d.connectHandle != nil {
 		d.sess.sess = s
 		d.connectHandle(d.sess)
 	}
 }
 
-func (d *msgHandler) OnDisconnect(s common.ISession, err error) {
+func (d *msgHandlerCommon) OnDisconnect(s common.ISession, err error) {
 	if d.disconnectHandle != nil {
 		d.sess.sess = s
 		d.disconnectHandle(d.sess, err)
 	}
 }
 
-func (d *msgHandler) OnTick(s common.ISession, tick time.Duration) {
+func (d *msgHandlerCommon) OnTick(s common.ISession, tick time.Duration) {
 	if d.tickHandle != nil {
 		d.sess.sess = s
 		d.tickHandle(d.sess, tick)
 	}
 }
 
-func (d *msgHandler) OnError(err error) {
+func (d *msgHandlerCommon) OnError(err error) {
 	if d.errHandle != nil {
 		d.errHandle(err)
 	}
 }
 
-func (d *msgHandler) OnPacket(s common.ISession, pak packet.IPacket) error {
+func (d *msgHandlerCommon) SendMsg(s common.ISession, msgid MsgIdType, msgobj interface{}) error {
+	d.sess.sess = s
+	return d.sess.SendMsg(msgid, msgobj)
+}
+
+func (d *msgHandlerCommon) SendMsgNoCopy(s common.ISession, msgid MsgIdType, msgobj interface{}) error {
+	d.sess.sess = s
+	return d.sess.SendMsgNoCopy(msgid, msgobj)
+}
+
+type msgHandlerClient struct {
+	msgHandlerCommon
+	handleMap map[MsgIdType]func(*MsgSession, interface{}) error
+}
+
+func newMsgHandlerClient(codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerClient {
+	d := &msgHandlerCommon{
+		sess: &MsgSession{codec: codec, mapper: mapper},
+	}
+	return &msgHandlerClient{
+		msgHandlerCommon: *d,
+		handleMap:        make(map[MsgIdType]func(*MsgSession, interface{}) error),
+	}
+}
+
+func (d *msgHandlerClient) RegisterHandle(msgid MsgIdType, handle func(*MsgSession, interface{}) error) {
+	d.handleMap[msgid] = handle
+}
+
+func (d *msgHandlerClient) OnPacket(s common.ISession, pak packet.IPacket) error {
 	msgid, msgobj, err := d.sess.splitIdAndMsg(*pak.Data())
 	if err != nil {
 		return err
@@ -164,14 +187,35 @@ func (d *msgHandler) OnPacket(s common.ISession, pak packet.IPacket) error {
 	return h(d.sess, msgobj)
 }
 
-func (d *msgHandler) SendMsg(s common.ISession, msgid MsgIdType, msgobj interface{}) error {
-	d.sess.sess = s
-	return d.sess.SendMsg(msgid, msgobj)
+type msgHandlerServerProxy struct {
+	msgHandlerCommon
+	sessionHandler IMsgSessionHandler
+	msgHandle      func(*MsgSession, MsgIdType, interface{}) error
 }
 
-func (d *msgHandler) SendMsgNoCopy(s common.ISession, msgid MsgIdType, msgobj interface{}) error {
+func newMsgHandlerServerProxy(sessionHandler IMsgSessionHandler, codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerServerProxy {
+	d := &msgHandlerCommon{
+		sess: &MsgSession{codec: codec, mapper: mapper},
+	}
+	proxy := &msgHandlerServerProxy{
+		msgHandlerCommon: *d,
+		sessionHandler:   sessionHandler,
+	}
+	proxy.msgHandlerCommon.SetConnectHandle(sessionHandler.OnConnected)
+	proxy.msgHandlerCommon.SetDisconnectHandle(sessionHandler.OnDisconnected)
+	proxy.msgHandlerCommon.SetTickHandle(sessionHandler.OnTick)
+	proxy.msgHandlerCommon.SetErrorHandle(sessionHandler.OnError)
+	proxy.msgHandle = sessionHandler.OnMsgHandle
+	return proxy
+}
+
+func (d *msgHandlerServerProxy) OnPacket(s common.ISession, pak packet.IPacket) error {
+	msgid, msgobj, err := d.sess.splitIdAndMsg(*pak.Data())
+	if err != nil {
+		return err
+	}
 	d.sess.sess = s
-	return d.sess.SendMsgNoCopy(msgid, msgobj)
+	return d.msgHandle(d.sess, msgid, msgobj)
 }
 
 func init() {

@@ -74,11 +74,15 @@ type config struct {
 
 type SessionHandler struct{}
 
-func (h *SessionHandler) OnConnect(sess *msg.MsgSession) {
+func NewGameSessionHandler(args ...interface{}) msg.IMsgSessionHandler {
+	return &SessionHandler{}
+}
+
+func (h *SessionHandler) OnConnected(sess *msg.MsgSession) {
 	log.Printf("session %v connected", sess.GetId())
 }
 
-func (h *SessionHandler) OnDisconnect(sess *msg.MsgSession, err error) {
+func (h *SessionHandler) OnDisconnected(sess *msg.MsgSession, err error) {
 	log.Printf("session %v disconnected", sess.GetId())
 }
 
@@ -87,6 +91,16 @@ func (h *SessionHandler) OnTick(sess *msg.MsgSession, tick time.Duration) {
 
 func (h *SessionHandler) OnError(err error) {
 	log.Printf("err %v", err)
+}
+
+func (h *SessionHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj interface{}) error {
+	var err error
+	if msgid == msg.MsgIdType(game_proto.MsgIdGamePlayerEnterReq) {
+		err = h.onPlayerEnterGame(sess, msgobj)
+	} else if msgid == msg.MsgIdType(game_proto.MsgIdGamePlayerExitReq) {
+		err = h.onPlayerExitGame(sess, msgobj)
+	}
+	return err
 }
 
 func (h *SessionHandler) onPlayerEnterGame(sess *msg.MsgSession, msg interface{}) error {
@@ -141,8 +155,7 @@ func (h *SessionHandler) onPlayerExitGame(sess *msg.MsgSession, msg interface{})
 }
 
 type GameService struct {
-	serv        *msg.MsgServer
-	sessHandles *SessionHandler
+	serv *msg.MsgServer
 }
 
 func NewGameService() *GameService {
@@ -154,26 +167,14 @@ func (s *GameService) GetNet() *msg.MsgServer {
 }
 
 func (s *GameService) Init(conf *config) bool {
-	serv := msg.NewGobMsgServer(msg.CreateIdMsgMapper())
+	serv := msg.NewGobMsgServer(NewGameSessionHandler, msg.CreateIdMsgMapper())
 	err := serv.Listen(conf.addr)
 	if err != nil {
 		fmt.Println("game service listen addr ", conf.addr, " err: ", err)
 		return false
 	}
 	s.serv = serv
-	s.setHandles()
 	return true
-}
-
-func (s *GameService) setHandles() {
-	sessionHandler := &SessionHandler{}
-	s.serv.SetSessionConnectedHandle(sessionHandler.OnConnect)
-	s.serv.SetSessionDisconnectedHandle(sessionHandler.OnDisconnect)
-	s.serv.SetSessionTickHandle(sessionHandler.OnTick)
-	s.serv.SetSessionErrorHandle(sessionHandler.OnError)
-	s.serv.SetMsgSessionHandle(game_proto.MsgIdGamePlayerEnterReq, sessionHandler.onPlayerEnterGame)
-	s.serv.SetMsgSessionHandle(game_proto.MsgIdGamePlayerExitReq, sessionHandler.onPlayerExitGame)
-	s.sessHandles = sessionHandler
 }
 
 func (s *GameService) Start() {

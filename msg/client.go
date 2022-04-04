@@ -5,17 +5,18 @@ import (
 
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/msg/codec"
 )
 
 // MsgClient struct
 type MsgClient struct {
 	*client.Client
-	handler *msgHandler
+	handler *msgHandlerClient
 }
 
 // NewMsgClient create a message client
 func NewMsgClient(msgCodec IMsgCodec, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
-	handler := newMsgHandler(msgCodec, idMsgMapper)
+	handler := newMsgHandlerClient(msgCodec, idMsgMapper)
 	c := &MsgClient{
 		Client:  client.NewClient(handler, options...),
 		handler: handler,
@@ -55,15 +56,15 @@ func (c *MsgClient) Send(msgid MsgIdType, msg interface{}) error {
 
 // NewPBMsgClient create protobuf message client
 func NewPBMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
-	return NewMsgClient(&ProtobufCodec{}, idMsgMapper, options...)
+	return NewMsgClient(&codec.ProtobufCodec{}, idMsgMapper, options...)
 }
 
 // NewJsonMsgClient create json message client
 func NewJsonMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
-	return NewMsgClient(&JsonCodec{}, idMsgMapper, options...)
+	return NewMsgClient(&codec.JsonCodec{}, idMsgMapper, options...)
 }
 
 // NewGobMsgClient create gob message client
 func NewGobMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
-	return NewMsgClient(&GobCodec{}, idMsgMapper, options...)
+	return NewMsgClient(&codec.GobCodec{}, idMsgMapper, options...)
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/msg"
+	"github.com/huoshan017/gsnet/server"
 
 	"github.com/huoshan017/gsnet/test/tproto"
 )
@@ -79,37 +80,53 @@ func newPBMsgClient(t *testing.T) (*msg.MsgClient, error) {
 	return c, nil
 }
 
-func newPBMsgServer(t *testing.T) (*msg.MsgServer, error) {
-	sessionHandles := msg.CreateServerSessionHandles()
-	sessionHandles.SetConnectedHandle(func(sess *msg.MsgSession) {
-		t.Logf("session %v connected", sess.GetId())
-	})
-	sessionHandles.SetDisconnectedHandle(func(sess *msg.MsgSession, err error) {
-		t.Logf("session %v disconnected", sess.GetId())
-	})
-	sessionHandles.SetTickHandle(func(sess *msg.MsgSession, tick time.Duration) {
+type testPBMsgHandler struct {
+	t *testing.T
+}
 
-	})
-	sessionHandles.SetErrorHandle(func(err error) {
-		t.Logf("session err: %v", err)
-	})
-	sessionHandles.SetMsgHandle(MsgIdPing, func(sess *msg.MsgSession, msg interface{}) error {
-		m, o := msg.(*tproto.MsgPing)
+func (h *testPBMsgHandler) OnConnected(sess *msg.MsgSession) {
+	h.t.Logf("session %v connected", sess.GetId())
+}
+
+func (h *testPBMsgHandler) OnDisconnected(sess *msg.MsgSession, err error) {
+	h.t.Logf("session %v disconnected", sess.GetId())
+}
+
+func (h *testPBMsgHandler) OnTick(sess *msg.MsgSession, tick time.Duration) {
+
+}
+
+func (h *testPBMsgHandler) OnError(err error) {
+	h.t.Logf("session err: %v", err)
+}
+
+func (h *testPBMsgHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj interface{}) error {
+	if msgid == MsgIdPing {
+		m, o := msgobj.(*tproto.MsgPing)
 		if !o {
-			t.Errorf("server receive message must Ping")
+			h.t.Errorf("server receive message must Ping")
 		}
-		t.Logf("received session %v message %v", sess.GetId(), m.Content)
+		h.t.Logf("received session %v message %v", sess.GetId(), m.Content)
 		var rm tproto.MsgPong
 		rm.Content = "pongpongpong"
 		return sess.SendMsg(MsgIdPong, &rm)
-	})
-	s := msg.NewPBMsgServerDirectly(sessionHandles, idMsgMapper)
+	}
+	return nil
+}
 
+func newTestPBMsgHandler(args ...interface{}) msg.IMsgSessionHandler {
+	handler := &testPBMsgHandler{
+		t: args[0].(*testing.T),
+	}
+	return handler
+}
+
+func newPBMsgServer(t *testing.T) (*msg.MsgServer, error) {
+	s := msg.NewPBMsgServer(newTestPBMsgHandler, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t))
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
 	}
-
 	return s, nil
 }
 
@@ -168,30 +185,49 @@ func newPBMsgClient2(t *testing.T) (*msg.MsgClient, error) {
 	return c, nil
 }
 
-func newPBMsgServer2(t *testing.T) (*msg.MsgServer, error) {
-	s := msg.NewPBMsgServer(idMsgMapper)
-	s.SetSessionConnectedHandle(func(sess *msg.MsgSession) {
-		t.Logf("session %v connected", sess.GetId())
-	})
-	s.SetSessionDisconnectedHandle(func(sess *msg.MsgSession, err error) {
-		t.Logf("session %v disconnected", sess.GetId())
-	})
-	s.SetSessionTickHandle(func(sess *msg.MsgSession, tick time.Duration) {
+type testPBMsgHandler2 struct {
+	t *testing.T
+}
 
-	})
-	s.SetSessionErrorHandle(func(err error) {
-		t.Logf("session err: %v", err)
-	})
-	s.SetMsgSessionHandle(MsgIdPing, func(sess *msg.MsgSession, msg interface{}) error {
-		m, o := msg.(*tproto.MsgPing)
+func (h *testPBMsgHandler2) OnConnected(sess *msg.MsgSession) {
+	h.t.Logf("session %v connected", sess.GetId())
+}
+
+func (h *testPBMsgHandler2) OnDisconnected(sess *msg.MsgSession, err error) {
+	h.t.Logf("session %v disconnected", sess.GetId())
+}
+
+func (h *testPBMsgHandler2) OnTick(sess *msg.MsgSession, tick time.Duration) {
+
+}
+
+func (h *testPBMsgHandler2) OnError(err error) {
+	h.t.Logf("session err: %v", err)
+}
+
+func (h *testPBMsgHandler2) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj interface{}) error {
+	if msgid == MsgIdPing {
+		m, o := msgobj.(*tproto.MsgPing)
 		if !o {
-			t.Errorf("server receive message must Ping")
+			h.t.Errorf("server receive message must Ping")
 		}
 		var rm tproto.MsgPong
 		rm.Content = m.Content
 		return sess.SendMsgNoCopy(MsgIdPong, &rm)
-	})
+	}
+	return nil
+}
 
+func newTestPBMsgHandler2(args ...interface{}) msg.IMsgSessionHandler {
+	t := args[0].(*testing.T)
+	handler := &testPBMsgHandler2{
+		t: t,
+	}
+	return handler
+}
+
+func newPBMsgServer2(t *testing.T) (*msg.MsgServer, error) {
+	s := msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t))
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
