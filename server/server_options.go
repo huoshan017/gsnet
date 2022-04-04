@@ -8,7 +8,7 @@ import (
 )
 
 // 会话处理器函数类型
-type NewSessionHandlerFunc func(args ...interface{}) common.ISessionHandler
+type NewSessionHandlerFunc func(args ...interface{}) common.ISessionEventHandler
 
 // 服务选项结构
 type ServerOptions struct {

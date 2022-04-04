@@ -76,7 +76,7 @@ type testClientHandler struct {
 	sendDataList *sendDataInfo
 }
 
-func newTestClientHandler(args ...interface{}) common.ISessionHandler {
+func newTestClientHandler(args ...interface{}) common.ISessionEventHandler {
 	if len(args) < 2 {
 		panic("At least need 2 arguments")
 	}
@@ -174,7 +174,7 @@ type testServerHandler struct {
 	state int32 // 1 表示服务器模式  2 表示客户端模式
 }
 
-func newTestServerHandler(args ...interface{}) common.ISessionHandler {
+func newTestServerHandler(args ...interface{}) common.ISessionEventHandler {
 	h := &testServerHandler{}
 	var o bool
 	h.t, o = args[0].(*testing.T)

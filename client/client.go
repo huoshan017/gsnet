@@ -12,14 +12,14 @@ import (
 type Client struct {
 	conn     *Connector
 	sess     common.ISession
-	handler  common.ISessionHandler
+	handler  common.ISessionEventHandler
 	options  ClientOptions
 	lastTime time.Time
 	ctx      context.Context
 	cancel   context.CancelFunc
 }
 
-func NewClient(handler common.ISessionHandler, options ...common.Option) *Client {
+func NewClient(handler common.ISessionEventHandler, options ...common.Option) *Client {
 	c := &Client{
 		handler: handler,
 	}

@@ -39,7 +39,7 @@ type ISession interface {
 }
 
 // 会话处理器接口
-type ISessionHandler interface {
+type ISessionEventHandler interface {
 	OnConnect(ISession)
 	OnDisconnect(ISession, error)
 	OnPacket(ISession, packet.IPacket) error

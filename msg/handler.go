@@ -188,11 +188,11 @@ func (d *msgHandlerClient) OnPacket(s common.ISession, pak packet.IPacket) error
 
 type msgHandlerServerProxy struct {
 	msgHandlerCommon
-	sessionHandler IMsgSessionHandler
+	sessionHandler IMsgSessionEventHandler
 	msgHandle      func(*MsgSession, MsgIdType, interface{}) error
 }
 
-func newMsgHandlerServerProxy(sessionHandler IMsgSessionHandler, codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerServerProxy {
+func newMsgHandlerServerProxy(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerServerProxy {
 	proxy := &msgHandlerServerProxy{
 		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper),
 		sessionHandler:   sessionHandler,

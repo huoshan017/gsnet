@@ -47,7 +47,7 @@ func NewServer(newFunc NewSessionHandlerFunc, options ...common.Option) *Server 
 	return s
 }
 
-func NewServerWithHandler(handler common.ISessionHandler, options ...common.Option) *Server {
+func NewServerWithHandler(handler common.ISessionEventHandler, options ...common.Option) *Server {
 	rf := reflect.TypeOf(handler)
 	s := &Server{
 		sessHandlerType: rf,
@@ -172,11 +172,11 @@ func (s *Server) handleConn(conn common.IConn) {
 	conn.Run()
 
 	// 创建會話處理器
-	var handler common.ISessionHandler
+	var handler common.ISessionEventHandler
 	if s.newHandlerFunc == nil {
 		v := reflect.New(s.sessHandlerType.Elem())
 		it := v.Interface()
-		handler = it.(common.ISessionHandler)
+		handler = it.(common.ISessionEventHandler)
 	} else {
 		if s.options.GetNewSessionHandlerFuncArgs() == nil {
 			handler = s.newHandlerFunc()

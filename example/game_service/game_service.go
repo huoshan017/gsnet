@@ -74,7 +74,7 @@ type config struct {
 
 type SessionHandler struct{}
 
-func NewGameSessionHandler(args ...interface{}) msg.IMsgSessionHandler {
+func NewGameSessionHandler(args ...interface{}) msg.IMsgSessionEventHandler {
 	return &SessionHandler{}
 }
 

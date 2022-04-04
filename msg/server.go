@@ -1,24 +1,13 @@
 package msg
 
 import (
-	"time"
-
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/msg/codec"
 	"github.com/huoshan017/gsnet/server"
 )
 
-// IMsgSessionHandler interface for message handler
-type IMsgSessionHandler interface {
-	OnConnected(*MsgSession)
-	OnDisconnected(*MsgSession, error)
-	OnTick(*MsgSession, time.Duration)
-	OnError(error)
-	OnMsgHandle(*MsgSession, MsgIdType, interface{}) error
-}
-
 // NewMsgSessionHandlerFunc function for creating interface IMsgSessionHandler instance
-type NewMsgSessionHandlerFunc func(args ...interface{}) IMsgSessionHandler
+type NewMsgSessionHandlerFunc func(args ...interface{}) IMsgSessionEventHandler
 
 // MsgServer struct
 type MsgServer struct {
@@ -28,17 +17,17 @@ type MsgServer struct {
 	mapper  *IdMsgMapper
 }
 
-// NewMsgServer create new message server directly
+// NewMsgServer create new message server
 func NewMsgServer(newFunc NewMsgSessionHandlerFunc, codec IMsgCodec, mapper *IdMsgMapper, options ...common.Option) *MsgServer {
 	s := &MsgServer{
 		newFunc: newFunc,
 		codec:   codec,
 		mapper:  mapper,
 	}
-	var newSessionHandler server.NewSessionHandlerFunc = func(args ...interface{}) common.ISessionHandler {
+	var newSessionHandler server.NewSessionHandlerFunc = func(args ...interface{}) common.ISessionEventHandler {
 		msgSessionHandler := s.newFunc(args...)
 		proxy := newMsgHandlerServerProxy(msgSessionHandler, s.codec, s.mapper)
-		return common.ISessionHandler(proxy)
+		return common.ISessionEventHandler(proxy)
 	}
 	s.Server = server.NewServer(newSessionHandler, options...)
 	return s
