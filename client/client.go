@@ -81,16 +81,37 @@ func (c *Client) Update() error {
 		return nil
 	}
 
-	packet, err := c.conn.RecvNonblock()
+	pak, err := c.conn.RecvNonblock()
 	// 没有数据
 	if err == common.ErrRecvChanEmpty {
-		c.options.GetPacketPool().Put(packet)
+		c.options.GetPacketPool().Put(pak)
 		return nil
 	}
+
+	// process resend
+	resend := c.conn.GetResendData()
 	if err == nil {
-		err = c.handler.OnPacket(c.sess, packet)
+		var res int32
+		if resend != nil {
+			res = resend.OnAck(pak)
+			if res < 0 {
+				common.GetLogger().Fatalf("gsnet: length of rend list less than ack num")
+				err = common.ErrResendDataInvalid
+			}
+		}
+		if res == 0 {
+			err = c.handler.OnPacket(c.sess, pak)
+		}
+		if resend != nil && err == nil {
+			resend.OnProcessed(1)
+		}
+		//err = c.handler.OnPacket(c.sess, pak)
 	}
-	c.options.GetPacketPool().Put(packet)
+	if resend != nil {
+		resend.OnUpdate(c.conn.GetConn())
+	}
+
+	c.options.GetPacketPool().Put(pak)
 	if err != nil {
 		if !common.IsNoDisconnectError(err) {
 			c.handler.OnDisconnect(c.sess, err)
@@ -169,12 +190,30 @@ func (c *Client) handle() error {
 		pak packet.IPacket
 		err error
 	)
+	resend := c.conn.GetResendData()
 	pak, err = c.conn.Wait(c.ctx)
 	if err == nil {
-		if pak != nil {
-			err = c.handler.OnPacket(c.sess, pak)
-		} else {
+		if pak != nil { // net packet handle
+			//err = c.handler.OnPacket(c.sess, pak)
+			var res int32
+			if resend != nil {
+				res = resend.OnAck(pak)
+				if res < 0 {
+					common.GetLogger().Fatalf("gsnet: length of rend list less than ack num")
+					err = common.ErrResendDataInvalid
+				}
+			}
+			if res == 0 {
+				err = c.handler.OnPacket(c.sess, pak)
+			}
+			if resend != nil && err == nil {
+				resend.OnProcessed(1)
+			}
+		} else { // tick handle
 			c.handleTick()
+			if resend != nil {
+				err = resend.OnUpdate(c.conn.GetConn())
+			}
 		}
 	}
 	c.options.GetPacketPool().Put(pak)

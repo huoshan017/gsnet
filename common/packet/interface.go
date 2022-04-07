@@ -4,6 +4,7 @@ import "io"
 
 // 包接口
 type IPacket interface {
+	Type() PacketType
 	Data() *[]byte
 	SetData(*[]byte)
 	MMType() MemoryManagementType

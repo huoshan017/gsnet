@@ -26,7 +26,7 @@ const (
 var (
 	ch          = make(chan struct{})
 	idMsgMapper *msg.IdMsgMapper
-	clientsCh   = make(chan *msg.MsgClient, 128)
+	//clientsCh   = make(chan *msg.MsgClient, 128)
 )
 
 func init() {
@@ -35,8 +35,13 @@ func init() {
 	idMsgMapper.AddMap(MsgIdPong, reflect.TypeOf(&tproto.MsgPong{}))
 }
 
-func newPBMsgClient(t *testing.T) (*msg.MsgClient, error) {
-	c := msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond))
+func newPBMsgClient(useResend bool, t *testing.T) (*msg.MsgClient, error) {
+	var c *msg.MsgClient
+	if useResend {
+		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond), common.WithResendConfig(&common.ResendConfig{}))
+	} else {
+		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond))
+	}
 
 	c.SetConnectHandle(func(sess *msg.MsgSession) {
 		t.Logf("connected")
@@ -47,10 +52,13 @@ func newPBMsgClient(t *testing.T) (*msg.MsgClient, error) {
 	})
 
 	var n int
+	var sendList [][]byte
 	c.SetTickHandle(func(sess *msg.MsgSession, tick time.Duration) {
 		if n < sendCount {
 			var ping tproto.MsgPing
-			ping.Content = "pingpingping"
+			bs := randBytes(100)
+			sendList = append(sendList, bs)
+			ping.Content = string(bs)
 			err := c.Send(MsgIdPing, &ping)
 			if err != nil {
 				t.Logf("client send message err: %v", err)
@@ -67,8 +75,14 @@ func newPBMsgClient(t *testing.T) (*msg.MsgClient, error) {
 
 	var rn int
 	c.RegisterMsgHandle(MsgIdPong, func(sess *msg.MsgSession, msg interface{}) error {
-		t.Logf("received Pong message %v", rn)
+		m := msg.(*tproto.MsgPong)
+		if !bytes.Equal([]byte(m.Content), sendList[0]) {
+			err := fmt.Errorf("compare failed: %v to %v", []byte(m.Content), sendList[0])
+			panic(err)
+		}
 		rn += 1
+		sendList = sendList[1:]
+		t.Logf("received Pong %v message %v", rn, m.Content)
 		return nil
 	})
 
@@ -106,9 +120,9 @@ func (h *testPBMsgHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType
 		if !o {
 			h.t.Errorf("server receive message must Ping")
 		}
-		h.t.Logf("received session %v message %v", sess.GetId(), m.Content)
+		//h.t.Logf("received session %v message %v", sess.GetId(), m.Content)
 		var rm tproto.MsgPong
-		rm.Content = "pongpongpong"
+		rm.Content = m.Content
 		return sess.SendMsg(MsgIdPong, &rm)
 	}
 	return nil
@@ -121,8 +135,13 @@ func newTestPBMsgHandler(args ...interface{}) msg.IMsgSessionEventHandler {
 	return handler
 }
 
-func newPBMsgServer(t *testing.T) (*msg.MsgServer, error) {
-	s := msg.NewPBMsgServer(newTestPBMsgHandler, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t))
+func newPBMsgServer(useResend bool, t *testing.T) (*msg.MsgServer, error) {
+	var s *msg.MsgServer
+	if useResend {
+		s = msg.NewPBMsgServer(newTestPBMsgHandler, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t), common.WithResendConfig(&common.ResendConfig{}))
+	} else {
+		s = msg.NewPBMsgServer(newTestPBMsgHandler, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t))
+	}
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
@@ -130,52 +149,76 @@ func newPBMsgServer(t *testing.T) (*msg.MsgServer, error) {
 	return s, nil
 }
 
-func newPBMsgClient2(t *testing.T) (*msg.MsgClient, error) {
-	c := msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond))
+type testPBMsgClientHandler struct {
+	//c        *msg.MsgClient
+	t        *testing.T
+	sn, rn   int
+	sendList [][]byte
+}
 
-	c.SetConnectHandle(func(sess *msg.MsgSession) {
-		t.Logf("connected")
-	})
+func newTestPBMsgClientHandler(t *testing.T, c *msg.MsgClient) *testPBMsgClientHandler {
+	return &testPBMsgClientHandler{t: t}
+}
 
-	c.SetDisconnectHandle(func(sess *msg.MsgSession, err error) {
-		t.Logf("disconnected, err %v", err)
-	})
+func (h *testPBMsgClientHandler) OnConnect(sess *msg.MsgSession) {
+	h.t.Logf("connected")
+}
 
-	var sn, rn int
-	var sendList [][]byte
-	c.SetTickHandle(func(sess *msg.MsgSession, tick time.Duration) {
-		if sn < sendCount {
-			var ping tproto.MsgPing
-			d := randBytes(50)
-			ping.Content = string(d)
-			err := c.Send(MsgIdPing, &ping)
-			if err != nil {
-				t.Logf("client send message err: %v", err)
-			}
-			sendList = append(sendList, d)
-			sn += 1
+func (h *testPBMsgClientHandler) OnDisconnect(sess *msg.MsgSession, err error) {
+	h.t.Logf("disconnected, err %v", err)
+}
+
+func (h *testPBMsgClientHandler) OnTick(sess *msg.MsgSession, tick time.Duration) {
+	if h.sn < sendCount {
+		var ping tproto.MsgPing
+		d := randBytes(100)
+		ping.Content = string(d)
+		err := sess.SendMsg(MsgIdPing, &ping)
+		if err != nil {
+			h.t.Logf("client send message err: %v", err)
 		}
-	})
+		h.sendList = append(h.sendList, d)
+		h.sn += 1
+	}
+}
 
-	c.SetErrorHandle(func(err error) {
-		t.Logf("get error: %v", err)
-	})
-
-	c.RegisterMsgHandle(MsgIdPong, func(sess *msg.MsgSession, msg interface{}) error {
-		if rn >= sendCount {
-			return nil
-		}
-		m := msg.(*tproto.MsgPong)
-		if !bytes.Equal([]byte(m.Content), sendList[rn]) {
-			err := fmt.Errorf("compare failed: %v to %v", m.Content, sendList[rn])
-			panic(err)
-		}
-		rn += 1
-		if rn >= sendCount {
-			clientsCh <- c
-		}
+func (h *testPBMsgClientHandler) onMsgPong(sess *msg.MsgSession, msgobj interface{}) error {
+	if h.rn >= sendCount {
 		return nil
-	})
+	}
+	m := msgobj.(*tproto.MsgPong)
+	if !bytes.Equal([]byte(m.Content), h.sendList[0]) {
+		err := fmt.Errorf("compare failed: %v to %v", []byte(m.Content), h.sendList[0])
+		panic(err)
+	}
+	//h.t.Logf("session %v received %v", sess.GetId(), m.Content)
+	h.sendList = h.sendList[1:]
+	h.rn += 1
+	if h.rn >= sendCount {
+		//clientsCh <- h.c
+		sess.Close()
+	}
+	return nil
+}
+
+func (h *testPBMsgClientHandler) OnError(err error) {
+	h.t.Logf("get error: %v", err)
+}
+
+func newPBMsgClient2(useResend bool, t *testing.T) (*msg.MsgClient, error) {
+	var c *msg.MsgClient
+	if useResend {
+		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond), common.WithResendConfig(&common.ResendConfig{}))
+	} else {
+		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond))
+	}
+
+	handler := newTestPBMsgClientHandler(t, c)
+	c.SetConnectHandle(handler.OnConnect)
+	c.SetDisconnectHandle(handler.OnDisconnect)
+	c.SetTickHandle(handler.OnTick)
+	c.SetErrorHandle(handler.OnError)
+	c.RegisterMsgHandle(MsgIdPong, handler.onMsgPong)
 
 	err := c.Connect(testAddress)
 	if err != nil {
@@ -226,8 +269,13 @@ func newTestPBMsgHandler2(args ...interface{}) msg.IMsgSessionEventHandler {
 	return handler
 }
 
-func newPBMsgServer2(t *testing.T) (*msg.MsgServer, error) {
-	s := msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t))
+func newPBMsgServer2(useResend bool, t *testing.T) (*msg.MsgServer, error) {
+	var s *msg.MsgServer
+	if useResend {
+		s = msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t), common.WithResendConfig(&common.ResendConfig{}))
+	} else {
+		s = msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t))
+	}
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
@@ -236,8 +284,8 @@ func newPBMsgServer2(t *testing.T) (*msg.MsgServer, error) {
 	return s, nil
 }
 
-func TestPBMsgClient(t *testing.T) {
-	s, err := newPBMsgServer(t)
+func testPBMsgClient(useResend bool, t *testing.T) {
+	s, err := newPBMsgServer(useResend, t)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
@@ -250,7 +298,7 @@ func TestPBMsgClient(t *testing.T) {
 
 	t.Logf("server started")
 
-	c, err := newPBMsgClient(t)
+	c, err := newPBMsgClient(useResend, t)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
@@ -264,8 +312,8 @@ func TestPBMsgClient(t *testing.T) {
 	t.Logf("client end")
 }
 
-func TestPBMsgServer(t *testing.T) {
-	s, err := newPBMsgServer2(t)
+func testPBMsgServer(useResend bool, t *testing.T) {
+	s, err := newPBMsgServer2(useResend, t)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
@@ -283,7 +331,7 @@ func TestPBMsgServer(t *testing.T) {
 	remainCount := int32(clientNum)
 	for i := 0; i < clientNum; i++ {
 		go func() {
-			c, err := newPBMsgClient2(t)
+			c, err := newPBMsgClient2(useResend, t)
 			if err != nil {
 				//t.Errorf("%v", err)
 				wg.Done()
@@ -300,7 +348,7 @@ func TestPBMsgServer(t *testing.T) {
 		}()
 	}
 
-	go func() {
+	/*go func() {
 		for {
 			client, o := <-clientsCh
 			if !o {
@@ -308,7 +356,23 @@ func TestPBMsgServer(t *testing.T) {
 			}
 			client.Close()
 		}
-	}()
+	}()*/
 
 	wg.Wait()
+}
+
+func TestPBMsgClient(t *testing.T) {
+	testPBMsgClient(false, t)
+}
+
+func TestPBMsgClientUseResend(t *testing.T) {
+	testPBMsgClient(true, t)
+}
+
+func TestPBMsgServer(t *testing.T) {
+	testPBMsgServer(false, t)
+}
+
+func TestPBMsgServerUseResend(t *testing.T) {
+	testPBMsgServer(true, t)
 }

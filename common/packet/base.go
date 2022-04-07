@@ -13,7 +13,11 @@ var (
 type PacketType int8
 
 const (
-	PacketNormal PacketType = iota
+	PacketNormalData   PacketType = iota
+	PacketHandshake    PacketType = 1
+	PacketHandshakeAck PacketType = 2
+	PacketHeartbeat    PacketType = 3
+	PacketSentAck      PacketType = 4
 )
 
 type CompressType int8
@@ -46,11 +50,13 @@ type PacketOptions struct {
 
 // 基础包结构
 type Packet struct {
-	typ PacketType // 类型
-	//cType CompressType   // 是否被压缩
-	//eType EncryptionType // 是否加密加密
+	typ   PacketType           // 类型
 	mType MemoryManagementType // 内存管理类型
 	data  *[]byte
+}
+
+func (p Packet) Type() PacketType {
+	return p.typ
 }
 
 func (p Packet) Data() *[]byte {
@@ -67,6 +73,10 @@ func (p Packet) MMType() MemoryManagementType {
 
 // bytes包定义
 type BytesPacket []byte
+
+func (p BytesPacket) Type() PacketType {
+	return PacketNormalData
+}
 
 func (p *BytesPacket) Data() *[]byte {
 	return (*[]byte)(p)

@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/common/packet"
 	"github.com/huoshan017/gsnet/server"
 )
 
@@ -34,25 +36,26 @@ func main() {
 
 	c := 0
 	var o bool = true
-	var conn common.IConn
+	var con net.Conn
 	for o {
 		select {
-		case conn, o = <-acceptor.GetNewConnChan():
+		case con, o = <-acceptor.GetNewConnChan():
 			if !o {
 				continue
 			}
+			conn := common.NewConn(con, common.Options{})
 			conn.Run()
 			c += 1
 			go func(no int, conn common.IConn) {
 				fmt.Println("connection ", no)
 				for {
-					packet, e := conn.Recv()
+					pak, e := conn.Recv()
 					if e != nil {
 						conn.Close()
 						fmt.Println("conn ", no, " recv err: ", e)
 						break
 					}
-					e = conn.Send(*packet.Data(), true)
+					e = conn.Send(packet.PacketNormalData, *pak.Data(), true)
 					if e != nil {
 						conn.Close()
 						fmt.Println("conn ", no, " send err: ", e)

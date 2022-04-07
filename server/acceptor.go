@@ -5,13 +5,12 @@ import (
 	"net"
 	"time"
 
-	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/control"
 )
 
 type Acceptor struct {
 	listener net.Listener
-	connCh   chan common.IConn
+	connCh   chan net.Conn
 	options  ServerOptions
 	closeCh  chan struct{}
 	closed   bool
@@ -28,7 +27,7 @@ func NewAcceptor(options ServerOptions) *Acceptor {
 	}
 	if a.options.GetConnChanLen() <= 0 {
 		a.options.SetConnChanLen(DefaultConnChanLen)
-		a.connCh = make(chan common.IConn, a.options.GetConnChanLen())
+		a.connCh = make(chan net.Conn, a.options.GetConnChanLen())
 	}
 	return a
 }
@@ -91,19 +90,12 @@ func (s *Acceptor) serve(listener net.Listener) error {
 			close(s.connCh)
 			break
 		}
-		var c common.IConn
-		switch s.options.GetConnDataType() {
-		case 1:
-			c = common.NewConn(conn, s.options.Options)
-		default:
-			c = common.NewConn2(conn, s.options.Options)
-		}
-		s.connCh <- c
+		s.connCh <- conn
 	}
 	return err
 }
 
-func (s *Acceptor) GetNewConnChan() chan common.IConn {
+func (s *Acceptor) GetNewConnChan() chan net.Conn {
 	return s.connCh
 }
 

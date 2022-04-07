@@ -22,7 +22,9 @@ type Options struct {
 	connCloseWaitSecs int // 連接關閉等待時間(秒)
 	packetPool        packet.IPacketPool
 	packetBuilder     packet.IPacketBuilder
-	connDataType      int // 连接数据结构类型
+	connDataType      int           // 连接数据结构类型
+	useReconnect      bool          // 是否使用重连
+	resendConfig      *ResendConfig // 重发配置
 
 	// todo 以下是需要实现的配置逻辑
 	flushWriteInterval time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
@@ -152,6 +154,20 @@ func (options *Options) SetConnDataType(typ int) {
 	options.connDataType = typ
 }
 
+func (options *Options) GetResendConfig() *ResendConfig {
+	return options.resendConfig
+}
+
+func (options *Options) SetResendConfig(config *ResendConfig) {
+	if config.AckSentNum == 0 {
+		config.AckSentNum = DefaultAckSentNum
+	}
+	if config.AckSentSpan == 0 {
+		config.AckSentSpan = DefaultSentAckTimeSpan
+	}
+	options.resendConfig = config
+}
+
 func WithNoDelay(noDelay bool) Option {
 	return func(options *Options) {
 		options.SetNodelay(noDelay)
@@ -239,5 +255,11 @@ func WithPacketBuilder(packetBuilder packet.IPacketBuilder) Option {
 func WithConnDataType(typ int) Option {
 	return func(options *Options) {
 		options.SetConnDataType(typ)
+	}
+}
+
+func WithResendConfig(config *ResendConfig) Option {
+	return func(options *Options) {
+		options.SetResendConfig(config)
 	}
 }

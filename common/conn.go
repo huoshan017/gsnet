@@ -258,7 +258,7 @@ func (c *Conn) IsClosed() bool {
 }
 
 // 发送数据，必須與Close函數在同一goroutine調用
-func (c *Conn) Send(data []byte, toCopy bool) error {
+func (c *Conn) Send(typ packet.PacketType, data []byte, toCopy bool) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
 	}
@@ -276,20 +276,20 @@ func (c *Conn) Send(data []byte, toCopy bool) error {
 	return nil
 }
 
-func (c *Conn) SendPoolBuffer(*[]byte, packet.MemoryManagementType) error {
+func (c *Conn) SendPoolBuffer(packet.PacketType, *[]byte, packet.MemoryManagementType) error {
 	return ErrNotImplement("Conn.SendPoolBuffer")
 }
 
-func (c *Conn) SendBytesArray([][]byte, bool) error {
+func (c *Conn) SendBytesArray(packet.PacketType, [][]byte, bool) error {
 	return ErrNotImplement("Conn.SendBytesArray")
 }
 
-func (c *Conn) SendPoolBufferArray([]*[]byte, packet.MemoryManagementType) error {
+func (c *Conn) SendPoolBufferArray(packet.PacketType, []*[]byte, packet.MemoryManagementType) error {
 	return ErrNotImplement("Conn.SendPoolBufferArray")
 }
 
 // 非阻塞发送
-func (c *Conn) SendNonblock(data []byte, toCopy bool) error {
+func (c *Conn) SendNonblock(pt packet.Packet, data []byte, toCopy bool) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
 	}

@@ -3,9 +3,10 @@ package common
 import "github.com/huoshan017/gsnet/common/packet"
 
 type Session struct {
-	conn    IConn
-	id      uint64
-	dataMap map[string]interface{}
+	conn       IConn
+	id         uint64
+	dataMap    map[string]interface{}
+	resendData *ResendData
 }
 
 func NewSession(conn IConn, id uint64) *Session {
@@ -23,19 +24,19 @@ func NewSessionNoId(conn IConn) *Session {
 }
 
 func (s *Session) Send(data []byte, toCopy bool) error {
-	return s.conn.Send(data, toCopy)
+	return s.conn.Send(packet.PacketNormalData, data, toCopy)
 }
 
 func (s *Session) SendBytesArray(bytesArray [][]byte, toCopy bool) error {
-	return s.conn.SendBytesArray(bytesArray, toCopy)
+	return s.conn.SendBytesArray(packet.PacketNormalData, bytesArray, toCopy)
 }
 
 func (s *Session) SendPoolBuffer(pBytes *[]byte, mmType packet.MemoryManagementType) error {
-	return s.conn.SendPoolBuffer(pBytes, mmType)
+	return s.conn.SendPoolBuffer(packet.PacketNormalData, pBytes, mmType)
 }
 
 func (s *Session) SendPoolBufferArray(pBytesArray []*[]byte, mmType packet.MemoryManagementType) error {
-	return s.conn.SendPoolBufferArray(pBytesArray, mmType)
+	return s.conn.SendPoolBufferArray(packet.PacketNormalData, pBytesArray, mmType)
 }
 
 func (s *Session) Close() {
@@ -56,4 +57,12 @@ func (s *Session) SetData(k string, d interface{}) {
 
 func (s *Session) GetData(k string) interface{} {
 	return s.dataMap[k]
+}
+
+func (s *Session) SetResendData(resendData *ResendData) {
+	s.resendData = resendData
+}
+
+func (s *Session) GetResendData() *ResendData {
+	return s.resendData
 }

@@ -14,13 +14,12 @@ type IConn interface {
 	RemoteAddr() net.Addr
 	Recv() (packet.IPacket, error)
 	RecvNonblock() (packet.IPacket, error)
-	Send([]byte, bool) error
-	SendPoolBuffer(*[]byte, packet.MemoryManagementType) error
-	SendBytesArray([][]byte, bool) error
-	SendPoolBufferArray([]*[]byte, packet.MemoryManagementType) error
-	//SendNonblock([]byte, bool) error
-	Run()
+	Send(packet.PacketType, []byte, bool) error
+	SendPoolBuffer(packet.PacketType, *[]byte, packet.MemoryManagementType) error
+	SendBytesArray(packet.PacketType, [][]byte, bool) error
+	SendPoolBufferArray(packet.PacketType, []*[]byte, packet.MemoryManagementType) error
 	Wait(ctx context.Context) (packet.IPacket, error)
+	Run()
 	Close()
 	CloseWait(int)
 }

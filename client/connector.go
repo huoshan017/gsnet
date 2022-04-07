@@ -23,6 +23,7 @@ type Connector struct {
 	asyncResultCh   chan error
 	connectCallback func(error)
 	state           int32
+	resend          *common.ResendData
 }
 
 // 创建连接器
@@ -30,6 +31,10 @@ func NewConnector(options *common.Options) *Connector {
 	c := &Connector{
 		options:       options,
 		asyncResultCh: make(chan error),
+	}
+	resendConfig := c.options.GetResendConfig()
+	if resendConfig != nil {
+		c.resend = common.NewResendData(resendConfig)
 	}
 	return c
 }
@@ -110,7 +115,7 @@ func (c *Connector) RecvNonblock() (packet.IPacket, error) {
 }
 
 func (c *Connector) Send(data []byte, copyData bool) error {
-	return c.conn.Send(data, copyData)
+	return c.conn.Send(packet.PacketNormalData, data, copyData)
 }
 
 func (c *Connector) Wait(ctx context.Context) (packet.IPacket, error) {
@@ -148,6 +153,10 @@ func (c *Connector) IsDisconnecting() bool {
 	return atomic.LoadInt32(&c.state) == ConnStateDisconnecting
 }
 
+func (c *Connector) GetResendData() *common.ResendData {
+	return c.resend
+}
+
 // 内部连接函数
 func (c *Connector) connect(address string, timeout time.Duration) error {
 	var conn net.Conn
@@ -165,7 +174,11 @@ func (c *Connector) connect(address string, timeout time.Duration) error {
 	case 1:
 		c.conn = common.NewConn(conn, *c.options)
 	default:
-		c.conn = common.NewConn2(conn, *c.options)
+		if c.resend != nil {
+			c.conn = common.NewConn2UseResend(conn, c.resend, *c.options)
+		} else {
+			c.conn = common.NewConn2(conn, *c.options)
+		}
 	}
 
 	c.conn.Run()
