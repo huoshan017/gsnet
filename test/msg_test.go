@@ -20,7 +20,7 @@ const (
 	MsgIdPing = msg.MsgIdType(1)
 	MsgIdPong = msg.MsgIdType(2)
 	sendCount = 5000
-	clientNum = 1000
+	clientNum = 1500
 )
 
 var (
@@ -150,7 +150,6 @@ func newPBMsgServer(useResend bool, t *testing.T) (*msg.MsgServer, error) {
 }
 
 type testPBMsgClientHandler struct {
-	//c        *msg.MsgClient
 	t        *testing.T
 	sn, rn   int
 	sendList [][]byte
@@ -195,7 +194,6 @@ func (h *testPBMsgClientHandler) onMsgPong(sess *msg.MsgSession, msgobj interfac
 	h.sendList = h.sendList[1:]
 	h.rn += 1
 	if h.rn >= sendCount {
-		//clientsCh <- h.c
 		sess.Close()
 	}
 	return nil
@@ -208,7 +206,7 @@ func (h *testPBMsgClientHandler) OnError(err error) {
 func newPBMsgClient2(useResend bool, t *testing.T) (*msg.MsgClient, error) {
 	var c *msg.MsgClient
 	if useResend {
-		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond), common.WithResendConfig(&common.ResendConfig{}))
+		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond), common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
 	} else {
 		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond))
 	}
@@ -272,7 +270,7 @@ func newTestPBMsgHandler2(args ...interface{}) msg.IMsgSessionEventHandler {
 func newPBMsgServer2(useResend bool, t *testing.T) (*msg.MsgServer, error) {
 	var s *msg.MsgServer
 	if useResend {
-		s = msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t), common.WithResendConfig(&common.ResendConfig{}))
+		s = msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t), common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
 	} else {
 		s = msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t))
 	}

@@ -1,9 +1,15 @@
 package msg
 
 import (
+	"errors"
+
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/common/packet"
 	"github.com/huoshan017/gsnet/common/pool"
+)
+
+var (
+	ErrMsgBodyIncomplete = errors.New("gsnet: message body incomplete")
 )
 
 type MsgSession struct {
@@ -59,21 +65,27 @@ func (s *MsgSession) CloseWait(secs int) {
 }
 
 func (s *MsgSession) splitIdAndMsg(msgdata []byte) (MsgIdType, interface{}, error) {
-	msgid, msgdata := splitIdAndMsg(msgdata)
+	msgid, msgdata, err := splitIdAndMsg(msgdata)
+	if err != nil {
+		return 0, nil, err
+	}
 	msgobj := s.mapper.GetReflectNewObject(msgid)
 	if msgobj == nil {
 		e := ErrMsgIdMapperTypeNotFound(msgid)
 		common.CheckAndRegisterNoDisconnectError(e)
 		return 0, nil, e
 	}
-	err := s.codec.Decode(msgdata, msgobj)
+	err = s.codec.Decode(msgdata, msgobj)
 	if err != nil {
 		return 0, nil, err
 	}
 	return msgid, msgobj, nil
 }
 
-func splitIdAndMsg(data []byte) (msgid MsgIdType, msgdata []byte) {
+func splitIdAndMsg(data []byte) (msgid MsgIdType, msgdata []byte, err error) {
+	if len(data) < 4 {
+		return 0, nil, ErrMsgBodyIncomplete
+	}
 	for i := 0; i < 4; i++ {
 		msgid += MsgIdType(data[i] << (8 * (4 - i - 1)))
 	}

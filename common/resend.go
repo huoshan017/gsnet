@@ -9,7 +9,6 @@ import (
 	"unsafe"
 
 	"github.com/huoshan017/gsnet/common/packet"
-	"github.com/huoshan017/gsnet/common/pool"
 )
 
 type IResendEventHandler interface {
@@ -128,7 +127,6 @@ func cas(p *unsafe.Pointer, old, new *resendNode) (ok bool) {
 }
 
 func NewResendData(config *ResendConfig) *ResendData {
-	config.UseLockFree = true
 	return &ResendData{
 		sentList: make([]struct {
 			data interface{}
@@ -179,30 +177,9 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 			n = num
 		}
 
-		var (
-			pb  *[]byte
-			pba []*[]byte
-			o   bool
-		)
-
 		for i := int16(0); i < n; i++ {
 			node := rd.sentList2.popFront()
-			if node.mmt != packet.MemoryManagementPoolUserManualFree {
-				continue
-			}
-			pb, o = node.data.(*[]byte)
-			if !o {
-				pba, o = rd.sentList[i].data.([]*[]byte)
-				if !o {
-					GetLogger().Infof("gsnet: type transfer failed")
-					continue
-				}
-				for _, pb = range pba {
-					pool.GetBuffPool().Free(pb)
-				}
-				continue
-			}
-			pool.GetBuffPool().Free(pb)
+			FreeSendData(node.mmt, node.data)
 		}
 	} else {
 		if int(n) > len(rd.sentList) {
@@ -215,30 +192,10 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 			n = int16(len(rd.sentList))
 		}
 
-		var (
-			pb  *[]byte
-			pba []*[]byte
-			o   bool
-		)
-
 		rd.locker.Lock()
 		for i := int16(0); i < n; i++ {
-			if rd.sentList[i].mmt != packet.MemoryManagementPoolUserManualFree {
-				continue
-			}
-			pb, o = rd.sentList[i].data.(*[]byte)
-			if !o {
-				pba, o = rd.sentList[i].data.([]*[]byte)
-				if !o {
-					GetLogger().Infof("gsnet: type transfer failed")
-					continue
-				}
-				for _, pb = range pba {
-					pool.GetBuffPool().Free(pb)
-				}
-				continue
-			}
-			pool.GetBuffPool().Free(pb)
+			sd := rd.sentList[i]
+			FreeSendData(sd.mmt, sd.data)
 		}
 		rd.sentList = rd.sentList[n:]
 		rd.locker.Unlock()

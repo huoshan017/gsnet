@@ -23,7 +23,6 @@ type Options struct {
 	packetPool        packet.IPacketPool
 	packetBuilder     packet.IPacketBuilder
 	connDataType      int           // 连接数据结构类型
-	useReconnect      bool          // 是否使用重连
 	resendConfig      *ResendConfig // 重发配置
 
 	// todo 以下是需要实现的配置逻辑

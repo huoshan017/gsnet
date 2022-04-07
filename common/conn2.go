@@ -11,51 +11,24 @@ import (
 	"github.com/huoshan017/gsnet/common/pool"
 )
 
+// wrapperSendData send data wrapper
 type wrapperSendData struct {
 	data   interface{}
 	pt_mmt int32
 }
 
+// wrapperSendData.getData transfer interface{} data to the right type
 func (sd *wrapperSendData) getData() ([]byte, *[]byte, [][]byte, []*[]byte) {
-	var (
-		b   []byte
-		pb  *[]byte
-		ba  [][]byte
-		pba []*[]byte
-		o   bool
-	)
-	if b, o = sd.data.([]byte); !o {
-		if pb, o = sd.data.(*[]byte); !o {
-			if ba, o = sd.data.([][]byte); !o {
-				if pba, o = sd.data.([]*[]byte); !o {
-					panic("gsnet: wrapper send data type must in []byte, *[]byte, [][]byte and []*[]byte")
-				}
-			}
-		}
-	}
-	return b, pb, ba, pba
+	return GetSendData(sd.data)
 }
 
 // only free to returns from wrapperSendData.getData with same instance
 func (sd *wrapperSendData) toFree(b []byte, pb *[]byte, ba [][]byte, pba []*[]byte) {
 	mmt := sd.pt_mmt & 0xffff
-	if mmt == packet.MemoryManagementPoolUserManualFree {
-		if b != nil {
-			panic("gsnet: type []byte cant free with pool")
-		}
-		if ba != nil {
-			panic("gsnet: type [][]byte cant free with pool")
-		}
-		if pb != nil {
-			pool.GetBuffPool().Free(pb)
-		} else if pba != nil {
-			for i := 0; i < len(pba); i++ {
-				pool.GetBuffPool().Free(pba[i])
-			}
-		}
-	}
+	FreeSendData2(packet.MemoryManagementType(mmt), b, pb, ba, pba)
 }
 
+// wrapperSendData.recycle recycle free send data to pool
 func (sd *wrapperSendData) recycle() {
 	if sd.data == nil {
 		panic("gsnet: wrapper send data nil")
@@ -469,15 +442,15 @@ func (c *Conn2) getWrapperSendPoolBuffer(pt packet.PacketType, pData *[]byte, mt
 	switch mt {
 	case packet.MemoryManagementSystemGC:
 		sd.data = pData
-		sd.pt_mmt = (int32(pt)<<16)&0x7fff0000 | int32(mt)
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | int32(mt)
 	case packet.MemoryManagementPoolFrameworkFree:
 		b := pool.GetBuffPool().Alloc(int32(len(*pData)))
 		copy(*b, *pData)
 		sd.data = b
-		sd.pt_mmt = (int32(pt)<<16)&0x7fff0000 | packet.MemoryManagementPoolUserManualFree
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | packet.MemoryManagementPoolUserManualFree
 	case packet.MemoryManagementPoolUserManualFree:
 		sd.data = pData
-		sd.pt_mmt = (int32(pt)<<16)&0x7fff0000 | int32(mt)
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | int32(mt)
 	}
 	return sd
 }
@@ -488,7 +461,7 @@ func (c *Conn2) getWrapperSendPoolBufferArray(pt packet.PacketType, pDataArray [
 	switch mt {
 	case packet.MemoryManagementSystemGC:
 		sd.data = pDataArray
-		sd.pt_mmt = (int32(pt)<<16)&0x7fff0000 | int32(mt)
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | int32(mt)
 	case packet.MemoryManagementPoolFrameworkFree:
 		var pda []*[]byte
 		for i := 0; i < len(pDataArray); i++ {
@@ -497,10 +470,10 @@ func (c *Conn2) getWrapperSendPoolBufferArray(pt packet.PacketType, pDataArray [
 			pda = append(pda, b)
 		}
 		sd.data = pda
-		sd.pt_mmt = (int32(pt)<<16)&0x7fff0000 | packet.MemoryManagementPoolUserManualFree
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | packet.MemoryManagementPoolUserManualFree
 	case packet.MemoryManagementPoolUserManualFree:
 		sd.data = pDataArray
-		sd.pt_mmt = (int32(pt)<<16)&0x7fff0000 | int32(mt)
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | int32(mt)
 	}
 	return sd
 }
