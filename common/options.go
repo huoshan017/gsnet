@@ -24,10 +24,11 @@ type Options struct {
 	packetBuilder     packet.IPacketBuilder
 	connDataType      int           // 连接数据结构类型
 	resendConfig      *ResendConfig // 重发配置
+	useHeartbeat      bool          // 使用心跳
 
 	// todo 以下是需要实现的配置逻辑
+	heartbeatTimeSpan  time.Duration // 心跳间隔
 	flushWriteInterval time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
-	heartbeatInterval  time.Duration // 心跳间隔
 }
 
 // 选项
@@ -167,6 +168,22 @@ func (options *Options) SetResendConfig(config *ResendConfig) {
 	options.resendConfig = config
 }
 
+func (options *Options) IsUseHeartbeat() bool {
+	return options.useHeartbeat
+}
+
+func (options *Options) SetUseHeartbeat(use bool) {
+	options.useHeartbeat = use
+}
+
+func (options *Options) GetHeartbeatTimeSpan() time.Duration {
+	return options.heartbeatTimeSpan
+}
+
+func (options *Options) SetHeartbeatTimeSpan(span time.Duration) {
+	options.heartbeatTimeSpan = span
+}
+
 func WithNoDelay(noDelay bool) Option {
 	return func(options *Options) {
 		options.SetNodelay(noDelay)
@@ -260,5 +277,17 @@ func WithConnDataType(typ int) Option {
 func WithResendConfig(config *ResendConfig) Option {
 	return func(options *Options) {
 		options.SetResendConfig(config)
+	}
+}
+
+func WithUseHeartbeat(use bool) Option {
+	return func(options *Options) {
+		options.SetUseHeartbeat(use)
+	}
+}
+
+func WithHeartbeatTimeSpan(span time.Duration) Option {
+	return func(options *Options) {
+		options.SetHeartbeatTimeSpan(span)
 	}
 }

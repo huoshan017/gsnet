@@ -163,6 +163,19 @@ func (s *Server) getSessCloseInfoChan() chan *sessionCloseInfo {
 	return s.sessCloseInfoChan
 }
 
+func (c *Server) handleHandshake(conn common.IConn, basePacketHandler common.IBasePacketHandler) (bool, error) {
+	var (
+		pak packet.IPacket
+		res int32
+		err error
+	)
+	pak, err = conn.Wait(c.ctx)
+	if err == nil && pak != nil {
+		res, err = basePacketHandler.OnHandleHandshake(pak)
+	}
+	return res == 1, err
+}
+
 func (s *Server) handleConn(c net.Conn) {
 	if len(s.sessMap) >= s.options.GetConnMaxCount() {
 		common.GetLogger().Info("gsnet: connection to server is maximum")
@@ -183,6 +196,8 @@ func (s *Server) handleConn(c net.Conn) {
 			conn = common.NewConn2(c, s.options.Options)
 		}
 	}
+
+	basePacketHandler := common.NewDefaultBasePacketHandler(false, conn, resendData, &s.options.Options)
 
 	// 先讓連接跑起來
 	conn.Run()
@@ -215,51 +230,56 @@ func (s *Server) handleConn(c net.Conn) {
 			}
 		}()
 
-		handler.OnConnect(sess)
-
 		var (
-			lastTime time.Time = time.Now()
-			pak      packet.IPacket
-			err      error
-			run      bool = true
-			resend        = sess.GetResendData()
+			err error
+			run = true
 		)
-		for run {
-			pak, err = conn.Wait(s.ctx)
-			if err == nil {
-				if pak != nil {
-					var res int32
-					if resend != nil {
-						res = resend.OnAck(pak)
-						if res < 0 {
-							common.GetLogger().Fatalf("gsnet: length of rend list less than ack num")
-							err = common.ErrResendDataInvalid
+
+		// handle handshake
+		var complete bool
+		for !complete {
+			complete, err = s.handleHandshake(conn, basePacketHandler)
+			if err != nil {
+				break
+			}
+		}
+
+		// handle packet
+		if err == nil {
+			handler.OnConnect(sess)
+
+			var (
+				lastTime time.Time = time.Now()
+				pak      packet.IPacket
+			)
+			for run {
+				pak, err = conn.Wait(s.ctx)
+				if err == nil {
+					if pak != nil {
+						var res, err = basePacketHandler.OnPreHandle(pak)
+						if err == nil && res == 0 {
+							err = handler.OnPacket(sess, pak)
 						}
-					}
-					if res == 0 {
-						err = handler.OnPacket(sess, pak)
-					}
-					if resend != nil && err == nil {
-						resend.OnProcessed(1)
-					}
-				} else {
-					now := time.Now()
-					handler.OnTick(sess, now.Sub(lastTime))
-					lastTime = now
-					// resend update
-					if resend != nil {
-						err = resend.OnUpdate(conn)
+						if err == nil {
+							err = basePacketHandler.OnPostHandle(pak)
+						}
+						// free packet to pool
+						s.options.GetPacketPool().Put(pak)
+					} else {
+						now := time.Now()
+						handler.OnTick(sess, now.Sub(lastTime))
+						lastTime = now
+						err = basePacketHandler.OnUpdateHandle()
 					}
 				}
-			}
-			// free packet to pool
-			s.options.GetPacketPool().Put(pak)
-			// process error
-			if err != nil {
-				if !common.IsNoDisconnectError(err) {
-					run = false
-				} else {
-					handler.OnError(err)
+
+				// process error
+				if err != nil {
+					if !common.IsNoDisconnectError(err) {
+						run = false
+					} else {
+						handler.OnError(err)
+					}
 				}
 			}
 		}

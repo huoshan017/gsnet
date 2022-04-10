@@ -6,7 +6,6 @@ import "io"
 type IPacket interface {
 	Type() PacketType
 	Data() *[]byte
-	SetData(*[]byte)
 	MMType() MemoryManagementType
 }
 

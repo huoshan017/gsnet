@@ -17,7 +17,8 @@ const (
 	PacketHandshake    PacketType = 1
 	PacketHandshakeAck PacketType = 2
 	PacketHeartbeat    PacketType = 3
-	PacketSentAck      PacketType = 4
+	PacketHeartbeatAck PacketType = 4
+	PacketSentAck      PacketType = 5
 )
 
 type CompressType int8
@@ -80,10 +81,6 @@ func (p BytesPacket) Type() PacketType {
 
 func (p *BytesPacket) Data() *[]byte {
 	return (*[]byte)(p)
-}
-
-func (p *BytesPacket) SetData(*[]byte) {
-
 }
 
 func (p BytesPacket) MMType() MemoryManagementType {

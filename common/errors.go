@@ -6,16 +6,17 @@ import (
 )
 
 var (
-	ErrConnClosed        = errors.New("gsnet: connetion is closed")
-	ErrSendChanFull      = errors.New("gsnet: send chan full")
-	ErrRecvChanEmpty     = errors.New("gsnet: recv chan empty")
-	ErrCancelWait        = errors.New("gsnet: cancel wait")
-	ErrResendDataInvalid = errors.New("gsnet: resend data invalid")
+	ErrConnClosed        = errors.New("connetion is closed")
+	ErrSendChanFull      = errors.New("send chan full")
+	ErrRecvChanEmpty     = errors.New("recv chan empty")
+	ErrCancelWait        = errors.New("cancel wait")
+	ErrResendDisable     = errors.New("resend disable")
+	ErrResendDataInvalid = errors.New("resend data invalid")
 	ErrNoMsgHandle       = func(msgid uint32) error {
-		return fmt.Errorf("gsnet: no message %v handle", msgid)
+		return fmt.Errorf("no message %v handle", msgid)
 	}
 	ErrNotImplement = func(funcName string) error {
-		return fmt.Errorf("gsnet: not implement %v", funcName)
+		return fmt.Errorf("not implement %v", funcName)
 	}
 )
 

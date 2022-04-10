@@ -29,19 +29,30 @@ var (
 	//clientsCh   = make(chan *msg.MsgClient, 128)
 )
 
+type testMsgConfig struct {
+	useHeartbeat bool
+	useResend    bool
+}
+
 func init() {
 	idMsgMapper = msg.CreateIdMsgMapper()
 	idMsgMapper.AddMap(MsgIdPing, reflect.TypeOf(&tproto.MsgPing{}))
 	idMsgMapper.AddMap(MsgIdPong, reflect.TypeOf(&tproto.MsgPong{}))
 }
 
-func newPBMsgClient(useResend bool, t *testing.T) (*msg.MsgClient, error) {
+func newPBMsgClient(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error) {
 	var c *msg.MsgClient
-	if useResend {
-		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond), common.WithResendConfig(&common.ResendConfig{}))
-	} else {
-		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond))
+	var options = []common.Option{
+		common.WithTickSpan(10 * time.Millisecond),
 	}
+	if config.useResend {
+		options = append(options, common.WithResendConfig(&common.ResendConfig{}))
+	}
+	if config.useHeartbeat {
+		options = append(options, common.WithUseHeartbeat(true))
+	}
+
+	c = msg.NewPBMsgClient(idMsgMapper, options...)
 
 	c.SetConnectHandle(func(sess *msg.MsgSession) {
 		t.Logf("connected")
@@ -135,13 +146,18 @@ func newTestPBMsgHandler(args ...interface{}) msg.IMsgSessionEventHandler {
 	return handler
 }
 
-func newPBMsgServer(useResend bool, t *testing.T) (*msg.MsgServer, error) {
+func newPBMsgServer(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error) {
 	var s *msg.MsgServer
-	if useResend {
-		s = msg.NewPBMsgServer(newTestPBMsgHandler, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t), common.WithResendConfig(&common.ResendConfig{}))
-	} else {
-		s = msg.NewPBMsgServer(newTestPBMsgHandler, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t))
+	var options = []common.Option{
+		server.WithNewSessionHandlerFuncArgs(t),
 	}
+	if config.useResend {
+		options = append(options, common.WithResendConfig(&common.ResendConfig{}))
+	}
+	if config.useHeartbeat {
+		options = append(options, common.WithUseHeartbeat(true))
+	}
+	s = msg.NewPBMsgServer(newTestPBMsgHandler, idMsgMapper, options...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
@@ -203,13 +219,18 @@ func (h *testPBMsgClientHandler) OnError(err error) {
 	h.t.Logf("get error: %v", err)
 }
 
-func newPBMsgClient2(useResend bool, t *testing.T) (*msg.MsgClient, error) {
+func newPBMsgClient2(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error) {
 	var c *msg.MsgClient
-	if useResend {
-		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond), common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
-	} else {
-		c = msg.NewPBMsgClient(idMsgMapper, common.WithTickSpan(10*time.Millisecond))
+	var options = []common.Option{
+		common.WithTickSpan(10 * time.Millisecond),
 	}
+	if config.useResend {
+		options = append(options, common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
+	}
+	if config.useHeartbeat {
+		options = append(options, common.WithUseHeartbeat(true))
+	}
+	c = msg.NewPBMsgClient(idMsgMapper, options...)
 
 	handler := newTestPBMsgClientHandler(t, c)
 	c.SetConnectHandle(handler.OnConnect)
@@ -267,23 +288,28 @@ func newTestPBMsgHandler2(args ...interface{}) msg.IMsgSessionEventHandler {
 	return handler
 }
 
-func newPBMsgServer2(useResend bool, t *testing.T) (*msg.MsgServer, error) {
+func newPBMsgServer2(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error) {
 	var s *msg.MsgServer
-	if useResend {
-		s = msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t), common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
-	} else {
-		s = msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, server.WithNewSessionHandlerFuncArgs(t))
+	var options = []common.Option{
+		server.WithNewSessionHandlerFuncArgs(t),
 	}
+	if config.useResend {
+		options = append(options, common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
+	}
+	if config.useHeartbeat {
+		options = append(options, common.WithUseHeartbeat(true))
+	}
+	s = msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, options...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
 	}
-
 	return s, nil
 }
 
 func testPBMsgClient(useResend bool, t *testing.T) {
-	s, err := newPBMsgServer(useResend, t)
+	config := &testMsgConfig{useResend: useResend, useHeartbeat: true}
+	s, err := newPBMsgServer(config, t)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
@@ -296,7 +322,7 @@ func testPBMsgClient(useResend bool, t *testing.T) {
 
 	t.Logf("server started")
 
-	c, err := newPBMsgClient(useResend, t)
+	c, err := newPBMsgClient(config, t)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
@@ -311,7 +337,8 @@ func testPBMsgClient(useResend bool, t *testing.T) {
 }
 
 func testPBMsgServer(useResend bool, t *testing.T) {
-	s, err := newPBMsgServer2(useResend, t)
+	config := &testMsgConfig{useResend: useResend, useHeartbeat: true}
+	s, err := newPBMsgServer2(config, t)
 	if err != nil {
 		t.Errorf("%v", err)
 		return
@@ -329,7 +356,7 @@ func testPBMsgServer(useResend bool, t *testing.T) {
 	remainCount := int32(clientNum)
 	for i := 0; i < clientNum; i++ {
 		go func() {
-			c, err := newPBMsgClient2(useResend, t)
+			c, err := newPBMsgClient2(config, t)
 			if err != nil {
 				//t.Errorf("%v", err)
 				wg.Done()

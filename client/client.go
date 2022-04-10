@@ -10,13 +10,14 @@ import (
 
 // 数据客户端
 type Client struct {
-	conn     *Connector
-	sess     common.ISession
-	handler  common.ISessionEventHandler
-	options  ClientOptions
-	lastTime time.Time
-	ctx      context.Context
-	cancel   context.CancelFunc
+	conn              *Connector
+	sess              common.ISession
+	handler           common.ISessionEventHandler
+	basePacketHandler common.IBasePacketHandler
+	options           ClientOptions
+	lastTime          time.Time
+	ctx               context.Context
+	cancel            context.CancelFunc
 }
 
 func NewClient(handler common.ISessionEventHandler, options ...common.Option) *Client {
@@ -64,10 +65,8 @@ func (c *Client) newConnector() *Connector {
 }
 
 func (c *Client) doConnectResult(err error) {
-	if err == nil && c.handler != nil {
-		c.handler.OnConnect(c.sess)
-	}
 	c.sess = common.NewSessionNoId(c.conn.GetConn())
+	c.basePacketHandler = common.NewDefaultBasePacketHandler(true, c.conn.GetConn(), c.conn.GetResendData(), &c.options.Options)
 }
 
 func (c *Client) Send(data []byte, copyData bool) error {
@@ -81,37 +80,35 @@ func (c *Client) Update() error {
 		return nil
 	}
 
+	var res int32
 	pak, err := c.conn.RecvNonblock()
-	// 没有数据
-	if err == common.ErrRecvChanEmpty {
-		c.options.GetPacketPool().Put(pak)
-		return nil
+
+	if err == nil {
+		res, err = c.basePacketHandler.OnHandleHandshake(pak)
 	}
 
-	// process resend
-	resend := c.conn.GetResendData()
-	if err == nil {
-		var res int32
-		if resend != nil {
-			res = resend.OnAck(pak)
-			if res < 0 {
-				common.GetLogger().Fatalf("gsnet: length of rend list less than ack num")
-				err = common.ErrResendDataInvalid
+	if err == nil && res == 0 {
+		res, err = c.basePacketHandler.OnPreHandle(pak)
+		if err == nil {
+			if res == 0 {
+				err = c.handler.OnPacket(c.sess, pak)
 			}
 		}
-		if res == 0 {
-			err = c.handler.OnPacket(c.sess, pak)
+		if err == nil {
+			err = c.basePacketHandler.OnPostHandle(pak)
 		}
-		if resend != nil && err == nil {
-			resend.OnProcessed(1)
-		}
-		//err = c.handler.OnPacket(c.sess, pak)
 	}
-	if resend != nil {
-		resend.OnUpdate(c.conn.GetConn())
+
+	if err == common.ErrRecvChanEmpty {
+		err = nil
+	}
+
+	if err == nil {
+		err = c.basePacketHandler.OnUpdateHandle()
 	}
 
 	c.options.GetPacketPool().Put(pak)
+
 	if err != nil {
 		if !common.IsNoDisconnectError(err) {
 			c.handler.OnDisconnect(c.sess, err)
@@ -120,16 +117,29 @@ func (c *Client) Update() error {
 			c.handler.OnError(err)
 		}
 	}
+
 	return err
 }
 
 func (c *Client) Run() {
-	var err error
+	var (
+		res bool
+		err error
+	)
+
 	for {
-		err = c.handle()
-		if err != nil {
+		res, err = c.handleHandshake(0)
+		if err != nil || res {
 			break
 		}
+	}
+
+	if err == nil {
+		c.handler.OnConnect(c.sess)
+	}
+
+	for err == nil {
+		err = c.handle()
 	}
 
 	if err != nil && !common.IsNoDisconnectError(err) {
@@ -185,44 +195,63 @@ func (c *Client) IsDisconnecting() bool {
 	return c.conn.IsDisconnecting()
 }
 
+func (c *Client) handleHandshake(mode int32) (bool, error) {
+	var (
+		pak packet.IPacket
+		res int32
+		err error
+	)
+	err = c.basePacketHandler.OnUpdateHandle()
+	if err != nil {
+		return false, err
+	}
+	if mode == 0 {
+		pak, err = c.conn.Wait(c.ctx)
+	} else {
+		pak, err = c.conn.RecvNonblock()
+	}
+	if err == nil && pak != nil {
+		res, err = c.basePacketHandler.OnHandleHandshake(pak)
+	}
+	if err == common.ErrRecvChanEmpty {
+		err = nil
+	}
+	return res == 1, err
+}
+
 func (c *Client) handle() error {
 	var (
 		pak packet.IPacket
+		res int32
 		err error
 	)
-	resend := c.conn.GetResendData()
+
 	pak, err = c.conn.Wait(c.ctx)
 	if err == nil {
 		if pak != nil { // net packet handle
-			//err = c.handler.OnPacket(c.sess, pak)
-			var res int32
-			if resend != nil {
-				res = resend.OnAck(pak)
-				if res < 0 {
-					common.GetLogger().Fatalf("gsnet: length of rend list less than ack num")
-					err = common.ErrResendDataInvalid
+			res, err = c.basePacketHandler.OnPreHandle(pak)
+			if err == nil {
+				if res == 0 {
+					err = c.handler.OnPacket(c.sess, pak)
 				}
 			}
-			if res == 0 {
-				err = c.handler.OnPacket(c.sess, pak)
+			if err == nil {
+				err = c.basePacketHandler.OnPostHandle(pak)
 			}
-			if resend != nil && err == nil {
-				resend.OnProcessed(1)
-			}
+			c.options.GetPacketPool().Put(pak)
 		} else { // tick handle
 			c.handleTick()
-			if resend != nil {
-				err = resend.OnUpdate(c.conn.GetConn())
-			}
+			err = c.basePacketHandler.OnUpdateHandle()
 		}
 	}
-	c.options.GetPacketPool().Put(pak)
+
 	if err != nil {
 		if !common.IsNoDisconnectError(err) {
 		} else {
 			c.handler.OnError(err)
 		}
 	}
+
 	return err
 }
 

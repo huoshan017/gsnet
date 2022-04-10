@@ -212,14 +212,6 @@ func (d *ResendData) OnUpdate(conn IConn) error {
 	return d.update(conn)
 }
 
-func (d *ResendData) CanSend() bool {
-	return true
-}
-
-func (d *ResendData) Send(writer io.Writer) error {
-	return nil
-}
-
 func (d *ResendData) update(conn IConn) error {
 	now := time.Now()
 	if d.ackTime.IsZero() {
