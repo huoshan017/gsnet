@@ -221,7 +221,7 @@ func (c *Conn2) writeLoop() {
 				err = c.options.GetPacketBuilder().EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
 			}
 			if err == nil {
-				// 数据还在缓冲
+				// have data in buffer
 				if c.writer.Buffered() > 0 {
 					if c.options.writeTimeout != 0 {
 						err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
@@ -231,7 +231,7 @@ func (c *Conn2) writeLoop() {
 					}
 				}
 			}
-			// use resend
+			// no use resend
 			if c.resendEventHandler == nil {
 				d.toFree(b, pb, ba, pba)
 			}

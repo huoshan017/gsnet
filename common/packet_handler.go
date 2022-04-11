@@ -112,8 +112,6 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 		}
 		if !h.cors {
 			err = ErrBasePacketHandlerServerCantRecvHeartbeatAck
-		} else {
-			err = h.sendHeartbeatAck()
 		}
 	case packet.PacketSentAck:
 		if h.resend == nil {
@@ -126,6 +124,8 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 			err = ErrResendDataInvalid
 		}
 	default:
+		// reset heartbeat timer
+		h.lastTime = time.Now()
 		res = 0
 	}
 	return res, err
@@ -155,11 +155,31 @@ func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 		}
 	case HandlerStateNormal:
 		if h.options.IsUseHeartbeat() {
+			// heartbeat timeout to disconnect
+			disconnectTimeout := h.options.GetDisconnectHeartbeatTimeout()
+			if disconnectTimeout <= 0 {
+				disconnectTimeout = DefaultDisconnectHeartbeatTimeout
+			}
+			duration := time.Since(h.lastTime)
+			if duration >= disconnectTimeout {
+				h.conn.Close()
+				return err
+			}
+
+			// heartbeat timespan
+			minSpan := h.options.GetMinHeartbeatTimeSpan()
+			if minSpan < DefaultMinimumHeartbeatTimeSpan {
+				minSpan = DefaultMinimumHeartbeatTimeSpan
+			}
 			span := h.options.GetHeartbeatTimeSpan()
 			if span <= 0 {
 				span = DefaultHeartbeatTimeSpan
+			} else if span < minSpan {
+				span = minSpan
 			}
-			if time.Since(h.lastTime) >= span {
+
+			// send heartbeat
+			if duration >= span {
 				err = h.sendHeartbeat()
 				if err != nil {
 					h.lastTime = time.Now()

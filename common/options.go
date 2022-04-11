@@ -8,26 +8,28 @@ import (
 
 // 选项结构
 type Options struct {
-	noDelay           bool
-	keepAlived        bool
-	keepAlivedPeriod  time.Duration
-	readTimeout       time.Duration
-	writeTimeout      time.Duration
-	tickSpan          time.Duration
-	dataProto         IDataProto
-	sendChanLen       int
-	recvChanLen       int
-	writeBuffSize     int
-	readBuffSize      int
-	connCloseWaitSecs int // 連接關閉等待時間(秒)
-	packetPool        packet.IPacketPool
-	packetBuilder     packet.IPacketBuilder
-	connDataType      int           // 连接数据结构类型
-	resendConfig      *ResendConfig // 重发配置
-	useHeartbeat      bool          // 使用心跳
+	noDelay                    bool
+	keepAlived                 bool
+	keepAlivedPeriod           time.Duration
+	readTimeout                time.Duration
+	writeTimeout               time.Duration
+	tickSpan                   time.Duration
+	dataProto                  IDataProto
+	sendChanLen                int
+	recvChanLen                int
+	writeBuffSize              int
+	readBuffSize               int
+	connCloseWaitSecs          int // 連接關閉等待時間(秒)
+	packetPool                 packet.IPacketPool
+	packetBuilder              packet.IPacketBuilder
+	connDataType               int           // 连接数据结构类型
+	resendConfig               *ResendConfig // 重发配置
+	useHeartbeat               bool          // 使用心跳
+	heartbeatTimeSpan          time.Duration // 心跳间隔
+	minHeartbeatTimeSpan       time.Duration // 最小心跳间隔
+	disconnectHeartbeatTimeout time.Duration // 断连的心跳超时
 
 	// todo 以下是需要实现的配置逻辑
-	heartbeatTimeSpan  time.Duration // 心跳间隔
 	flushWriteInterval time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
 }
 
@@ -184,6 +186,22 @@ func (options *Options) SetHeartbeatTimeSpan(span time.Duration) {
 	options.heartbeatTimeSpan = span
 }
 
+func (options *Options) GetMinHeartbeatTimeSpan() time.Duration {
+	return options.minHeartbeatTimeSpan
+}
+
+func (options *Options) SetMinHeartbeatTimeSpan(span time.Duration) {
+	options.minHeartbeatTimeSpan = span
+}
+
+func (options *Options) GetDisconnectHeartbeatTimeout() time.Duration {
+	return options.disconnectHeartbeatTimeout
+}
+
+func (options *Options) SetDisconnectHeartbeatTimeout(span time.Duration) {
+	options.disconnectHeartbeatTimeout = span
+}
+
 func WithNoDelay(noDelay bool) Option {
 	return func(options *Options) {
 		options.SetNodelay(noDelay)
@@ -289,5 +307,17 @@ func WithUseHeartbeat(use bool) Option {
 func WithHeartbeatTimeSpan(span time.Duration) Option {
 	return func(options *Options) {
 		options.SetHeartbeatTimeSpan(span)
+	}
+}
+
+func WithMinHeartbeatTimeSpan(span time.Duration) Option {
+	return func(options *Options) {
+		options.SetMinHeartbeatTimeSpan(span)
+	}
+}
+
+func WithDisconnectHeartbeatTimeout(span time.Duration) Option {
+	return func(options *Options) {
+		options.SetDisconnectHeartbeatTimeout(span)
 	}
 }
