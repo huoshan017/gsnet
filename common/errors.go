@@ -6,13 +6,14 @@ import (
 )
 
 var (
-	ErrConnClosed        = errors.New("connetion is closed")
-	ErrSendChanFull      = errors.New("send chan full")
-	ErrRecvChanEmpty     = errors.New("recv chan empty")
-	ErrCancelWait        = errors.New("cancel wait")
-	ErrResendDisable     = errors.New("resend disable")
-	ErrResendDataInvalid = errors.New("resend data invalid")
-	ErrNoMsgHandle       = func(msgid uint32) error {
+	ErrConnClosed          = errors.New("connetion is closed")
+	ErrSendChanFull        = errors.New("send chan full")
+	ErrRecvChanEmpty       = errors.New("recv chan empty")
+	ErrCancelWait          = errors.New("cancel wait")
+	ErrResendDisable       = errors.New("resend disable")
+	ErrResendDataInvalid   = errors.New("resend data invalid")
+	ErrSentPacketCacheFull = errors.New("sent packet cache is full")
+	ErrNoMsgHandle         = func(msgid uint32) error {
 		return fmt.Errorf("no message %v handle", msgid)
 	}
 	ErrNotImplement = func(funcName string) error {

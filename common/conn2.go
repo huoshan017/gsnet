@@ -205,35 +205,39 @@ func (c *Conn2) writeLoop() {
 			// 多线程情况下，在发送数据之前调用重发的接口缓存数据，防止发送完对方收到再发确认包过来时还没来得及缓存造成确认失败
 			if c.resendEventHandler != nil {
 				mmt := packet.MemoryManagementType(d.pt_mmt & 0xffff)
-				c.resendEventHandler.OnSent(d.data, mmt)
-			}
-
-			pt := packet.PacketType((d.pt_mmt >> 16) & 0xffff)
-			b, pb, ba, pba := d.getData()
-
-			if b != nil {
-				err = c.options.GetPacketBuilder().EncodeWriteTo(pt, b, c.writer)
-			} else if pb != nil {
-				err = c.options.GetPacketBuilder().EncodeWriteTo(pt, *pb, c.writer)
-			} else if ba != nil {
-				err = c.options.GetPacketBuilder().EncodeBytesArrayWriteTo(pt, ba, c.writer)
-			} else if pba != nil {
-				err = c.options.GetPacketBuilder().EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
-			}
-			if err == nil {
-				// have data in buffer
-				if c.writer.Buffered() > 0 {
-					if c.options.writeTimeout != 0 {
-						err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
-					}
-					if err == nil {
-						err = c.writer.Flush()
-					}
+				if !c.resendEventHandler.OnSent(d.data, mmt) {
+					err = ErrSentPacketCacheFull
 				}
 			}
-			// no use resend
-			if c.resendEventHandler == nil {
-				d.toFree(b, pb, ba, pba)
+
+			if err == nil {
+				pt := packet.PacketType((d.pt_mmt >> 16) & 0xffff)
+				b, pb, ba, pba := d.getData()
+
+				if b != nil {
+					err = c.options.GetPacketBuilder().EncodeWriteTo(pt, b, c.writer)
+				} else if pb != nil {
+					err = c.options.GetPacketBuilder().EncodeWriteTo(pt, *pb, c.writer)
+				} else if ba != nil {
+					err = c.options.GetPacketBuilder().EncodeBytesArrayWriteTo(pt, ba, c.writer)
+				} else if pba != nil {
+					err = c.options.GetPacketBuilder().EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
+				}
+				if err == nil {
+					// have data in buffer
+					if c.writer.Buffered() > 0 {
+						if c.options.writeTimeout != 0 {
+							err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+						}
+						if err == nil {
+							err = c.writer.Flush()
+						}
+					}
+				}
+				// no use resend
+				if c.resendEventHandler == nil {
+					d.toFree(b, pb, ba, pba)
+				}
 			}
 		}
 		if err != nil {

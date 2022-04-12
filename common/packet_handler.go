@@ -133,12 +133,10 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 
 func (h *DefaultBasePacketHandler) OnPostHandle(pak packet.IPacket) error {
 	var err error
-	if pak.Type() == packet.PacketSentAck {
-		if h.resend == nil {
-			err = ErrResendDisable
-		} else {
-			h.resend.OnProcessed(1)
-		}
+	if h.resend == nil {
+		err = ErrResendDisable
+	} else {
+		h.resend.OnProcessed(1)
 	}
 	return err
 }

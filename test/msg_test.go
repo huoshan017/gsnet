@@ -20,7 +20,7 @@ const (
 	MsgIdPing = msg.MsgIdType(1)
 	MsgIdPong = msg.MsgIdType(2)
 	sendCount = 5000
-	clientNum = 1500
+	clientNum = 2000
 )
 
 var (

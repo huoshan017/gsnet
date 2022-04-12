@@ -26,8 +26,8 @@ func NewMsgServer(newFunc NewMsgSessionHandlerFunc, codec IMsgCodec, mapper *IdM
 	}
 	var newSessionHandler server.NewSessionHandlerFunc = func(args ...interface{}) common.ISessionEventHandler {
 		msgSessionHandler := s.newFunc(args...)
-		proxy := newMsgHandlerServerProxy(msgSessionHandler, s.codec, s.mapper)
-		return common.ISessionEventHandler(proxy)
+		ms := newMsgHandlerServer(msgSessionHandler, s.codec, s.mapper)
+		return common.ISessionEventHandler(ms)
 	}
 	s.Server = server.NewServer(newSessionHandler, options...)
 	return s

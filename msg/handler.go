@@ -186,14 +186,14 @@ func (d *msgHandlerClient) OnPacket(s common.ISession, pak packet.IPacket) error
 	return h(d.sess, msgobj)
 }
 
-type msgHandlerServerProxy struct {
+type msgHandlerServer struct {
 	msgHandlerCommon
 	sessionHandler IMsgSessionEventHandler
 	msgHandle      func(*MsgSession, MsgIdType, interface{}) error
 }
 
-func newMsgHandlerServerProxy(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerServerProxy {
-	proxy := &msgHandlerServerProxy{
+func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerServer {
+	proxy := &msgHandlerServer{
 		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper),
 		sessionHandler:   sessionHandler,
 	}
@@ -205,7 +205,7 @@ func newMsgHandlerServerProxy(sessionHandler IMsgSessionEventHandler, codec IMsg
 	return proxy
 }
 
-func (d *msgHandlerServerProxy) OnPacket(s common.ISession, pak packet.IPacket) error {
+func (d *msgHandlerServer) OnPacket(s common.ISession, pak packet.IPacket) error {
 	msgid, msgobj, err := d.sess.splitIdAndMsg(*pak.Data())
 	if err != nil {
 		return err

@@ -11,8 +11,12 @@ import (
 	"github.com/huoshan017/gsnet/common/packet"
 )
 
+const (
+	MaxCacheSentPacket uint8 = 255
+)
+
 type IResendEventHandler interface {
-	OnSent(data interface{}, mmt packet.MemoryManagementType)
+	OnSent(data interface{}, mmt packet.MemoryManagementType) bool
 	OnAck(pak packet.IPacket) int32
 	OnProcessed(n int16)
 	OnUpdate(IConn) error
@@ -41,6 +45,8 @@ type ResendData struct {
 	}
 	locker     sync.Mutex
 	sentList2  *resendList
+	startIndex int32
+	endIndex   int32
 	nProcessed int16
 	ackTime    time.Time
 }
@@ -137,21 +143,48 @@ func NewResendData(config *ResendConfig) *ResendData {
 	}
 }
 
-// ResendData.OnSent call in different goroutine to OnAck
-func (rd *ResendData) OnSent(data interface{}, mmt packet.MemoryManagementType) {
+func (rd *ResendData) CanSend() bool {
+	var can bool
 	if rd.config.UseLockFree {
-		rd.sentList2.pushBack(&struct {
-			data interface{}
-			mmt  packet.MemoryManagementType
-		}{data, mmt})
+		if rd.sentList2.getNum() < 255 {
+			can = true
+		}
+	} else {
+		if len(rd.sentList) < 255 {
+			can = true
+		}
+	}
+	return can
+}
+
+// ResendData.OnSent call in different goroutine to OnAck
+func (rd *ResendData) OnSent(data interface{}, mmt packet.MemoryManagementType) bool {
+	var sent bool
+	if rd.config.UseLockFree {
+		if rd.sentList2.getNum() < int32(MaxCacheSentPacket) {
+			rd.sentList2.pushBack(&struct {
+				data interface{}
+				mmt  packet.MemoryManagementType
+			}{data, mmt})
+			sent = true
+		}
 	} else {
 		rd.locker.Lock()
-		rd.sentList = append(rd.sentList, struct {
-			data interface{}
-			mmt  packet.MemoryManagementType
-		}{data, mmt})
+		if len(rd.sentList) < int(MaxCacheSentPacket) {
+			rd.sentList = append(rd.sentList, struct {
+				data interface{}
+				mmt  packet.MemoryManagementType
+			}{data, mmt})
+			sent = true
+		}
 		rd.locker.Unlock()
 	}
+	if sent {
+		if !atomic.CompareAndSwapInt32(&rd.endIndex, int32(MaxCacheSentPacket), 1) {
+			atomic.AddInt32(&rd.endIndex, 1)
+		}
+	}
+	return sent
 }
 
 // ResendData.OnAck ack the packet
@@ -163,6 +196,8 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 
 	d := *pak.Data()
 	n := (int16(d[0])<<8)&0x7f00 | int16(d[1]&0xff)
+
+	GetLogger().Infof("ack n = %v", n)
 
 	if rd.config.UseLockFree {
 		num := int16(rd.sentList2.getNum())
@@ -199,6 +234,10 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 		}
 		rd.sentList = rd.sentList[n:]
 		rd.locker.Unlock()
+	}
+
+	if !atomic.CompareAndSwapInt32(&rd.startIndex, int32(MaxCacheSentPacket), 1) {
+		atomic.AddInt32(&rd.startIndex, 1)
 	}
 
 	return 1
