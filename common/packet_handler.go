@@ -114,14 +114,12 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 			err = ErrBasePacketHandlerServerCantRecvHeartbeatAck
 		}
 	case packet.PacketSentAck:
-		if h.resend == nil {
-			err = ErrResendDisable
-			break
-		}
-		res = h.resend.OnAck(pak)
-		if res < 0 {
-			GetLogger().Fatalf("gsnet: length of rend list less than ack num")
-			err = ErrResendDataInvalid
+		if h.resend != nil {
+			res = h.resend.OnAck(pak)
+			if res < 0 {
+				GetLogger().Fatalf("gsnet: length of rend list less than ack num")
+				err = ErrResendDataInvalid
+			}
 		}
 	default:
 		// reset heartbeat timer
@@ -133,9 +131,7 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 
 func (h *DefaultBasePacketHandler) OnPostHandle(pak packet.IPacket) error {
 	var err error
-	if h.resend == nil {
-		err = ErrResendDisable
-	} else {
+	if h.resend != nil {
 		h.resend.OnProcessed(1)
 	}
 	return err
