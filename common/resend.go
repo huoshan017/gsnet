@@ -49,6 +49,7 @@ type ResendData struct {
 	nProcessed       int16
 	nextRecvIndex    int16
 	ackTime          time.Time
+	disposed         bool
 }
 
 type resendNode struct {
@@ -240,30 +241,51 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 	return 1
 }
 
-func (d *ResendData) OnProcessed(n int16) {
-	d.nProcessed += n
-	d.nextRecvIndex = (d.nextRecvIndex + n) % MaxCacheSentPacket
+func (rd *ResendData) OnProcessed(n int16) {
+	rd.nProcessed += n
+	rd.nextRecvIndex = (rd.nextRecvIndex + n) % MaxCacheSentPacket
 }
 
-func (d *ResendData) OnUpdate(conn IConn) error {
-	return d.update(conn)
+func (rd *ResendData) OnUpdate(conn IConn) error {
+	return rd.update(conn)
 }
 
-func (d *ResendData) update(conn IConn) error {
+func (rd *ResendData) Dispose() {
+	if rd.disposed {
+		return
+	}
+	if rd.config.UseLockFree {
+		n := rd.sentList2.getNum()
+		for i := int32(0); i < n; i++ {
+			sd := rd.sentList2.popFront()
+			FreeSendData(sd.mmt, sd.data)
+		}
+	} else {
+		n := len(rd.sentList)
+		for i := int16(0); i < int16(n); i++ {
+			sd := rd.sentList[i]
+			FreeSendData(sd.mmt, sd.data)
+		}
+		rd.sentList = rd.sentList[:0]
+	}
+	rd.disposed = true
+}
+
+func (rd *ResendData) update(conn IConn) error {
 	now := time.Now()
-	if d.ackTime.IsZero() {
-		d.ackTime = now
+	if rd.ackTime.IsZero() {
+		rd.ackTime = now
 	}
 
 	var err error
-	if d.nProcessed <= 0 {
+	if rd.nProcessed <= 0 {
 		return err
 	}
-	if d.nProcessed >= d.config.AckSentNum || now.Sub(d.ackTime) >= d.config.AckSentSpan {
-		err = conn.Send(packet.PacketSentAck, []byte{byte(d.nProcessed >> 8), byte(d.nProcessed & 0xff)}, false)
+	if rd.nProcessed >= rd.config.AckSentNum || now.Sub(rd.ackTime) >= rd.config.AckSentSpan {
+		err = conn.Send(packet.PacketSentAck, []byte{byte(rd.nProcessed >> 8), byte(rd.nProcessed & 0xff)}, false)
 		if err == nil || IsNoDisconnectError(err) {
-			d.nProcessed = 0
-			d.ackTime = now
+			rd.nProcessed = 0
+			rd.ackTime = now
 		}
 	}
 	return err

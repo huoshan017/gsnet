@@ -82,7 +82,7 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 			err = ErrBasePacketHandlerServerCantRecvHandshakeAck
 		} else {
 			h.state = HandlerStateNormal
-			res = 1
+			res = 2
 		}
 	}
 	return res, err

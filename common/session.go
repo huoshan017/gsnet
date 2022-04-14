@@ -40,10 +40,16 @@ func (s *Session) SendPoolBufferArray(pBytesArray []*[]byte, mmType packet.Memor
 }
 
 func (s *Session) Close() {
+	if s.resendData != nil {
+		s.resendData.Dispose()
+	}
 	s.conn.Close()
 }
 
 func (s *Session) CloseWaitSecs(secs int) {
+	if s.resendData != nil {
+		s.resendData.Dispose()
+	}
 	s.conn.CloseWait(secs)
 }
 

@@ -106,7 +106,7 @@ func (h *testClientUseUpdateHandler) OnPacket(sess common.ISession, packet packe
 		}
 	}
 	h.compareNum += 1
-	if h.compareNum >= 100 {
+	if h.compareNum >= 1000 {
 		sess.Close()
 	}
 	h.t.Logf("compared %v", h.compareNum)
@@ -153,6 +153,11 @@ func TestClientUseUpdate(t *testing.T) {
 	defer tc.Close()
 
 	for {
+		err = tc.Update()
+		if err != nil {
+			t.Logf("test client update err %v", err)
+			break
+		}
 		d := []byte("abcdefghijklmnopqrstuvwxyz0123456789")
 		err = tc.Send(d, false)
 		if err != nil {
@@ -160,11 +165,6 @@ func TestClientUseUpdate(t *testing.T) {
 			break
 		}
 		sd.appendSendData(d)
-		err = tc.Update()
-		if err != nil {
-			t.Logf("test client update err %v", err)
-			break
-		}
 		time.Sleep(time.Millisecond)
 	}
 

@@ -85,6 +85,9 @@ func (c *Client) Update() error {
 
 	if err == nil {
 		res, err = c.basePacketHandler.OnHandleHandshake(pak)
+		if res == 2 {
+			c.handler.OnConnect(c.sess)
+		}
 	}
 
 	if err == nil && res == 0 {
@@ -216,7 +219,7 @@ func (c *Client) handleHandshake(mode int32) (bool, error) {
 	if err == common.ErrRecvChanEmpty {
 		err = nil
 	}
-	return res == 1, err
+	return res == 2, err
 }
 
 func (c *Client) handle() error {

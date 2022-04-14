@@ -35,9 +35,10 @@ type testMsgConfig struct {
 }
 
 func init() {
-	idMsgMapper = msg.CreateIdMsgMapper()
-	idMsgMapper.AddMap(MsgIdPing, reflect.TypeOf(&tproto.MsgPing{}))
-	idMsgMapper.AddMap(MsgIdPong, reflect.TypeOf(&tproto.MsgPong{}))
+	idMsgMapper = msg.CreateIdMsgMapperWith(map[msg.MsgIdType]reflect.Type{
+		MsgIdPing: reflect.TypeOf(&tproto.MsgPing{}),
+		MsgIdPong: reflect.TypeOf(&tproto.MsgPong{}),
+	})
 }
 
 func newPBMsgClient(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error) {
