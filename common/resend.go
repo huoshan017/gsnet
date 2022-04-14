@@ -2,7 +2,6 @@ package common
 
 import (
 	"fmt"
-	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,7 +11,7 @@ import (
 )
 
 const (
-	MaxCacheSentPacket uint8 = 255
+	MaxCacheSentPacket int16 = 256
 )
 
 type IResendEventHandler interface {
@@ -26,8 +25,8 @@ type IResendChecker interface {
 	CanSend() bool
 }
 
-type IResendSender interface {
-	Send(writer io.Writer) error
+type IResender interface {
+	Resend(sess ISession) error
 }
 
 type ResendConfig struct {
@@ -43,12 +42,13 @@ type ResendData struct {
 		data interface{}
 		mmt  packet.MemoryManagementType
 	}
-	locker     sync.Mutex
-	sentList2  *resendList
-	startIndex int32
-	endIndex   int32
-	nProcessed int16
-	ackTime    time.Time
+	locker           sync.Mutex
+	sentList2        *resendList
+	nextSentIndex    int16
+	nextAckSentIndex int16
+	nProcessed       int16
+	nextRecvIndex    int16
+	ackTime          time.Time
 }
 
 type resendNode struct {
@@ -180,8 +180,9 @@ func (rd *ResendData) OnSent(data interface{}, mmt packet.MemoryManagementType) 
 		rd.locker.Unlock()
 	}
 	if sent {
-		if !atomic.CompareAndSwapInt32(&rd.endIndex, int32(MaxCacheSentPacket), 1) {
-			atomic.AddInt32(&rd.endIndex, 1)
+		rd.nextSentIndex += 1
+		if rd.nextSentIndex >= int16(MaxCacheSentPacket) {
+			rd.nextSentIndex = 0
 		}
 	}
 	return sent
@@ -196,8 +197,6 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 
 	d := *pak.Data()
 	n := (int16(d[0])<<8)&0x7f00 | int16(d[1]&0xff)
-
-	GetLogger().Infof("ack n = %v", n)
 
 	if rd.config.UseLockFree {
 		num := int16(rd.sentList2.getNum())
@@ -236,15 +235,14 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 		rd.locker.Unlock()
 	}
 
-	if !atomic.CompareAndSwapInt32(&rd.startIndex, int32(MaxCacheSentPacket), 1) {
-		atomic.AddInt32(&rd.startIndex, 1)
-	}
+	rd.nextAckSentIndex = (rd.nextAckSentIndex + n) % MaxCacheSentPacket
 
 	return 1
 }
 
 func (d *ResendData) OnProcessed(n int16) {
 	d.nProcessed += n
+	d.nextRecvIndex = (d.nextRecvIndex + n) % MaxCacheSentPacket
 }
 
 func (d *ResendData) OnUpdate(conn IConn) error {

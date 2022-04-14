@@ -298,6 +298,10 @@ func (s *Server) handleConn(c net.Conn) {
 func (s *Server) handleClose(err *sessionCloseInfo) {
 	_, o := s.sessMap[err.sessionId]
 	if o {
+		sess := s.sessMap[err.sessionId]
+		if sess != nil {
+			sess.GetResendData()
+		}
 		delete(s.sessMap, err.sessionId)
 		s.waitWg.Done()
 		common.GetLogger().Info("handleClose sess count ", len(s.sessMap), ", sessionId: ", err.sessionId)
