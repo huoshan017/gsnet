@@ -37,13 +37,13 @@ const (
 type DefaultBasePacketHandler struct {
 	cors     bool
 	conn     IConn
-	resend   *ResendData
+	resend   IResendEventHandler
 	options  *Options
 	lastTime time.Time
 	state    HandlerState
 }
 
-func NewDefaultBasePacketHandler(cors bool, conn IConn, resend *ResendData, options *Options) *DefaultBasePacketHandler {
+func NewDefaultBasePacketHandler(cors bool, conn IConn, resend IResendEventHandler, options *Options) *DefaultBasePacketHandler {
 	return &DefaultBasePacketHandler{
 		cors:     cors,
 		conn:     conn,

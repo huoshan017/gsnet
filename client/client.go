@@ -72,7 +72,11 @@ func (c *Client) newConnector() *Connector {
 
 func (c *Client) doConnectResult(err error) {
 	c.sess = common.NewSessionNoId(c.conn.GetConn())
-	c.basePacketHandler = common.NewDefaultBasePacketHandler(true, c.conn.GetConn(), c.conn.GetResendData(), &c.options.Options)
+	var resend common.IResendEventHandler
+	if c.conn.GetResendData() != nil {
+		resend = c.conn.GetResendData()
+	}
+	c.basePacketHandler = common.NewDefaultBasePacketHandler(true, c.conn.GetConn(), resend, &c.options.Options)
 	// update模式下先把握手处理掉
 	if c.options.GetRunMode() == RunModeOnlyUpdate {
 		for {

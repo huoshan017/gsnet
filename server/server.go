@@ -163,15 +163,18 @@ func (s *Server) getSessCloseInfoChan() chan *sessionCloseInfo {
 	return s.sessCloseInfoChan
 }
 
-func (c *Server) handleHandshake(conn common.IConn, basePacketHandler common.IBasePacketHandler) (bool, error) {
+func (s *Server) handleHandshake(conn common.IConn, basePacketHandler common.IBasePacketHandler) (bool, error) {
 	var (
 		pak packet.IPacket
 		res int32
 		err error
 	)
-	pak, err = conn.Wait(c.ctx)
+	pak, err = conn.Wait(s.ctx)
 	if err == nil && pak != nil {
 		res, err = basePacketHandler.OnHandleHandshake(pak)
+	}
+	if pak != nil {
+		s.options.GetPacketPool().Put(pak)
 	}
 	return res == 1, err
 }
@@ -197,7 +200,12 @@ func (s *Server) handleConn(c net.Conn) {
 		}
 	}
 
-	basePacketHandler := common.NewDefaultBasePacketHandler(false, conn, resendData, &s.options.Options)
+	basePacketHandler := common.NewDefaultBasePacketHandler(false, conn, func() common.IResendEventHandler {
+		if resendData == nil {
+			return nil
+		}
+		return resendData
+	}(), &s.options.Options)
 
 	// 先讓連接跑起來
 	conn.Run()
