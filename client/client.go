@@ -2,10 +2,16 @@ package client
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/common/packet"
+)
+
+var (
+	ErrClientRunUpdateMode   = errors.New("gsnet: client run update mode")
+	ErrClientRunMainLoopMode = errors.New("gsnet: client run main loop mode")
 )
 
 // 数据客户端
@@ -67,6 +73,18 @@ func (c *Client) newConnector() *Connector {
 func (c *Client) doConnectResult(err error) {
 	c.sess = common.NewSessionNoId(c.conn.GetConn())
 	c.basePacketHandler = common.NewDefaultBasePacketHandler(true, c.conn.GetConn(), c.conn.GetResendData(), &c.options.Options)
+	// update模式下先把握手处理掉
+	if c.options.GetRunMode() == RunModeOnlyUpdate {
+		for {
+			res, err := c.handleHandshake(0)
+			if err != nil || res {
+				break
+			}
+		}
+		if err == nil {
+			c.handler.OnConnect(c.sess)
+		}
+	}
 }
 
 func (c *Client) Send(data []byte, copyData bool) error {
@@ -74,24 +92,26 @@ func (c *Client) Send(data []byte, copyData bool) error {
 }
 
 func (c *Client) Update() error {
+	if c.options.GetRunMode() != RunModeOnlyUpdate {
+		return ErrClientRunUpdateMode
+	}
+
 	// 连接状态
 	if c.sess == nil {
 		c.conn.WaitResult(0)
 		return nil
 	}
 
-	var res int32
-	pak, err := c.conn.RecvNonblock()
+	var (
+		res int32
+		err error
+		pak packet.IPacket
+	)
 
-	if err == nil {
-		res, err = c.basePacketHandler.OnHandleHandshake(pak)
-		if res == 2 {
-			c.handler.OnConnect(c.sess)
-		}
-	}
-
-	if err == nil && res == 0 {
+	pak, err = c.conn.RecvNonblock()
+	if pak != nil {
 		res, err = c.basePacketHandler.OnPreHandle(pak)
+		common.GetLogger().Infof("res %v  err %v", res, err)
 		if err == nil {
 			if res == 0 {
 				err = c.handler.OnPacket(c.sess, pak)
@@ -125,6 +145,11 @@ func (c *Client) Update() error {
 }
 
 func (c *Client) Run() {
+	if c.options.GetRunMode() != RunModeAsMainLoop {
+		c.handler.OnError(ErrClientRunMainLoopMode)
+		return
+	}
+
 	var (
 		res bool
 		err error
@@ -216,6 +241,7 @@ func (c *Client) handleHandshake(mode int32) (bool, error) {
 	if err == nil && pak != nil {
 		res, err = c.basePacketHandler.OnHandleHandshake(pak)
 	}
+	c.options.GetPacketPool().Put(pak)
 	if err == common.ErrRecvChanEmpty {
 		err = nil
 	}

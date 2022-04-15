@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 	"time"
@@ -10,47 +11,125 @@ import (
 	"github.com/huoshan017/gsnet/common/packet"
 )
 
-func TestClient(t *testing.T) {
-	ts := createTestServer(t, 2)
+type testClientUseRunHandler struct {
+	t          *testing.T
+	b          *testing.B
+	state      int32 // 1 客户端模式   2 服务器模式
+	sentList   [][]byte
+	compareNum int32
+}
+
+func newTestClientUseRunHandler(args ...interface{}) common.ISessionEventHandler {
+	if len(args) < 2 {
+		panic("At least need 2 arguments")
+	}
+	h := &testClientUseRunHandler{}
+	var o bool
+	h.t, o = args[0].(*testing.T)
+	if !o {
+		h.b, _ = args[0].(*testing.B)
+	}
+	h.state = args[1].(int32)
+	return h
+}
+
+func (h *testClientUseRunHandler) OnConnect(sess common.ISession) {
+	if h.state == 2 {
+		if h.t != nil {
+			h.t.Logf("TestClientUseRun connected")
+		} else if h.b != nil {
+			h.b.Logf("TestClientUseRun connected")
+		}
+	}
+}
+
+func (h *testClientUseRunHandler) OnDisconnect(sess common.ISession, err error) {
+	if h.state == 2 {
+		if h.t != nil {
+			h.t.Logf("TestClientUseRun disconnected, err: %v", err)
+		} else if h.b != nil {
+			h.b.Logf("TestClientUseRun disconnected, err: %v", err)
+		}
+	}
+}
+
+func (h *testClientUseRunHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
+	var (
+		e error
+	)
+	data := *packet.Data()
+	if !bytes.Equal(data, h.sentList[0]) {
+		err := fmt.Errorf("compare err: %v", e)
+		if h.t != nil {
+			panic(err)
+		} else if h.b != nil {
+			panic(err)
+		}
+	}
+	h.sentList = h.sentList[1:]
+	h.compareNum += 1
+	if h.compareNum >= 100 {
+		sess.Close()
+	}
+	h.t.Logf("testClientUseRunHandler.OnPacket compared %v", data)
+	return nil
+}
+
+func (h *testClientUseRunHandler) OnTick(sess common.ISession, tick time.Duration) {
+	d := randBytes(100)
+	err := sess.Send(d, false)
+	if err != nil {
+		if h.t != nil {
+			h.t.Logf("TestClientUseRun sess send data err: %v", err)
+		} else if h.b != nil {
+			h.t.Logf("TestClientUseRun sess send data err: %v", err)
+		}
+		return
+	}
+	h.sentList = append(h.sentList, d)
+}
+
+func (h *testClientUseRunHandler) OnError(err error) {
+	if h.state == 2 {
+		if h.t != nil {
+			h.t.Logf("TestClientUseRun occur err: %v", err)
+		} else if h.b != nil {
+			h.t.Logf("TestClientUseRun occur err: %v", err)
+		}
+	}
+}
+
+func createTestClientUseRun(t *testing.T, state int32) *client.Client {
+	// 启用tick处理
+	return client.NewClient(newTestClientUseRunHandler(t, state), common.WithTickSpan(time.Millisecond*100), common.WithConnDataType(connDataType))
+}
+
+func TestClientUseRun(t *testing.T) {
+	ts := createTestServer(t, 1)
 	err := ts.Listen(testAddress)
 	if err != nil {
-		t.Errorf("server for test client listen err: %+v", err)
+		t.Errorf("server for TestClientUseRun listen err: %+v", err)
 		return
 	}
 	defer ts.End()
 
 	go ts.Start()
 
-	t.Logf("server for test client running")
+	t.Logf("server for TestClientUseRun running")
 
-	sendNum := 10
-	sd := createSendDataInfo(int32(sendNum))
-	tc := createTestClient2(t, 1, sd)
+	tc := createTestClientUseRun(t, 2)
 	err = tc.Connect(testAddress)
 	if err != nil {
-		t.Errorf("test client connect err: %+v", err)
+		t.Errorf("TestClientUseRun connect err: %+v", err)
 		return
 	}
 	defer tc.Close()
 
-	go tc.Run()
+	t.Logf("TestClientUseRun running")
 
-	t.Logf("test client running")
+	tc.Run()
 
-	for i := 0; i < sendNum; i++ {
-		d := []byte("abcdefghijklmnopqrstuvwxyz0123456789")
-		err := tc.Send(d, false)
-		if err != nil {
-			t.Errorf("test client send err: %+v", err)
-			return
-		}
-		sd.appendSendData(d)
-		time.Sleep(time.Millisecond)
-	}
-
-	time.Sleep(time.Second)
-
-	t.Logf("test done")
+	t.Logf("TestClientUseRun done")
 }
 
 type testClientUseUpdateHandler struct {
@@ -78,7 +157,7 @@ func newTestClientUseUpdateHandler(args ...interface{}) common.ISessionEventHand
 }
 
 func (h *testClientUseUpdateHandler) OnConnect(sess common.ISession) {
-	if h.state == 1 {
+	if h.state == 2 {
 		if h.t != nil {
 			h.t.Logf("connected")
 		}
@@ -86,7 +165,7 @@ func (h *testClientUseUpdateHandler) OnConnect(sess common.ISession) {
 }
 
 func (h *testClientUseUpdateHandler) OnDisconnect(sess common.ISession, err error) {
-	if h.state == 1 {
+	if h.state == 2 {
 		if h.t != nil {
 			h.t.Logf("disconnected, err: %v", err)
 		}
@@ -117,7 +196,7 @@ func (h *testClientUseUpdateHandler) OnTick(sess common.ISession, tick time.Dura
 }
 
 func (h *testClientUseUpdateHandler) OnError(err error) {
-	if h.state == 1 {
+	if h.state == 2 {
 		if h.t != nil {
 			h.t.Logf("occur err: %v", err)
 		}
@@ -126,11 +205,11 @@ func (h *testClientUseUpdateHandler) OnError(err error) {
 
 func createTestClientUseUpdate(t *testing.T, state int32, userData interface{}) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseUpdateHandler(t, state, userData), common.WithTickSpan(time.Millisecond*100))
+	return client.NewClient(newTestClientUseUpdateHandler(t, state, userData), client.WithRunMode(client.RunModeOnlyUpdate))
 }
 
 func TestClientUseUpdate(t *testing.T) {
-	ts := createTestServer(t, 2)
+	ts := createTestServer(t, 1)
 	err := ts.Listen(testAddress)
 	if err != nil {
 		t.Errorf("server for test client listen err: %+v", err)
@@ -144,7 +223,7 @@ func TestClientUseUpdate(t *testing.T) {
 
 	sendNum := 10
 	sd := createSendDataInfo(int32(sendNum))
-	tc := createTestClientUseUpdate(t, 1, sd)
+	tc := createTestClientUseUpdate(t, 2, sd)
 	err = tc.Connect(testAddress)
 	if err != nil {
 		t.Errorf("test client connect err: %+v", err)

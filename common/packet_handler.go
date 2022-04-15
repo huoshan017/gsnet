@@ -123,7 +123,9 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 		}
 	default:
 		// reset heartbeat timer
-		h.lastTime = time.Now()
+		if h.options.IsUseHeartbeat() {
+			h.lastTime = time.Now()
+		}
 		res = 0
 	}
 	return res, err

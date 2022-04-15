@@ -94,7 +94,7 @@ func newTestClientHandler(args ...interface{}) common.ISessionEventHandler {
 }
 
 func (h *testClientHandler) OnConnect(sess common.ISession) {
-	if h.state == 1 {
+	if h.state == 2 {
 		if h.t != nil {
 			h.t.Logf("connected")
 		} else if h.b != nil {
@@ -104,7 +104,7 @@ func (h *testClientHandler) OnConnect(sess common.ISession) {
 }
 
 func (h *testClientHandler) OnDisconnect(sess common.ISession, err error) {
-	if h.state == 1 {
+	if h.state == 2 {
 		if h.t != nil {
 			h.t.Logf("disconnected, err: %v", err)
 		} else if h.b != nil {
@@ -127,6 +127,7 @@ func (h *testClientHandler) OnPacket(sess common.ISession, packet packet.IPacket
 			panic(err)
 		}
 	}
+	h.t.Logf("testClientHandler.OnPacket compared %v", data)
 	return nil
 }
 
@@ -145,7 +146,7 @@ func (h *testClientHandler) OnTick(sess common.ISession, tick time.Duration) {
 }
 
 func (h *testClientHandler) OnError(err error) {
-	if h.state == 1 {
+	if h.state == 2 {
 		if h.t != nil {
 			h.t.Logf("occur err: %v", err)
 		} else if h.b != nil {
@@ -206,6 +207,9 @@ func (h *testServerHandler) OnDisconnect(sess common.ISession, err error) {
 }
 
 func (h *testServerHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
+	if h.t != nil {
+		h.t.Logf("testServerHandler.OnPacket packet %v", *packet.Data())
+	}
 	err := sess.Send(*packet.Data(), true)
 	if err != nil {
 		str := fmt.Sprintf("OnData with session %v send err: %v", sess.GetId(), err)
