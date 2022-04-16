@@ -167,7 +167,7 @@ func (s *GameService) GetNet() *msg.MsgServer {
 }
 
 func (s *GameService) Init(conf *config) bool {
-	serv := msg.NewGobMsgServer(NewGameSessionHandler, msg.CreateIdMsgMapper())
+	serv := msg.NewGobMsgServer(NewGameSessionHandler, []any{}, msg.CreateIdMsgMapper())
 	err := serv.Listen(conf.addr)
 	if err != nil {
 		fmt.Println("game service listen addr ", conf.addr, " err: ", err)

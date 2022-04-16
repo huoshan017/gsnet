@@ -18,7 +18,7 @@ type MsgServer struct {
 }
 
 // NewMsgServer create new message server
-func NewMsgServer(newFunc NewMsgSessionHandlerFunc, codec IMsgCodec, mapper *IdMsgMapper, options ...common.Option) *MsgServer {
+func NewMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCodec, mapper *IdMsgMapper, options ...common.Option) *MsgServer {
 	s := &MsgServer{
 		newFunc: newFunc,
 		codec:   codec,
@@ -29,26 +29,27 @@ func NewMsgServer(newFunc NewMsgSessionHandlerFunc, codec IMsgCodec, mapper *IdM
 		ms := newMsgHandlerServer(msgSessionHandler, s.codec, s.mapper)
 		return common.ISessionEventHandler(ms)
 	}
+	options = append(options, server.WithNewSessionHandlerFuncArgs(funcArgs...))
 	s.Server = server.NewServer(newSessionHandler, options...)
 	return s
 }
 
 // NewPBMsgServer create a protobuf message server
-func NewPBMsgServer(newFunc NewMsgSessionHandlerFunc, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
-	return NewMsgServer(newFunc, &codec.ProtobufCodec{}, idMsgMapper, options...)
+func NewPBMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	return NewMsgServer(newFunc, funcArgs, &codec.ProtobufCodec{}, idMsgMapper, options...)
 }
 
 // NewJsonMsgServer create a json message server
-func NewJsonMsgServerr(newFunc NewMsgSessionHandlerFunc, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
-	return NewMsgServer(newFunc, &codec.JsonCodec{}, idMsgMapper, options...)
+func NewJsonMsgServerr(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	return NewMsgServer(newFunc, funcArgs, &codec.JsonCodec{}, idMsgMapper, options...)
 }
 
 // NewGobMsgServer create a gob message server
-func NewGobMsgServer(newFunc NewMsgSessionHandlerFunc, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
-	return NewMsgServer(newFunc, &codec.GobCodec{}, idMsgMapper, options...)
+func NewGobMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	return NewMsgServer(newFunc, funcArgs, &codec.GobCodec{}, idMsgMapper, options...)
 }
 
 // NewThriftMsgServer create a thrift message server
-func NewThriftMsgServer(newFunc NewMsgSessionHandlerFunc, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
-	return NewMsgServer(newFunc, &codec.ThriftCodec{}, idMsgMapper, options...)
+func NewThriftMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	return NewMsgServer(newFunc, funcArgs, &codec.ThriftCodec{}, idMsgMapper, options...)
 }

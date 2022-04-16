@@ -11,7 +11,6 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/msg"
-	"github.com/huoshan017/gsnet/server"
 
 	"github.com/huoshan017/gsnet/test/tproto"
 )
@@ -147,16 +146,14 @@ func newTestPBMsgHandler(args ...any) msg.IMsgSessionEventHandler {
 
 func newPBMsgServer(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error) {
 	var s *msg.MsgServer
-	var options = []common.Option{
-		server.WithNewSessionHandlerFuncArgs(t),
-	}
+	var options = []common.Option{}
 	if config.useResend {
 		options = append(options, common.WithResendConfig(&common.ResendConfig{}))
 	}
 	if config.useHeartbeat {
 		options = append(options, common.WithUseHeartbeat(true))
 	}
-	s = msg.NewPBMsgServer(newTestPBMsgHandler, idMsgMapper, options...)
+	s = msg.NewPBMsgServer(newTestPBMsgHandler, []any{t}, idMsgMapper, options...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
@@ -289,16 +286,14 @@ func newTestPBMsgHandler2(args ...any) msg.IMsgSessionEventHandler {
 
 func newPBMsgServer2(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error) {
 	var s *msg.MsgServer
-	var options = []common.Option{
-		server.WithNewSessionHandlerFuncArgs(t),
-	}
+	var options = []common.Option{}
 	if config.useResend {
 		options = append(options, common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
 	}
 	if config.useHeartbeat {
 		options = append(options, common.WithUseHeartbeat(true))
 	}
-	s = msg.NewPBMsgServer(newTestPBMsgHandler2, idMsgMapper, options...)
+	s = msg.NewPBMsgServer(newTestPBMsgHandler2, []any{t}, idMsgMapper, options...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
