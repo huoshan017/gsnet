@@ -5,7 +5,7 @@ import "github.com/huoshan017/gsnet/common/packet"
 type Session struct {
 	conn       IConn
 	id         uint64
-	dataMap    map[string]interface{}
+	dataMap    map[string]any
 	resendData *ResendData
 }
 
@@ -13,7 +13,7 @@ func NewSession(conn IConn, id uint64) *Session {
 	return &Session{
 		conn:    conn,
 		id:      id,
-		dataMap: make(map[string]interface{}),
+		dataMap: make(map[string]any),
 	}
 }
 
@@ -57,11 +57,11 @@ func (s *Session) GetId() uint64 {
 	return s.id
 }
 
-func (s *Session) SetData(k string, d interface{}) {
+func (s *Session) SetData(k string, d any) {
 	s.dataMap[k] = d
 }
 
-func (s *Session) GetData(k string) interface{} {
+func (s *Session) GetData(k string) any {
 	return s.dataMap[k]
 }
 

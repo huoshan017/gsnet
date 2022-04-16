@@ -86,7 +86,7 @@ func newPBMsgClient(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error)
 	})
 
 	var rn int
-	c.RegisterMsgHandle(MsgIdPong, func(sess *msg.MsgSession, msg interface{}) error {
+	c.RegisterMsgHandle(MsgIdPong, func(sess *msg.MsgSession, msg any) error {
 		m := msg.(*tproto.MsgPong)
 		if !bytes.Equal([]byte(m.Content), sendList[0]) {
 			err := fmt.Errorf("compare failed: %v to %v", []byte(m.Content), sendList[0])
@@ -126,7 +126,7 @@ func (h *testPBMsgHandler) OnError(err error) {
 	h.t.Logf("session err: %v", err)
 }
 
-func (h *testPBMsgHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj interface{}) error {
+func (h *testPBMsgHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
 	if msgid == MsgIdPing {
 		m, o := msgobj.(*tproto.MsgPing)
 		if !o {
@@ -140,7 +140,7 @@ func (h *testPBMsgHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType
 	return nil
 }
 
-func newTestPBMsgHandler(args ...interface{}) msg.IMsgSessionEventHandler {
+func newTestPBMsgHandler(args ...any) msg.IMsgSessionEventHandler {
 	handler := &testPBMsgHandler{
 		t: args[0].(*testing.T),
 	}
@@ -198,7 +198,7 @@ func (h *testPBMsgClientHandler) OnTick(sess *msg.MsgSession, tick time.Duration
 	}
 }
 
-func (h *testPBMsgClientHandler) onMsgPong(sess *msg.MsgSession, msgobj interface{}) error {
+func (h *testPBMsgClientHandler) onMsgPong(sess *msg.MsgSession, msgobj any) error {
 	if h.rn >= sendCount {
 		return nil
 	}
@@ -268,7 +268,7 @@ func (h *testPBMsgHandler2) OnError(err error) {
 	h.t.Logf("session err: %v", err)
 }
 
-func (h *testPBMsgHandler2) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj interface{}) error {
+func (h *testPBMsgHandler2) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
 	if msgid == MsgIdPing {
 		m, o := msgobj.(*tproto.MsgPing)
 		if !o {
@@ -281,7 +281,7 @@ func (h *testPBMsgHandler2) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdTyp
 	return nil
 }
 
-func newTestPBMsgHandler2(args ...interface{}) msg.IMsgSessionEventHandler {
+func newTestPBMsgHandler2(args ...any) msg.IMsgSessionEventHandler {
 	t := args[0].(*testing.T)
 	handler := &testPBMsgHandler2{
 		t: t,

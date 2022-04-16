@@ -51,7 +51,7 @@ func NewBufferPool() *BufferPool {
 		buffSizeArray: make([][oneLayerSize]int32, len(layerStartSizeArray)),
 		pools:         make([][oneLayerSize]*sync.Pool, len(layerStartSizeArray)),
 		maxSizePool: &sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				b := make([]byte, maxBufSize)
 				return &b
 			},
@@ -62,7 +62,7 @@ func NewBufferPool() *BufferPool {
 			s := layerStartSizeArray[i] + j*layerStepSizeArray[i]
 			buffPool.buffSizeArray[i][j] = s
 			buffPool.pools[i][j] = &sync.Pool{
-				New: func() interface{} {
+				New: func() any {
 					b := make([]byte, s)
 					return &b
 				},

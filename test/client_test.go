@@ -19,7 +19,7 @@ type testClientUseRunHandler struct {
 	compareNum int32
 }
 
-func newTestClientUseRunHandler(args ...interface{}) common.ISessionEventHandler {
+func newTestClientUseRunHandler(args ...any) common.ISessionEventHandler {
 	if len(args) < 2 {
 		panic("At least need 2 arguments")
 	}
@@ -139,7 +139,7 @@ type testClientUseUpdateHandler struct {
 	compareNum   int32
 }
 
-func newTestClientUseUpdateHandler(args ...interface{}) common.ISessionEventHandler {
+func newTestClientUseUpdateHandler(args ...any) common.ISessionEventHandler {
 	if len(args) < 2 {
 		panic("At least need 2 arguments")
 	}
@@ -203,7 +203,7 @@ func (h *testClientUseUpdateHandler) OnError(err error) {
 	}
 }
 
-func createTestClientUseUpdate(t *testing.T, state int32, userData interface{}) *client.Client {
+func createTestClientUseUpdate(t *testing.T, state int32, userData any) *client.Client {
 	// 启用tick处理
 	return client.NewClient(newTestClientUseUpdateHandler(t, state, userData), client.WithRunMode(client.RunModeOnlyUpdate))
 }

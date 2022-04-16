@@ -71,17 +71,17 @@ func (p *Player) send(msgid msg.MsgIdType, msgdata []byte) error {
 	return p.owner.GetNet().Send(msgid, msgdata)
 }
 
-func (p *Player) registerHandle(msgid msg.MsgIdType, handle func(*msg.MsgSession, interface{}) error) {
+func (p *Player) registerHandle(msgid msg.MsgIdType, handle func(*msg.MsgSession, any) error) {
 	p.owner.GetNet().RegisterMsgHandle(msgid, handle)
 }
 
-func (p *Player) onEnterGame(sess *msg.MsgSession, data interface{}) error {
+func (p *Player) onEnterGame(sess *msg.MsgSession, data any) error {
 	p.state = PlayerStateEntered
 	fmt.Println("Player entered game")
 	return nil
 }
 
-func (p *Player) onExitGame(sess *msg.MsgSession, data interface{}) error {
+func (p *Player) onExitGame(sess *msg.MsgSession, data any) error {
 	p.state = PlayerStateNotEnter
 	p.owner.GetNet().Close()
 	fmt.Println("Player exited game")

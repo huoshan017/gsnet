@@ -7,8 +7,8 @@ type MsgIdType uint32
 
 // IMsgCodec message codec interface
 type IMsgCodec interface {
-	Encode(interface{}) ([]byte, error)
-	Decode([]byte, interface{}) error
+	Encode(any) ([]byte, error)
+	Decode([]byte, any) error
 }
 
 // IMsgSessionHandler interface for message event handler
@@ -17,5 +17,5 @@ type IMsgSessionEventHandler interface {
 	OnDisconnected(*MsgSession, error)
 	OnTick(*MsgSession, time.Duration)
 	OnError(error)
-	OnMsgHandle(*MsgSession, MsgIdType, interface{}) error
+	OnMsgHandle(*MsgSession, MsgIdType, any) error
 }

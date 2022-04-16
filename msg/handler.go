@@ -79,7 +79,7 @@ func (ma *IdMsgMapper) AddMap(id MsgIdType, typ reflect.Type) {
 	ma.m[id] = typ
 }
 
-func (ma *IdMsgMapper) GetReflectNewObject(id MsgIdType) interface{} {
+func (ma *IdMsgMapper) GetReflectNewObject(id MsgIdType) any {
 	rt, o := ma.m[id]
 	if !o {
 		return nil
@@ -145,29 +145,29 @@ func (d *msgHandlerCommon) OnError(err error) {
 	}
 }
 
-func (d *msgHandlerCommon) SendMsg(s common.ISession, msgid MsgIdType, msgobj interface{}) error {
+func (d *msgHandlerCommon) SendMsg(s common.ISession, msgid MsgIdType, msgobj any) error {
 	d.sess.sess = s
 	return d.sess.SendMsg(msgid, msgobj)
 }
 
-func (d *msgHandlerCommon) SendMsgNoCopy(s common.ISession, msgid MsgIdType, msgobj interface{}) error {
+func (d *msgHandlerCommon) SendMsgNoCopy(s common.ISession, msgid MsgIdType, msgobj any) error {
 	d.sess.sess = s
 	return d.sess.SendMsgNoCopy(msgid, msgobj)
 }
 
 type msgHandlerClient struct {
 	msgHandlerCommon
-	handleMap map[MsgIdType]func(*MsgSession, interface{}) error
+	handleMap map[MsgIdType]func(*MsgSession, any) error
 }
 
 func newMsgHandlerClient(codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerClient {
 	return &msgHandlerClient{
 		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper),
-		handleMap:        make(map[MsgIdType]func(*MsgSession, interface{}) error),
+		handleMap:        make(map[MsgIdType]func(*MsgSession, any) error),
 	}
 }
 
-func (d *msgHandlerClient) RegisterHandle(msgid MsgIdType, handle func(*MsgSession, interface{}) error) {
+func (d *msgHandlerClient) RegisterHandle(msgid MsgIdType, handle func(*MsgSession, any) error) {
 	d.handleMap[msgid] = handle
 }
 
@@ -189,7 +189,7 @@ func (d *msgHandlerClient) OnPacket(s common.ISession, pak packet.IPacket) error
 type msgHandlerServer struct {
 	msgHandlerCommon
 	sessionHandler IMsgSessionEventHandler
-	msgHandle      func(*MsgSession, MsgIdType, interface{}) error
+	msgHandle      func(*MsgSession, MsgIdType, any) error
 }
 
 func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerServer {

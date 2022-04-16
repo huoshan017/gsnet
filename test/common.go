@@ -76,7 +76,7 @@ type testClientHandler struct {
 	sendDataList *sendDataInfo
 }
 
-func newTestClientHandler(args ...interface{}) common.ISessionEventHandler {
+func newTestClientHandler(args ...any) common.ISessionEventHandler {
 	if len(args) < 2 {
 		panic("At least need 2 arguments")
 	}
@@ -155,17 +155,17 @@ func (h *testClientHandler) OnError(err error) {
 	}
 }
 
-func createTestClient(t *testing.T, state int32, userData interface{}) *client.Client {
+func createTestClient(t *testing.T, state int32, userData any) *client.Client {
 	// 启用tick处理
 	return client.NewClient(newTestClientHandler(t, state, userData), common.WithTickSpan(time.Millisecond*10), common.WithConnDataType(connDataType))
 }
 
-func createTestClient2(t *testing.T, state int32, userData interface{}) *client.Client {
+func createTestClient2(t *testing.T, state int32, userData any) *client.Client {
 	h := newTestClientHandler(t, state, userData)
 	return client.NewClient(h, common.WithConnDataType(connDataType))
 }
 
-func createBenchmarkClient(b *testing.B, state int32, userData interface{}) *client.Client {
+func createBenchmarkClient(b *testing.B, state int32, userData any) *client.Client {
 	return client.NewClient(newTestClientHandler(b, state, userData), common.WithConnDataType(connDataType))
 }
 
@@ -175,7 +175,7 @@ type testServerHandler struct {
 	state int32 // 1 表示服务器模式  2 表示客户端模式
 }
 
-func newTestServerHandler(args ...interface{}) common.ISessionEventHandler {
+func newTestServerHandler(args ...any) common.ISessionEventHandler {
 	h := &testServerHandler{}
 	var o bool
 	h.t, o = args[0].(*testing.T)

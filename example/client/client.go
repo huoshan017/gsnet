@@ -61,7 +61,7 @@ func main() {
 					fmt.Println("connector send data err: ", err)
 					return
 				}
-				var recv_data interface{}
+				var recv_data any
 				recv_data, err = conn.Recv()
 				if err != nil {
 					fmt.Println("connector ", no, " recv data err: ", err)

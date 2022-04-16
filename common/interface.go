@@ -33,8 +33,8 @@ type ISession interface {
 	Close()
 	CloseWaitSecs(int)
 	GetId() uint64
-	SetData(string, interface{})
-	GetData(string) interface{}
+	SetData(string, any)
+	GetData(string) any
 }
 
 // 会话处理器接口

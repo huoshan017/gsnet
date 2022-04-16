@@ -10,10 +10,10 @@ func NewProtobufCodec() *ProtobufCodec {
 	return &ProtobufCodec{}
 }
 
-func (c *ProtobufCodec) Encode(i interface{}) ([]byte, error) {
+func (c *ProtobufCodec) Encode(i any) ([]byte, error) {
 	return proto.Marshal(i.(proto.Message))
 }
 
-func (c *ProtobufCodec) Decode(d []byte, i interface{}) error {
+func (c *ProtobufCodec) Decode(d []byte, i any) error {
 	return proto.Unmarshal(d, i.(proto.Message))
 }

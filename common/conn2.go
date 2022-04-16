@@ -13,11 +13,11 @@ import (
 
 // wrapperSendData send data wrapper
 type wrapperSendData struct {
-	data   interface{}
+	data   any
 	pt_mmt int32
 }
 
-// wrapperSendData.getData transfer interface{} data to the right type
+// wrapperSendData.getData transfer any data to the right type
 func (sd *wrapperSendData) getData() ([]byte, *[]byte, [][]byte, []*[]byte) {
 	return GetSendData(sd.data)
 }

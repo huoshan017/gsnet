@@ -45,12 +45,12 @@ func (c *MsgClient) SetErrorHandle(handle func(error)) {
 }
 
 // MsgClient.RegisterMsgHandle register a handle for message id
-func (c *MsgClient) RegisterMsgHandle(msgid MsgIdType, handle func(*MsgSession, interface{}) error) {
+func (c *MsgClient) RegisterMsgHandle(msgid MsgIdType, handle func(*MsgSession, any) error) {
 	c.handler.RegisterHandle(msgid, handle)
 }
 
 // MsgClient.Send send message to server
-func (c *MsgClient) Send(msgid MsgIdType, msg interface{}) error {
+func (c *MsgClient) Send(msgid MsgIdType, msg any) error {
 	return c.handler.SendMsg(c.GetSession(), msgid, msg)
 }
 

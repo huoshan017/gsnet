@@ -74,7 +74,7 @@ type config struct {
 
 type SessionHandler struct{}
 
-func NewGameSessionHandler(args ...interface{}) msg.IMsgSessionEventHandler {
+func NewGameSessionHandler(args ...any) msg.IMsgSessionEventHandler {
 	return &SessionHandler{}
 }
 
@@ -93,7 +93,7 @@ func (h *SessionHandler) OnError(err error) {
 	log.Printf("err %v", err)
 }
 
-func (h *SessionHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj interface{}) error {
+func (h *SessionHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
 	var err error
 	if msgid == msg.MsgIdType(game_proto.MsgIdGamePlayerEnterReq) {
 		err = h.onPlayerEnterGame(sess, msgobj)
@@ -103,7 +103,7 @@ func (h *SessionHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, 
 	return err
 }
 
-func (h *SessionHandler) onPlayerEnterGame(sess *msg.MsgSession, msg interface{}) error {
+func (h *SessionHandler) onPlayerEnterGame(sess *msg.MsgSession, msg any) error {
 	req, o := msg.(*game_proto.GamePlayerEnterReq)
 	if !o {
 		panic("onPlayerEnterGame must receive game_proto.GamePlayerEnterReq")
@@ -139,7 +139,7 @@ func (h *SessionHandler) onPlayerEnterGame(sess *msg.MsgSession, msg interface{}
 	return nil
 }
 
-func (h *SessionHandler) onPlayerExitGame(sess *msg.MsgSession, msg interface{}) error {
+func (h *SessionHandler) onPlayerExitGame(sess *msg.MsgSession, msg any) error {
 	d := sess.GetData("player")
 	if d == nil {
 		return errors.New("game_service: no invalid session")

@@ -20,7 +20,7 @@ type DefaultPacketPool struct {
 func NewDefaultPacketPool() *DefaultPacketPool {
 	return &DefaultPacketPool{
 		pool: &sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				return &Packet{}
 			},
 		},
@@ -35,7 +35,7 @@ func (p *DefaultPacketPool) Get() IPacket {
 
 func (p *DefaultPacketPool) Put(pak IPacket) {
 	// 不是*Packet类型
-	if _, o := interface{}(pak).(*Packet); !o {
+	if _, o := any(pak).(*Packet); !o {
 		return
 	}
 	if _, o := p.usingPackets.LoadAndDelete(pak); !o {
@@ -144,7 +144,7 @@ func (pc *DefaultPacketBuilder) DecodeReadFrom(reader io.Reader) (IPacket, error
 	// todo 增加加密类型的处理
 	}
 	p := pc.options.PacketPool.Get()
-	pak := interface{}(p).(*Packet)
+	pak := any(p).(*Packet)
 	pak.typ = PacketType(header[3])
 	pak.mType = MemoryManagementPoolFrameworkFree
 	pak.SetData(pData)

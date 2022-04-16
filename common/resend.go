@@ -15,7 +15,7 @@ const (
 )
 
 type IResendEventHandler interface {
-	OnSent(data interface{}, mmt packet.MemoryManagementType) bool
+	OnSent(data any, mmt packet.MemoryManagementType) bool
 	OnAck(pak packet.IPacket) int32
 	OnProcessed(n int16)
 	OnUpdate(IConn) error
@@ -39,7 +39,7 @@ type ResendConfig struct {
 type ResendData struct {
 	config   ResendConfig
 	sentList []struct {
-		data interface{}
+		data any
 		mmt  packet.MemoryManagementType
 	}
 	locker           sync.Mutex
@@ -54,7 +54,7 @@ type ResendData struct {
 
 type resendNode struct {
 	value *struct {
-		data interface{}
+		data any
 		mmt  packet.MemoryManagementType
 	}
 	next unsafe.Pointer
@@ -68,7 +68,7 @@ type resendList struct {
 
 func newResendList() *resendList {
 	n := unsafe.Pointer(&struct {
-		data interface{}
+		data any
 		mmt  packet.MemoryManagementType
 	}{})
 	return &resendList{head: n, tail: n}
@@ -79,7 +79,7 @@ func (l *resendList) getNum() int32 {
 }
 
 func (l *resendList) pushBack(v *struct {
-	data interface{}
+	data any
 	mmt  packet.MemoryManagementType
 }) {
 	n := &resendNode{value: v}
@@ -101,7 +101,7 @@ func (l *resendList) pushBack(v *struct {
 }
 
 func (l *resendList) popFront() *struct {
-	data interface{}
+	data any
 	mmt  packet.MemoryManagementType
 } {
 	for {
@@ -136,7 +136,7 @@ func cas(p *unsafe.Pointer, old, new *resendNode) (ok bool) {
 func NewResendData(config *ResendConfig) *ResendData {
 	return &ResendData{
 		sentList: make([]struct {
-			data interface{}
+			data any
 			mmt  packet.MemoryManagementType
 		}, 0),
 		sentList2: newResendList(),
@@ -159,12 +159,12 @@ func (rd *ResendData) CanSend() bool {
 }
 
 // ResendData.OnSent call in different goroutine to OnAck
-func (rd *ResendData) OnSent(data interface{}, mmt packet.MemoryManagementType) bool {
+func (rd *ResendData) OnSent(data any, mmt packet.MemoryManagementType) bool {
 	var sent bool
 	if rd.config.UseLockFree {
 		if rd.sentList2.getNum() < int32(MaxCacheSentPacket) {
 			rd.sentList2.pushBack(&struct {
-				data interface{}
+				data any
 				mmt  packet.MemoryManagementType
 			}{data, mmt})
 			sent = true
@@ -173,7 +173,7 @@ func (rd *ResendData) OnSent(data interface{}, mmt packet.MemoryManagementType) 
 		rd.locker.Lock()
 		if len(rd.sentList) < int(MaxCacheSentPacket) {
 			rd.sentList = append(rd.sentList, struct {
-				data interface{}
+				data any
 				mmt  packet.MemoryManagementType
 			}{data, mmt})
 			sent = true

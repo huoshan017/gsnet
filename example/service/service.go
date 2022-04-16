@@ -34,7 +34,7 @@ func (h *PlayerHandler) OnError(err error) {
 
 }
 
-func NewPlayerHandler(args ...interface{}) common.ISessionEventHandler {
+func NewPlayerHandler(args ...any) common.ISessionEventHandler {
 	return &PlayerHandler{}
 }
 

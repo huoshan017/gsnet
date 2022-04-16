@@ -5,7 +5,7 @@ import (
 	"github.com/huoshan017/gsnet/common/pool"
 )
 
-func GetSendData(data interface{}) ([]byte, *[]byte, [][]byte, []*[]byte) {
+func GetSendData(data any) ([]byte, *[]byte, [][]byte, []*[]byte) {
 	var (
 		b   []byte
 		pb  *[]byte
@@ -25,7 +25,7 @@ func GetSendData(data interface{}) ([]byte, *[]byte, [][]byte, []*[]byte) {
 	return b, pb, ba, pba
 }
 
-func FreeSendData(mmt packet.MemoryManagementType, data interface{}) bool {
+func FreeSendData(mmt packet.MemoryManagementType, data any) bool {
 	b, pb, ba, pba := GetSendData(data)
 	return FreeSendData2(mmt, b, pb, ba, pba)
 }

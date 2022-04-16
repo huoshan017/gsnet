@@ -26,15 +26,15 @@ func (s *MsgSession) GetId() uint64 {
 	return s.sess.GetId()
 }
 
-func (s *MsgSession) SetData(key string, value interface{}) {
+func (s *MsgSession) SetData(key string, value any) {
 	s.sess.SetData(key, value)
 }
 
-func (s *MsgSession) GetData(key string) interface{} {
+func (s *MsgSession) GetData(key string) any {
 	return s.sess.GetData(key)
 }
 
-func (s *MsgSession) SendMsg(msgid MsgIdType, msg interface{}) error {
+func (s *MsgSession) SendMsg(msgid MsgIdType, msg any) error {
 	msgdata, err := s.codec.Encode(msg)
 	if err != nil {
 		return err
@@ -46,7 +46,7 @@ func (s *MsgSession) SendMsg(msgid MsgIdType, msg interface{}) error {
 	return s.sess.SendPoolBuffer(pData, packet.MemoryManagementPoolUserManualFree)
 }
 
-func (s *MsgSession) SendMsgNoCopy(msgid MsgIdType, msg interface{}) error {
+func (s *MsgSession) SendMsgNoCopy(msgid MsgIdType, msg any) error {
 	msgdata, err := s.codec.Encode(msg)
 	if err != nil {
 		return err
@@ -64,7 +64,7 @@ func (s *MsgSession) CloseWait(secs int) {
 	s.sess.CloseWaitSecs(secs)
 }
 
-func (s *MsgSession) splitIdAndMsg(msgdata []byte) (MsgIdType, interface{}, error) {
+func (s *MsgSession) splitIdAndMsg(msgdata []byte) (MsgIdType, any, error) {
 	msgid, msgdata, err := splitIdAndMsg(msgdata)
 	if err != nil {
 		return 0, nil, err

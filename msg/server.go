@@ -7,7 +7,7 @@ import (
 )
 
 // NewMsgSessionHandlerFunc function for creating interface IMsgSessionHandler instance
-type NewMsgSessionHandlerFunc func(args ...interface{}) IMsgSessionEventHandler
+type NewMsgSessionHandlerFunc func(args ...any) IMsgSessionEventHandler
 
 // MsgServer struct
 type MsgServer struct {
@@ -24,7 +24,7 @@ func NewMsgServer(newFunc NewMsgSessionHandlerFunc, codec IMsgCodec, mapper *IdM
 		codec:   codec,
 		mapper:  mapper,
 	}
-	var newSessionHandler server.NewSessionHandlerFunc = func(args ...interface{}) common.ISessionEventHandler {
+	var newSessionHandler server.NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
 		msgSessionHandler := s.newFunc(args...)
 		ms := newMsgHandlerServer(msgSessionHandler, s.codec, s.mapper)
 		return common.ISessionEventHandler(ms)

@@ -8,14 +8,14 @@ import (
 )
 
 // 会话处理器函数类型
-type NewSessionHandlerFunc func(args ...interface{}) common.ISessionEventHandler
+type NewSessionHandlerFunc func(args ...any) common.ISessionEventHandler
 
 // 服务选项结构
 type ServerOptions struct {
 	common.Options
 	connMaxCount          int           // 連接最大數
 	connChanLen           int           // 連接通道長度
-	createHandlerFuncArgs []interface{} // 会话处理器创建函数参数列表
+	createHandlerFuncArgs []any         // 会话处理器创建函数参数列表
 	reusePort             bool          // 重用端口
 	reuseAddr             bool          // 重用地址
 	errChanLen            int           // 错误通道长度
@@ -38,11 +38,11 @@ func (options *ServerOptions) SetConnChanLen(chanLen int) {
 	options.connChanLen = chanLen
 }
 
-func (options *ServerOptions) GetNewSessionHandlerFuncArgs() []interface{} {
+func (options *ServerOptions) GetNewSessionHandlerFuncArgs() []any {
 	return options.createHandlerFuncArgs
 }
 
-func (options *ServerOptions) SetNewSessionHandlerFuncArgs(args ...interface{}) {
+func (options *ServerOptions) SetNewSessionHandlerFuncArgs(args ...any) {
 	options.createHandlerFuncArgs = args
 }
 
@@ -92,7 +92,7 @@ func WithConnChanLen(chanLen int) common.Option {
 	}
 }
 
-func WithNewSessionHandlerFuncArgs(args ...interface{}) common.Option {
+func WithNewSessionHandlerFuncArgs(args ...any) common.Option {
 	return func(options *common.Options) {
 		p := (*ServerOptions)(unsafe.Pointer(options))
 		p.SetNewSessionHandlerFuncArgs(args...)
