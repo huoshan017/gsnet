@@ -244,7 +244,6 @@ func (c *Conn2) writeLoop() {
 			break
 		}
 	}
-	// 错误写入通道由读协程接收
 	if err != nil {
 		c.errWriteCh <- err
 	}

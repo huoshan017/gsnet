@@ -29,7 +29,9 @@ func NewMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCo
 		ms := newMsgHandlerServer(msgSessionHandler, s.codec, s.mapper)
 		return common.ISessionEventHandler(ms)
 	}
-	options = append(options, server.WithNewSessionHandlerFuncArgs(funcArgs...))
+	if len(funcArgs) > 0 {
+		options = append(options, server.WithNewSessionHandlerFuncArgs(funcArgs...))
+	}
 	s.Server = server.NewServer(newSessionHandler, options...)
 	return s
 }
