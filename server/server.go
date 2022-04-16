@@ -8,7 +8,8 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
-	"github.com/huoshan017/gsnet/common/packet"
+	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/packet"
 )
 
 const (
@@ -99,7 +100,7 @@ func (s *Server) Start() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				common.GetLogger().WithStack(err)
+				log.WithStack(err)
 			}
 		}()
 		s.acceptor.Serve()
@@ -181,7 +182,7 @@ func (s *Server) handleHandshake(conn common.IConn, basePacketHandler common.IBa
 
 func (s *Server) handleConn(c net.Conn) {
 	if len(s.sessMap) >= s.options.GetConnMaxCount() {
-		common.GetLogger().Info("gsnet: connection to server is maximum")
+		log.Info("gsnet: connection to server is maximum")
 		return
 	}
 
@@ -234,7 +235,7 @@ func (s *Server) handleConn(c net.Conn) {
 	go func(conn common.IConn) {
 		defer func() {
 			if err := recover(); err != nil {
-				common.GetLogger().WithStack(err)
+				log.WithStack(err)
 			}
 		}()
 
@@ -312,6 +313,6 @@ func (s *Server) handleClose(err *sessionCloseInfo) {
 		}
 		delete(s.sessMap, err.sessionId)
 		s.waitWg.Done()
-		common.GetLogger().Info("handleClose sess count ", len(s.sessMap), ", sessionId: ", err.sessionId)
+		log.Info("handleClose sess count ", len(s.sessMap), ", sessionId: ", err.sessionId)
 	}
 }

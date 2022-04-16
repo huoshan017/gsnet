@@ -21,13 +21,6 @@ const (
 	PacketSentAck      PacketType = 5
 )
 
-type CompressType int8
-
-const (
-	CompressNone CompressType = iota
-	CompressZip  CompressType = 1
-)
-
 type EncryptionType int8
 
 const (

@@ -9,7 +9,7 @@ import (
 
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
-	"github.com/huoshan017/gsnet/common/packet"
+	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/server"
 )
 

@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/huoshan017/gsnet/common/packet"
+	"github.com/huoshan017/gsnet/packet"
 )
 
 // 连接接口

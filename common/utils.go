@@ -1,8 +1,8 @@
 package common
 
 import (
-	"github.com/huoshan017/gsnet/common/packet"
-	"github.com/huoshan017/gsnet/common/pool"
+	"github.com/huoshan017/gsnet/packet"
+	"github.com/huoshan017/gsnet/pool"
 )
 
 func GetSendData(data any) ([]byte, *[]byte, [][]byte, []*[]byte) {

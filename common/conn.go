@@ -8,7 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/huoshan017/gsnet/common/packet"
+	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/packet"
 )
 
 const (
@@ -98,7 +99,7 @@ func (c *Conn) Run() {
 func (c *Conn) readLoop() {
 	defer func() {
 		if err := recover(); err != nil {
-			GetLogger().WithStack(err)
+			log.WithStack(err)
 		}
 	}()
 
@@ -161,7 +162,7 @@ func (c *Conn) readBytes(data []byte) (err error) {
 
 	_, err = io.ReadFull(c.reader, data)
 	if err != nil {
-		GetLogger().Infof("gsnet: io.ReadFull err: %v", err)
+		log.Infof("gsnet: io.ReadFull err: %v", err)
 	}
 	return
 }
@@ -170,7 +171,7 @@ func (c *Conn) readBytes(data []byte) (err error) {
 func (c *Conn) writeLoop() {
 	defer func() {
 		if err := recover(); err != nil {
-			GetLogger().WithStack(err)
+			log.WithStack(err)
 		}
 	}()
 	var err error
@@ -219,7 +220,7 @@ func (c *Conn) writeBytes(data []byte) (err error) {
 
 	_, err = c.writer.Write(data)
 	if err != nil {
-		GetLogger().Infof("gsnet: w.writer.Write err: %v", err)
+		log.Infof("gsnet: w.writer.Write err: %v", err)
 	}
 	return
 }

@@ -1,4 +1,4 @@
-package common
+package log
 
 import (
 	"io"
@@ -19,7 +19,7 @@ type Logger interface {
 
 var gslog Logger
 
-func GetLogger() Logger {
+func getLogger() Logger {
 	if gslog == nil {
 		SetLogger(newDefaultLogger())
 	}
@@ -65,4 +65,28 @@ func (l *defaultLog) Infof(format string, args ...any) {
 
 func (l *defaultLog) Info(args ...any) {
 	l.log.Print(args...)
+}
+
+func SetOutput(output io.Writer) {
+	getLogger().SetOutput(output)
+}
+
+func WithStack(err any) {
+	getLogger().WithStack(err)
+}
+
+func Fatalf(format string, args ...any) {
+	getLogger().Fatalf(format, args...)
+}
+
+func Fatal(args ...any) {
+	getLogger().Fatal(args...)
+}
+
+func Infof(format string, args ...any) {
+	getLogger().Infof(format, args...)
+}
+
+func Info(args ...any) {
+	getLogger().Info(args...)
 }

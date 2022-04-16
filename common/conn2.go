@@ -7,8 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/huoshan017/gsnet/common/packet"
-	"github.com/huoshan017/gsnet/common/pool"
+	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/packet"
+	"github.com/huoshan017/gsnet/pool"
 )
 
 // wrapperSendData send data wrapper
@@ -144,7 +145,7 @@ func (c *Conn2) Run() {
 func (c *Conn2) readLoop() {
 	defer func() {
 		if err := recover(); err != nil {
-			GetLogger().WithStack(err)
+			log.WithStack(err)
 		}
 	}()
 
@@ -188,7 +189,7 @@ func (c *Conn2) writeLoop() {
 			d.recycle()
 		}
 		if err := recover(); err != nil {
-			GetLogger().WithStack(err)
+			log.WithStack(err)
 		}
 	}()
 

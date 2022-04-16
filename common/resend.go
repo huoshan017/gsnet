@@ -7,7 +7,8 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/huoshan017/gsnet/common/packet"
+	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/packet"
 )
 
 const (
@@ -203,7 +204,7 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 		num := int16(rd.sentList2.getNum())
 		if n > num {
 			errstr := fmt.Sprintf("acknum %v > length of sentlist %v", n, num)
-			GetLogger().Fatalf(errstr)
+			log.Fatalf(errstr)
 			//panic(errstr)
 			return -1
 		}
@@ -219,7 +220,7 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 	} else {
 		if int(n) > len(rd.sentList) {
 			errstr := fmt.Sprintf("acknum %v > length of sentlist %v", n, len(rd.sentList))
-			GetLogger().Fatalf(errstr)
+			log.Fatalf(errstr)
 			return -1
 		}
 

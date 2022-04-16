@@ -4,7 +4,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/huoshan017/gsnet/common/pool"
+	"github.com/huoshan017/gsnet/pool"
 )
 
 const (

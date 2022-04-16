@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/huoshan017/gsnet/common/packet"
+	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/packet"
 )
 
 var (
@@ -117,7 +118,7 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 		if h.resend != nil {
 			res = h.resend.OnAck(pak)
 			if res < 0 {
-				GetLogger().Fatalf("gsnet: length of rend list less than ack num")
+				log.Fatalf("gsnet: length of rend list less than ack num")
 				err = ErrResendDataInvalid
 			}
 		}

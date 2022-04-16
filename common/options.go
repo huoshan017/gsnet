@@ -3,7 +3,7 @@ package common
 import (
 	"time"
 
-	"github.com/huoshan017/gsnet/common/packet"
+	"github.com/huoshan017/gsnet/packet"
 )
 
 // 选项结构

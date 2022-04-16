@@ -7,7 +7,8 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
-	"github.com/huoshan017/gsnet/common/packet"
+	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/packet"
 )
 
 const (
@@ -61,7 +62,7 @@ func (c *Connector) ConnectAsync(address string, timeout time.Duration, connectC
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				common.GetLogger().WithStack(err)
+				log.WithStack(err)
 			}
 		}()
 		c.connectCallback = connectCB

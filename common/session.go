@@ -1,6 +1,6 @@
 package common
 
-import "github.com/huoshan017/gsnet/common/packet"
+import "github.com/huoshan017/gsnet/packet"
 
 type Session struct {
 	conn       IConn
