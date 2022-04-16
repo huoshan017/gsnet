@@ -106,46 +106,8 @@ func (c *Client) Update() error {
 		return nil
 	}
 
-	var (
-		res int32
-		err error
-		pak packet.IPacket
-	)
-
-	pak, err = c.conn.RecvNonblock()
-	if pak != nil {
-		res, err = c.basePacketHandler.OnPreHandle(pak)
-		common.GetLogger().Infof("res %v  err %v", res, err)
-		if err == nil {
-			if res == 0 {
-				err = c.handler.OnPacket(c.sess, pak)
-			}
-		}
-		if err == nil {
-			err = c.basePacketHandler.OnPostHandle(pak)
-		}
-	}
-
-	if err == common.ErrRecvChanEmpty {
-		err = nil
-	}
-
-	if err == nil {
-		err = c.basePacketHandler.OnUpdateHandle()
-	}
-
-	c.options.GetPacketPool().Put(pak)
-
-	if err != nil {
-		if !common.IsNoDisconnectError(err) {
-			c.handler.OnDisconnect(c.sess, err)
-			c.conn.Close()
-		} else {
-			c.handler.OnError(err)
-		}
-	}
-
-	return err
+	err := c.handle(1)
+	return c.handleErr(err)
 }
 
 func (c *Client) Run() {
@@ -171,15 +133,10 @@ func (c *Client) Run() {
 	}
 
 	for err == nil {
-		err = c.handle()
+		err = c.handle(0)
 	}
 
-	if err != nil && !common.IsNoDisconnectError(err) {
-		if c.handler != nil {
-			c.handler.OnDisconnect(c.sess, err)
-		}
-		c.conn.Close()
-	}
+	c.handleErr(err)
 }
 
 func (c *Client) Quit() {
@@ -252,14 +209,18 @@ func (c *Client) handleHandshake(mode int32) (bool, error) {
 	return res == 2, err
 }
 
-func (c *Client) handle() error {
+func (c *Client) handle(mode int32) error {
 	var (
 		pak packet.IPacket
 		res int32
 		err error
 	)
 
-	pak, err = c.conn.Wait(c.ctx)
+	if mode == 0 {
+		pak, err = c.conn.Wait(c.ctx)
+	} else {
+		pak, err = c.conn.RecvNonblock()
+	}
 	if err == nil {
 		if pak != nil { // net packet handle
 			res, err = c.basePacketHandler.OnPreHandle(pak)
@@ -278,9 +239,12 @@ func (c *Client) handle() error {
 		}
 	}
 
+	if mode != 0 && err == common.ErrRecvChanEmpty {
+		err = nil
+	}
+
 	if err != nil {
-		if !common.IsNoDisconnectError(err) {
-		} else {
+		if common.IsNoDisconnectError(err) {
 			c.handler.OnError(err)
 		}
 	}
@@ -293,4 +257,19 @@ func (c *Client) handleTick() {
 	tick := now.Sub(c.lastTime)
 	c.handler.OnTick(c.sess, tick)
 	c.lastTime = now
+}
+
+func (c *Client) handleErr(err error) error {
+	if err != nil {
+		// if no disconnect error, reset err to nil
+		if common.IsNoDisconnectError(err) {
+			err = nil
+		} else {
+			if c.handler != nil {
+				c.handler.OnDisconnect(c.sess, err)
+			}
+			c.conn.Close()
+		}
+	}
+	return err
 }

@@ -26,7 +26,6 @@ const (
 var (
 	ch          = make(chan struct{})
 	idMsgMapper *msg.IdMsgMapper
-	//clientsCh   = make(chan *msg.MsgClient, 128)
 )
 
 type testMsgConfig struct {
@@ -132,7 +131,6 @@ func (h *testPBMsgHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType
 		if !o {
 			h.t.Errorf("server receive message must Ping")
 		}
-		//h.t.Logf("received session %v message %v", sess.GetId(), m.Content)
 		var rm tproto.MsgPong
 		rm.Content = m.Content
 		return sess.SendMsg(MsgIdPong, &rm)
@@ -373,16 +371,6 @@ func testPBMsgServer(useResend bool, t *testing.T) {
 			wg.Done()
 		}()
 	}
-
-	/*go func() {
-		for {
-			client, o := <-clientsCh
-			if !o {
-				break
-			}
-			client.Close()
-		}
-	}()*/
 
 	wg.Wait()
 }
