@@ -239,7 +239,14 @@ func (h *testServerHandler) OnError(err error) {
 }
 
 func createTestServer(t *testing.T, state int32) *server.Server {
-	return server.NewServer(newTestServerHandler, server.WithNewSessionHandlerFuncArgs(t, state), common.WithReadBuffSize(10*4096), common.WithWriteBuffSize(5*4096), common.WithConnDataType(connDataType))
+	return server.NewServer(newTestServerHandler,
+		server.WithNewSessionHandlerFuncArgs(t, state),
+		common.WithReadBuffSize(10*4096),
+		common.WithWriteBuffSize(5*4096),
+		common.WithConnDataType(connDataType),
+		common.WithPacketCompressType(packet.CompressSnappy),
+		common.WithPacketEncryptionType(packet.EncryptionAes),
+	)
 }
 
 func createTestServerWithHandler(t *testing.T, state int32) *server.Server {

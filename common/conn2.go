@@ -44,14 +44,15 @@ type Conn2 struct {
 	options            Options
 	writer             *bufio.Writer
 	reader             *bufio.Reader
-	recvCh             chan packet.IPacket  // 缓存从网络接收的数据，对应一个接收者一个发送者
-	sendCh             chan wrapperSendData // 缓存发往网络的数据，对应一个接收者一个发送者
-	closeCh            chan struct{}        // 关闭通道
-	closed             int32                // 是否关闭
-	errCh              chan error           // 错误通道
-	errWriteCh         chan error           // 写错误通道
-	ticker             *time.Ticker         // 定时器
-	resendEventHandler IResendEventHandler  // 重发事件处理器
+	recvCh             chan packet.IPacket   // 缓存从网络接收的数据，对应一个接收者一个发送者
+	sendCh             chan wrapperSendData  // 缓存发往网络的数据，对应一个接收者一个发送者
+	closeCh            chan struct{}         // 关闭通道
+	closed             int32                 // 是否关闭
+	errCh              chan error            // 错误通道
+	errWriteCh         chan error            // 写错误通道
+	ticker             *time.Ticker          // 定时器
+	packetBuilder      packet.IPacketBuilder // 包创建器
+	resendEventHandler IResendEventHandler   // 重发事件处理器
 }
 
 // NewConn2WithResend create Conn2 instance use resend
@@ -102,6 +103,12 @@ func NewConn2UseResend(conn net.Conn, resend IResendEventHandler, options Option
 			tcpConn.SetKeepAlivePeriod(c.options.keepAlivedPeriod)
 		}
 	}
+
+	c.packetBuilder = NewDefaultPacketBuilder(packet.PacketOptions{
+		CType:      c.options.GetPacketCompressType(),
+		EType:      c.options.GetPacketEncryptionType(),
+		PacketPool: packet.GetDefaultPacketPool(),
+	})
 
 	var tickSpan = c.options.GetTickSpan()
 	if tickSpan > 0 && tickSpan < MinConnTick {
@@ -160,7 +167,8 @@ func (c *Conn2) readLoop() {
 				break
 			}
 		}
-		pak, err = c.options.GetPacketBuilder().DecodeReadFrom(c.reader)
+		//pak, err = c.options.GetPacketBuilder().DecodeReadFrom(c.reader)
+		pak, err = c.packetBuilder.DecodeReadFrom(c.reader)
 		if err == nil {
 			select {
 			// todo 是否一定需要接收goroutine也等待发送goroutine的错误
@@ -216,13 +224,17 @@ func (c *Conn2) writeLoop() {
 				b, pb, ba, pba := d.getData()
 
 				if b != nil {
-					err = c.options.GetPacketBuilder().EncodeWriteTo(pt, b, c.writer)
+					//err = c.options.GetPacketBuilder().EncodeWriteTo(pt, b, c.writer)
+					err = c.packetBuilder.EncodeWriteTo(pt, b, c.writer)
 				} else if pb != nil {
-					err = c.options.GetPacketBuilder().EncodeWriteTo(pt, *pb, c.writer)
+					//err = c.options.GetPacketBuilder().EncodeWriteTo(pt, *pb, c.writer)
+					err = c.packetBuilder.EncodeWriteTo(pt, *pb, c.writer)
 				} else if ba != nil {
-					err = c.options.GetPacketBuilder().EncodeBytesArrayWriteTo(pt, ba, c.writer)
+					//err = c.options.GetPacketBuilder().EncodeBytesArrayWriteTo(pt, ba, c.writer)
+					err = c.packetBuilder.EncodeBytesArrayWriteTo(pt, ba, c.writer)
 				} else if pba != nil {
-					err = c.options.GetPacketBuilder().EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
+					//err = c.options.GetPacketBuilder().EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
+					err = c.packetBuilder.EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
 				}
 				if err == nil {
 					// have data in buffer

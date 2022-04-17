@@ -37,9 +37,9 @@ func NewClient(handler common.ISessionEventHandler, options ...common.Option) *C
 	if c.options.GetPacketPool() == nil {
 		c.options.SetPacketPool(packet.GetDefaultPacketPool())
 	}
-	if c.options.GetPacketBuilder() == nil {
-		c.options.SetPacketBuilder(packet.GetDefaultPacketBuilder())
-	}
+	//if c.options.GetPacketBuilder() == nil {
+	//	c.options.SetPacketBuilder(packet.GetDefaultPacketBuilder())
+	//}
 	return c
 }
 

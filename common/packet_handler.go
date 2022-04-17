@@ -69,7 +69,7 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 		err error
 		typ = pak.Type()
 	)
-	if typ == packet.PacketHandshake {
+	if typ == packet.PacketHandshake { // server side
 		if !h.cors {
 			err = h.sendHandshakeAck()
 			if err == nil {
@@ -78,11 +78,21 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 		} else {
 			err = ErrBasePacketHandlerClientCantRecvHandshake
 		}
-	} else if typ == packet.PacketHandshakeAck {
+	} else if typ == packet.PacketHandshakeAck { // client side
 		if !h.cors {
 			err = ErrBasePacketHandlerServerCantRecvHandshakeAck
 		} else {
 			h.state = HandlerStateNormal
+			data := *pak.Data()
+			ct := packet.CompressType(data[0])
+			et := packet.EncryptionType(data[1])
+			h.options.SetPacketCompressType(ct)
+			h.options.SetPacketEncryptionType(et)
+			l := data[2]
+			if l > 0 {
+				key := data[3 : 3+l]
+				h.options.SetPacketCryptoKey(key)
+			}
 			res = 2
 		}
 	}
@@ -195,7 +205,21 @@ func (h *DefaultBasePacketHandler) sendHandshake() error {
 }
 
 func (h *DefaultBasePacketHandler) sendHandshakeAck() error {
-	return h.conn.Send(packet.PacketHandshakeAck, []byte{}, false)
+	ct := h.options.GetPacketCompressType()
+	et := h.options.GetPacketEncryptionType()
+	var key []byte
+	if et == packet.EncryptionAes {
+		key = h.options.GetPacketCryptoKey()
+	} else if et == packet.EncryptionDes {
+		key = h.options.GetPacketCryptoKey()
+	}
+	data := []byte{
+		byte(ct),
+		byte(et),
+		byte(len(key)),
+	}
+	data = append(data, key...)
+	return h.conn.Send(packet.PacketHandshakeAck, data, false)
 }
 
 func (h *DefaultBasePacketHandler) sendHeartbeat() error {

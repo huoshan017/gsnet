@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/huoshan017/gsnet/packet"
@@ -8,26 +9,29 @@ import (
 
 // 选项结构
 type Options struct {
-	noDelay                    bool
-	keepAlived                 bool
-	keepAlivedPeriod           time.Duration
-	readTimeout                time.Duration
-	writeTimeout               time.Duration
-	tickSpan                   time.Duration
-	dataProto                  IDataProto
-	sendChanLen                int
-	recvChanLen                int
-	writeBuffSize              int
-	readBuffSize               int
-	connCloseWaitSecs          int // 連接關閉等待時間(秒)
-	packetPool                 packet.IPacketPool
-	packetBuilder              packet.IPacketBuilder
-	connDataType               int           // 连接数据结构类型
-	resendConfig               *ResendConfig // 重发配置
-	useHeartbeat               bool          // 使用心跳
-	heartbeatTimeSpan          time.Duration // 心跳间隔
-	minHeartbeatTimeSpan       time.Duration // 最小心跳间隔
-	disconnectHeartbeatTimeout time.Duration // 断连的心跳超时
+	noDelay           bool
+	keepAlived        bool
+	keepAlivedPeriod  time.Duration
+	readTimeout       time.Duration
+	writeTimeout      time.Duration
+	tickSpan          time.Duration
+	dataProto         IDataProto
+	sendChanLen       int
+	recvChanLen       int
+	writeBuffSize     int
+	readBuffSize      int
+	connCloseWaitSecs int                // 連接關閉等待時間(秒)
+	packetPool        packet.IPacketPool // 包池
+	//packetBuilder              packet.IPacketBuilder // 包创建器
+	packetCompressType         packet.CompressType   // 包解压缩类型
+	packetEncryptionType       packet.EncryptionType // 包加解密类型
+	cryptoKey                  []byte                // 加解密key
+	connDataType               int                   // 连接数据结构类型
+	resendConfig               *ResendConfig         // 重发配置
+	useHeartbeat               bool                  // 使用心跳
+	heartbeatTimeSpan          time.Duration         // 心跳间隔
+	minHeartbeatTimeSpan       time.Duration         // 最小心跳间隔
+	disconnectHeartbeatTimeout time.Duration         // 断连的心跳超时
 
 	// todo 以下是需要实现的配置逻辑
 	flushWriteInterval time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
@@ -140,13 +144,13 @@ func (options *Options) SetPacketPool(packetPool packet.IPacketPool) {
 	options.packetPool = packetPool
 }
 
-func (options *Options) GetPacketBuilder() packet.IPacketBuilder {
-	return options.packetBuilder
-}
+//func (options *Options) GetPacketBuilder() packet.IPacketBuilder {
+//	return options.packetBuilder
+//}
 
-func (options *Options) SetPacketBuilder(packetBuilder packet.IPacketBuilder) {
-	options.packetBuilder = packetBuilder
-}
+//func (options *Options) SetPacketBuilder(packetBuilder packet.IPacketBuilder) {
+//	options.packetBuilder = packetBuilder
+//}
 
 func (options *Options) GetConnDataType() int {
 	return options.connDataType
@@ -200,6 +204,36 @@ func (options *Options) GetDisconnectHeartbeatTimeout() time.Duration {
 
 func (options *Options) SetDisconnectHeartbeatTimeout(span time.Duration) {
 	options.disconnectHeartbeatTimeout = span
+}
+
+func (options *Options) GetPacketCompressType() packet.CompressType {
+	return options.packetCompressType
+}
+
+func (options *Options) SetPacketCompressType(ct packet.CompressType) {
+	if !packet.IsValidCompressType(ct) {
+		panic(fmt.Sprintf("compress type %v invalid", ct))
+	}
+	options.packetCompressType = ct
+}
+
+func (options *Options) GetPacketEncryptionType() packet.EncryptionType {
+	return options.packetEncryptionType
+}
+
+func (options *Options) SetPacketEncryptionType(et packet.EncryptionType) {
+	if !packet.IsValidEncryptionType(et) {
+		panic(fmt.Sprintf("encryptioin type %v invalid", et))
+	}
+	options.packetEncryptionType = et
+}
+
+func (options *Options) GetPacketCryptoKey() []byte {
+	return options.cryptoKey
+}
+
+func (options *Options) SetPacketCryptoKey(key []byte) {
+	options.cryptoKey = key
 }
 
 func WithNoDelay(noDelay bool) Option {
@@ -280,11 +314,11 @@ func WithPacketPool(packetPool packet.IPacketPool) Option {
 	}
 }
 
-func WithPacketBuilder(packetBuilder packet.IPacketBuilder) Option {
-	return func(options *Options) {
-		options.SetPacketBuilder(packetBuilder)
-	}
-}
+//func WithPacketBuilder(packetBuilder packet.IPacketBuilder) Option {
+//	return func(options *Options) {
+//		options.SetPacketBuilder(packetBuilder)
+//	}
+//}
 
 func WithConnDataType(typ int) Option {
 	return func(options *Options) {
@@ -319,5 +353,17 @@ func WithMinHeartbeatTimeSpan(span time.Duration) Option {
 func WithDisconnectHeartbeatTimeout(span time.Duration) Option {
 	return func(options *Options) {
 		options.SetDisconnectHeartbeatTimeout(span)
+	}
+}
+
+func WithPacketCompressType(ct packet.CompressType) Option {
+	return func(options *Options) {
+		options.SetPacketCompressType(ct)
+	}
+}
+
+func WithPacketEncryptionType(et packet.EncryptionType) Option {
+	return func(options *Options) {
+		options.SetPacketEncryptionType(et)
 	}
 }

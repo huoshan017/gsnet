@@ -21,12 +21,6 @@ const (
 	PacketSentAck      PacketType = 5
 )
 
-type EncryptionType int8
-
-const (
-	EncryptionNone EncryptionType = iota
-)
-
 // 内存管理类型
 type MemoryManagementType int8
 
@@ -39,6 +33,7 @@ const (
 type PacketOptions struct {
 	CType      CompressType
 	EType      EncryptionType
+	CryptoKey  []byte
 	PacketPool IPacketPool
 }
 
@@ -63,6 +58,12 @@ func (p *Packet) SetData(data *[]byte) {
 
 func (p Packet) MMType() MemoryManagementType {
 	return p.mType
+}
+
+func (p *Packet) Set(typ PacketType, mType MemoryManagementType, data *[]byte) {
+	p.typ = typ
+	p.mType = mType
+	p.data = data
 }
 
 // bytes包定义

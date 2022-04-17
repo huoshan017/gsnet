@@ -76,9 +76,9 @@ func (s *Server) init(options ...common.Option) {
 	if s.options.GetPacketPool() == nil {
 		s.options.SetPacketPool(packet.GetDefaultPacketPool())
 	}
-	if s.options.GetPacketBuilder() == nil {
-		s.options.SetPacketBuilder(packet.GetDefaultPacketBuilder())
-	}
+	//if s.options.GetPacketBuilder() == nil {
+	//	s.options.SetPacketBuilder(packet.GetDefaultPacketBuilder())
+	//}
 	s.acceptor = NewAcceptor(s.options)
 	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.GetErrChanLen())
 	s.ctx, s.cancel = context.WithCancel(context.Background())
