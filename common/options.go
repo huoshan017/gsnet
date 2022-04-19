@@ -2,6 +2,7 @@ package common
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/huoshan017/gsnet/packet"
@@ -9,23 +10,23 @@ import (
 
 // 选项结构
 type Options struct {
-	noDelay           bool
-	keepAlived        bool
-	keepAlivedPeriod  time.Duration
-	readTimeout       time.Duration
-	writeTimeout      time.Duration
-	tickSpan          time.Duration
-	dataProto         IDataProto
-	sendChanLen       int
-	recvChanLen       int
-	writeBuffSize     int
-	readBuffSize      int
-	connCloseWaitSecs int                // 連接關閉等待時間(秒)
-	packetPool        packet.IPacketPool // 包池
-	//packetBuilder              packet.IPacketBuilder // 包创建器
+	noDelay                    bool
+	keepAlived                 bool
+	keepAlivedPeriod           time.Duration
+	readTimeout                time.Duration
+	writeTimeout               time.Duration
+	tickSpan                   time.Duration
+	dataProto                  IDataProto
+	sendChanLen                int
+	recvChanLen                int
+	writeBuffSize              int
+	readBuffSize               int
+	connCloseWaitSecs          int                   // 連接關閉等待時間(秒)
+	packetPool                 packet.IPacketPool    // 包池
 	packetCompressType         packet.CompressType   // 包解压缩类型
 	packetEncryptionType       packet.EncryptionType // 包加解密类型
 	cryptoKey                  []byte                // 加解密key
+	rand                       *rand.Rand            // 随机数
 	connDataType               int                   // 连接数据结构类型
 	resendConfig               *ResendConfig         // 重发配置
 	useHeartbeat               bool                  // 使用心跳
@@ -236,6 +237,13 @@ func (options *Options) SetPacketCryptoKey(key []byte) {
 	options.cryptoKey = key
 }
 
+func (options *Options) GetRand() *rand.Rand {
+	if options.rand == nil {
+		options.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	return options.rand
+}
+
 func WithNoDelay(noDelay bool) Option {
 	return func(options *Options) {
 		options.SetNodelay(noDelay)
@@ -365,5 +373,11 @@ func WithPacketCompressType(ct packet.CompressType) Option {
 func WithPacketEncryptionType(et packet.EncryptionType) Option {
 	return func(options *Options) {
 		options.SetPacketEncryptionType(et)
+	}
+}
+
+func WithPacketCryptoKey(key []byte) Option {
+	return func(options *Options) {
+		options.SetPacketCryptoKey(key)
 	}
 }

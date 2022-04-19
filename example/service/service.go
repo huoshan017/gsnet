@@ -23,7 +23,7 @@ func (h *PlayerHandler) OnDisconnect(s common.ISession, err error) {
 }
 
 func (h *PlayerHandler) OnPacket(s common.ISession, p packet.IPacket) error {
-	return s.Send(*p.Data(), true)
+	return s.Send(p.Data(), true)
 }
 
 func (h *PlayerHandler) OnTick(s common.ISession, tick time.Duration) {

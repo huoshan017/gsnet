@@ -55,3 +55,8 @@ func NewGobMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapp
 func NewThriftMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
 	return NewMsgServer(newFunc, funcArgs, &codec.ThriftCodec{}, idMsgMapper, options...)
 }
+
+// NewMsgpackMsgServer create a msgpack message server
+func NewMsgpackMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+	return NewMsgServer(newFunc, funcArgs, &codec.MsgpackCodec{}, idMsgMapper, options...)
+}

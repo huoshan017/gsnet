@@ -55,7 +55,7 @@ func main() {
 						fmt.Println("conn ", no, " recv err: ", e)
 						break
 					}
-					e = conn.Send(packet.PacketNormalData, *pak.Data(), true)
+					e = conn.Send(packet.PacketNormalData, pak.Data(), true)
 					if e != nil {
 						conn.Close()
 						fmt.Println("conn ", no, " send err: ", e)

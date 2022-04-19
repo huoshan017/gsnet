@@ -6,10 +6,6 @@ import (
 	"github.com/huoshan017/gsnet/pool"
 )
 
-const (
-	DefaultPacketHeaderLen = 3
-)
-
 // pool for type `Packet`
 type DefaultPacketPool struct {
 	pool         *sync.Pool
@@ -41,7 +37,7 @@ func (p *DefaultPacketPool) Put(pak IPacket) {
 		return
 	}
 	if pak.MMType() == MemoryManagementPoolFrameworkFree || pak.MMType() == MemoryManagementPoolUserManualFree {
-		pool.GetBuffPool().Free(pak.Data())
+		pool.GetBuffPool().Free(pak.PData())
 	}
 	p.pool.Put(pak)
 }

@@ -37,6 +37,10 @@ github.com/v2pro/quokka v0.0.0-20171201153428-382cb39c6ee6 h1:hb7P11ytAQIcQ7Cq1u
 github.com/v2pro/quokka v0.0.0-20171201153428-382cb39c6ee6/go.mod h1:0VP5W9AFNVWU8C1QLNeVg8TvzoEkIHWZ4vxtxEVFWUY=
 github.com/v2pro/wombat v0.0.0-20180402055224-a56dbdcddef2 h1:g9qBO/hKkIHxSkyt0/I7R51pFxzVO1tNIUEwhV2yJ28=
 github.com/v2pro/wombat v0.0.0-20180402055224-a56dbdcddef2/go.mod h1:wen8nMxrRrUmXnRwH+3wGAW+hyYTHcOrTNhMpxyp/i0=
+github.com/vmihailenco/msgpack/v5 v5.3.5 h1:5gO0H1iULLWGhs2H5tbAHIZTV8/cYafcFOr9znI5mJU=
+github.com/vmihailenco/msgpack/v5 v5.3.5/go.mod h1:7xyJ9e+0+9SaZT0Wt1RGleJXzli6Q/V5KbhBonMG9jc=
+github.com/vmihailenco/tagparser/v2 v2.0.0 h1:y09buUbR+b5aycVFQs/g70pqKVZNBmxwAhO7/IwNM9g=
+github.com/vmihailenco/tagparser/v2 v2.0.0/go.mod h1:Wri+At7QHww0WTrCBeu4J6bNtoV6mEfg5OIWRZA9qds=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=

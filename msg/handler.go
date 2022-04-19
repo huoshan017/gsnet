@@ -172,7 +172,7 @@ func (d *msgHandlerClient) RegisterHandle(msgid MsgIdType, handle func(*MsgSessi
 }
 
 func (d *msgHandlerClient) OnPacket(s common.ISession, pak packet.IPacket) error {
-	msgid, msgobj, err := d.sess.splitIdAndMsg(*pak.Data())
+	msgid, msgobj, err := d.sess.splitIdAndMsg(pak.Data())
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec
 }
 
 func (d *msgHandlerServer) OnPacket(s common.ISession, pak packet.IPacket) error {
-	msgid, msgobj, err := d.sess.splitIdAndMsg(*pak.Data())
+	msgid, msgobj, err := d.sess.splitIdAndMsg(pak.Data())
 	if err != nil {
 		return err
 	}

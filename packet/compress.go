@@ -13,7 +13,7 @@ type CompressType int8
 
 const (
 	CompressNone   CompressType = iota
-	CompressZip    CompressType = 1
+	CompressZlib   CompressType = 1
 	CompressGzip   CompressType = 2
 	CompressSnappy CompressType = 3
 	CompressMax    CompressType = 4

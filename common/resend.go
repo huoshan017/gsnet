@@ -197,7 +197,7 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 		return 0
 	}
 
-	d := *pak.Data()
+	d := pak.Data()
 	n := (int16(d[0])<<8)&0x7f00 | int16(d[1]&0xff)
 
 	if rd.config.UseLockFree {

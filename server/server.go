@@ -76,9 +76,7 @@ func (s *Server) init(options ...common.Option) {
 	if s.options.GetPacketPool() == nil {
 		s.options.SetPacketPool(packet.GetDefaultPacketPool())
 	}
-	//if s.options.GetPacketBuilder() == nil {
-	//	s.options.SetPacketBuilder(packet.GetDefaultPacketBuilder())
-	//}
+
 	s.acceptor = NewAcceptor(s.options)
 	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.GetErrChanLen())
 	s.ctx, s.cancel = context.WithCancel(context.Background())
@@ -182,31 +180,48 @@ func (s *Server) handleHandshake(conn common.IConn, basePacketHandler common.IBa
 
 func (s *Server) handleConn(c net.Conn) {
 	if len(s.sessMap) >= s.options.GetConnMaxCount() {
+		c.Close()
 		log.Info("gsnet: connection to server is maximum")
 		return
 	}
 
-	var conn common.IConn
-	var resendData *common.ResendData
+	var (
+		conn          common.IConn
+		resendData    *common.ResendData
+		packetBuilder *common.DefaultPacketBuilder
+	)
+
+	// 创建连接
 	switch s.options.GetConnDataType() {
 	case 1:
 		conn = common.NewConn(c, s.options.Options)
 	default:
+		packetBuilder = common.NewDefaultPacketBuilder(&s.options.Options)
 		resendConfig := s.options.GetResendConfig()
 		if resendConfig != nil {
 			resendData = common.NewResendData(resendConfig)
-			conn = common.NewConn2UseResend(c, resendData, s.options.Options)
+			conn = common.NewConn2UseResend(c, packetBuilder, resendData, &s.options.Options)
 		} else {
-			conn = common.NewConn2(c, s.options.Options)
+			conn = common.NewConn2(c, packetBuilder, &s.options.Options)
 		}
 	}
 
-	basePacketHandler := common.NewDefaultBasePacketHandler(false, conn, func() common.IResendEventHandler {
+	// 创建包创建器参数获取者
+	var getter common.IPacketBuilderArgsGetter
+	if packetBuilder != nil {
+		getter = &packetBuilderArgsGetter{packetBuilder}
+	}
+
+	// 类型的指针值为空，其包含的接口类型的值不一定为空
+	resendEventHandler := func() common.IResendEventHandler {
 		if resendData == nil {
 			return nil
 		}
 		return resendData
-	}(), &s.options.Options)
+	}()
+
+	// 创建基础包处理器
+	basePacketHandler := common.NewDefaultBasePacketHandler4Server(conn, getter, resendEventHandler, &s.options.Options)
 
 	// 先讓連接跑起來
 	conn.Run()
@@ -315,4 +330,12 @@ func (s *Server) handleClose(err *sessionCloseInfo) {
 		s.waitWg.Done()
 		log.Info("handleClose sess count ", len(s.sessMap), ", sessionId: ", err.sessionId)
 	}
+}
+
+type packetBuilderArgsGetter struct {
+	getter *common.DefaultPacketBuilder
+}
+
+func (h *packetBuilderArgsGetter) Get() []any {
+	return []any{h.getter.GetCryptoKey()}
 }

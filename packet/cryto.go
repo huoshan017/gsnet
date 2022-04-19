@@ -5,7 +5,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/des"
-	"errors"
+	"fmt"
 	"math/rand"
 )
 
@@ -81,16 +81,6 @@ func (c *AesDecrypter) Decrypt(data []byte) ([]byte, error) {
 	return orig, nil
 }
 
-var keyletters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")
-
-func GenAesKey() []byte {
-	b := make([]byte, 16)
-	for i := range b {
-		b[i] = keyletters[rand.Intn(len(keyletters))]
-	}
-	return b
-}
-
 func pkcs7Padding(cipherText []byte, blockSize int) []byte {
 	padding := blockSize - len(cipherText)%blockSize
 	padText := bytes.Repeat([]byte{byte(padding)}, padding)
@@ -123,7 +113,7 @@ func NewDesEncrypter(key []byte) (*DesEncrypter, error) {
 func (c *DesEncrypter) Encrypt(data []byte) ([]byte, error) {
 	data = zeroPadding(data, c.blockSize)
 	if len(data)%c.blockSize != 0 {
-		return nil, errors.New("gsnet: crypto des need a multiple of the blocksize")
+		return nil, fmt.Errorf("crypto des need a multiple of the blocksize, len data %v, block size %v", len(data), c.blockSize)
 	}
 	out := make([]byte, len(data))
 	dst := out
@@ -132,6 +122,7 @@ func (c *DesEncrypter) Encrypt(data []byte) ([]byte, error) {
 		data = data[c.blockSize:]
 		dst = dst[c.blockSize:]
 	}
+	//log.Infof("gsnet: des encrypted get data %v", out)
 	return out, nil
 }
 
@@ -153,10 +144,11 @@ func NewDesDecrypter(key []byte) (*DesDecrypter, error) {
 }
 
 func (c *DesDecrypter) Decrypt(data []byte) ([]byte, error) {
+	//log.Infof("gsnet: des to descrypt data %v", data)
 	out := make([]byte, len(data))
 	dst := out
 	if len(data)%c.blockSize != 0 {
-		return nil, errors.New("gsnet: crypto des input not full blocks")
+		return nil, fmt.Errorf("crypto des input not full blocks, len data %v, block size %v", len(data), c.blockSize)
 	}
 	for len(data) > 0 {
 		c.block.Decrypt(dst, data[:c.blockSize])
@@ -164,14 +156,6 @@ func (c *DesDecrypter) Decrypt(data []byte) ([]byte, error) {
 		dst = dst[c.blockSize:]
 	}
 	return zeroUnpadding(out), nil
-}
-
-func GenDesKey() []byte {
-	b := make([]byte, 8)
-	for i := range b {
-		b[i] = keyletters[rand.Intn(len(keyletters))]
-	}
-	return b
 }
 
 func zeroPadding(cipherText []byte, blockSize int) []byte {
@@ -184,4 +168,32 @@ func zeroUnpadding(origData []byte) []byte {
 	return bytes.TrimFunc(origData, func(r rune) bool {
 		return r == rune(0)
 	})
+}
+
+var keyletters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")
+
+func GenAesKey(r *rand.Rand) []byte {
+	b := make([]byte, 16)
+	for i := range b {
+		b[i] = keyletters[r.Intn(len(keyletters))]
+	}
+	return b
+}
+
+func GenDesKey(r *rand.Rand) []byte {
+	b := make([]byte, 8)
+	for i := range b {
+		b[i] = keyletters[r.Intn(len(keyletters))]
+	}
+	return b
+}
+
+func GenCryptoKey(et EncryptionType, r *rand.Rand) []byte {
+	if et == EncryptionAes {
+		return GenAesKey(r)
+	} else if et == EncryptionDes {
+		return GenDesKey(r)
+	} else {
+		return nil
+	}
 }

@@ -41,28 +41,29 @@ func (sd *wrapperSendData) recycle() {
 // Conn2 struct
 type Conn2 struct {
 	conn               net.Conn
-	options            Options
+	options            *Options
 	writer             *bufio.Writer
 	reader             *bufio.Reader
-	recvCh             chan packet.IPacket   // 缓存从网络接收的数据，对应一个接收者一个发送者
-	sendCh             chan wrapperSendData  // 缓存发往网络的数据，对应一个接收者一个发送者
-	closeCh            chan struct{}         // 关闭通道
-	closed             int32                 // 是否关闭
-	errCh              chan error            // 错误通道
-	errWriteCh         chan error            // 写错误通道
-	ticker             *time.Ticker          // 定时器
-	packetBuilder      packet.IPacketBuilder // 包创建器
-	resendEventHandler IResendEventHandler   // 重发事件处理器
+	recvCh             chan packet.IPacket  // 缓存从网络接收的数据，对应一个接收者一个发送者
+	sendCh             chan wrapperSendData // 缓存发往网络的数据，对应一个接收者一个发送者
+	closeCh            chan struct{}        // 关闭通道
+	closed             int32                // 是否关闭
+	errCh              chan error           // 错误通道
+	errWriteCh         chan error           // 写错误通道
+	ticker             *time.Ticker         // 定时器
+	packetBuilder      IPacketBuilder       // 包创建器
+	resendEventHandler IResendEventHandler  // 重发事件处理器
 }
 
 // NewConn2WithResend create Conn2 instance use resend
-func NewConn2UseResend(conn net.Conn, resend IResendEventHandler, options Options) *Conn2 {
+func NewConn2UseResend(conn net.Conn, packetBuilder IPacketBuilder, resend IResendEventHandler, options *Options) *Conn2 {
 	c := &Conn2{
 		conn:               conn,
 		options:            options,
 		closeCh:            make(chan struct{}),
 		errCh:              make(chan error, 1),
 		errWriteCh:         make(chan error, 1),
+		packetBuilder:      packetBuilder,
 		resendEventHandler: resend,
 	}
 
@@ -78,19 +79,14 @@ func NewConn2UseResend(conn net.Conn, resend IResendEventHandler, options Option
 		c.reader = bufio.NewReaderSize(conn, c.options.readBuffSize)
 	}
 
-	if c.options.recvChanLen <= 0 {
-		c.options.recvChanLen = DefaultConnRecvChanLen
+	if c.options.GetRecvChanLen() <= 0 {
+		c.options.SetRecvChanLen(DefaultConnRecvChanLen)
+	}
+	if c.options.GetSendChanLen() <= 0 {
+		c.options.SetSendChanLen(DefaultConnSendChanLen)
 	}
 	c.recvCh = make(chan packet.IPacket, c.options.recvChanLen)
-
-	if c.options.sendChanLen <= 0 {
-		c.options.sendChanLen = DefaultConnSendChanLen
-	}
 	c.sendCh = make(chan wrapperSendData, c.options.sendChanLen)
-
-	if c.options.dataProto == nil {
-		c.options.dataProto = &DefaultDataProto{}
-	}
 
 	if tcpConn, ok := c.conn.(*net.TCPConn); ok {
 		if c.options.noDelay {
@@ -103,12 +99,6 @@ func NewConn2UseResend(conn net.Conn, resend IResendEventHandler, options Option
 			tcpConn.SetKeepAlivePeriod(c.options.keepAlivedPeriod)
 		}
 	}
-
-	c.packetBuilder = NewDefaultPacketBuilder(packet.PacketOptions{
-		CType:      c.options.GetPacketCompressType(),
-		EType:      c.options.GetPacketEncryptionType(),
-		PacketPool: packet.GetDefaultPacketPool(),
-	})
 
 	var tickSpan = c.options.GetTickSpan()
 	if tickSpan > 0 && tickSpan < MinConnTick {
@@ -128,8 +118,8 @@ func NewConn2UseResend(conn net.Conn, resend IResendEventHandler, options Option
 }
 
 // NewConn2 create a Conn2 instance
-func NewConn2(conn net.Conn, options Options) *Conn2 {
-	return NewConn2UseResend(conn, nil, options)
+func NewConn2(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Conn2 {
+	return NewConn2UseResend(conn, packetBuilder, nil, options)
 }
 
 // Conn2.LocalAddr get local address for connection
@@ -279,9 +269,7 @@ func (c *Conn2) closeWait(secs int) {
 	defer func() {
 		// 清理接收通道内存池分配的内存
 		for d := range c.recvCh {
-			if d.MMType() == packet.MemoryManagementPoolUserManualFree {
-				pool.GetBuffPool().Free(d.Data())
-			}
+			c.options.GetPacketPool().Put(d)
 		}
 	}()
 
@@ -297,6 +285,7 @@ func (c *Conn2) closeWait(secs int) {
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
+	c.packetBuilder.Close()
 	close(c.closeCh)
 	close(c.sendCh)
 }

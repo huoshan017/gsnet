@@ -54,12 +54,9 @@ func (h *testClientUseRunHandler) OnDisconnect(sess common.ISession, err error) 
 }
 
 func (h *testClientUseRunHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
-	var (
-		e error
-	)
-	data := *packet.Data()
+	data := packet.Data()
 	if !bytes.Equal(data, h.sentList[0]) {
-		err := fmt.Errorf("compare err: %v", e)
+		err := fmt.Errorf("compare err with	  %v\r\n			%v", data, h.sentList[0])
 		if h.t != nil {
 			panic(err)
 		} else if h.b != nil {
@@ -177,7 +174,7 @@ func (h *testClientUseUpdateHandler) OnPacket(sess common.ISession, packet packe
 		o bool
 		e error
 	)
-	data := *packet.Data()
+	data := packet.Data()
 	if o, e = h.sendDataList.compareData(data, true); !o {
 		err := fmt.Errorf("compare err: %v", e)
 		if h.t != nil {
@@ -185,7 +182,7 @@ func (h *testClientUseUpdateHandler) OnPacket(sess common.ISession, packet packe
 		}
 	}
 	h.compareNum += 1
-	if h.compareNum >= 1000 {
+	if h.compareNum >= 100 {
 		sess.Close()
 	}
 	h.t.Logf("compared %v", h.compareNum)
@@ -237,7 +234,7 @@ func TestClientUseUpdate(t *testing.T) {
 			t.Logf("test client update err %v", err)
 			break
 		}
-		d := []byte("abcdefghijklmnopqrstuvwxyz0123456789")
+		d := randBytes(30)
 		err = tc.Send(d, false)
 		if err != nil {
 			t.Logf("test client send err: %+v", err)

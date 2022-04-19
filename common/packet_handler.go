@@ -27,6 +27,10 @@ type IBasePacketHandler interface {
 	OnUpdateHandle() error
 }
 
+type IPacketEventHandler interface {
+	OnHandshakeDone(args ...any) error
+}
+
 type HandlerState int32
 
 const (
@@ -36,18 +40,33 @@ const (
 )
 
 type DefaultBasePacketHandler struct {
-	cors     bool
-	conn     IConn
-	resend   IResendEventHandler
-	options  *Options
-	lastTime time.Time
-	state    HandlerState
+	cors         bool
+	conn         IConn
+	eventHandler IPacketEventHandler
+	getter       IPacketBuilderArgsGetter
+	resend       IResendEventHandler
+	options      *Options
+	lastTime     time.Time
+	state        HandlerState
 }
 
-func NewDefaultBasePacketHandler(cors bool, conn IConn, resend IResendEventHandler, options *Options) *DefaultBasePacketHandler {
+func NewDefaultBasePacketHandler4Client(conn IConn, eventHandler IPacketEventHandler, resend IResendEventHandler, options *Options) *DefaultBasePacketHandler {
 	return &DefaultBasePacketHandler{
-		cors:     cors,
+		cors:         true,
+		conn:         conn,
+		eventHandler: eventHandler,
+		resend:       resend,
+		options:      options,
+		lastTime:     time.Now(),
+		state:        HandlerStateNotBegin,
+	}
+}
+
+func NewDefaultBasePacketHandler4Server(conn IConn, getter IPacketBuilderArgsGetter, resend IResendEventHandler, options *Options) *DefaultBasePacketHandler {
+	return &DefaultBasePacketHandler{
+		cors:     false,
 		conn:     conn,
+		getter:   getter,
 		resend:   resend,
 		options:  options,
 		lastTime: time.Now(),
@@ -83,7 +102,7 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 			err = ErrBasePacketHandlerServerCantRecvHandshakeAck
 		} else {
 			h.state = HandlerStateNormal
-			data := *pak.Data()
+			data := pak.Data()
 			ct := packet.CompressType(data[0])
 			et := packet.EncryptionType(data[1])
 			h.options.SetPacketCompressType(ct)
@@ -92,6 +111,13 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 			if l > 0 {
 				key := data[3 : 3+l]
 				h.options.SetPacketCryptoKey(key)
+				if h.eventHandler != nil {
+					h.eventHandler.OnHandshakeDone(ct, et, key)
+					log.Infof("handshake ack, compress type %v, encryption type %v, crypto key %v", ct, et, key)
+				}
+			} else {
+				h.eventHandler.OnHandshakeDone(ct, et)
+				log.Infof("handshake ack, compress type %v, encryption type %v", ct, et)
 			}
 			res = 2
 		}
@@ -161,7 +187,7 @@ func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 			}
 		}
 	case HandlerStateNormal:
-		if h.options.IsUseHeartbeat() {
+		if h.cors && h.options.IsUseHeartbeat() {
 			// heartbeat timeout to disconnect
 			disconnectTimeout := h.options.GetDisconnectHeartbeatTimeout()
 			if disconnectTimeout <= 0 {
@@ -205,18 +231,24 @@ func (h *DefaultBasePacketHandler) sendHandshake() error {
 }
 
 func (h *DefaultBasePacketHandler) sendHandshakeAck() error {
+	if h.getter == nil {
+		return nil
+	}
 	ct := h.options.GetPacketCompressType()
 	et := h.options.GetPacketEncryptionType()
-	var key []byte
-	if et == packet.EncryptionAes {
-		key = h.options.GetPacketCryptoKey()
-	} else if et == packet.EncryptionDes {
-		key = h.options.GetPacketCryptoKey()
+	args := h.getter.Get()
+	if len(args) < 1 {
+		return errors.New("gsnet: packet builder arguments not enough")
 	}
+	key, o := args[0].([]byte)
+	if !o {
+		return errors.New("gsnet: packet builder argument crypto key type cast failed")
+	}
+	log.Infof("send compress type %v, encryption type %v, key %v", ct, et, key)
 	data := []byte{
-		byte(ct),
-		byte(et),
-		byte(len(key)),
+		byte(ct),       // compress type
+		byte(et),       // encryption type
+		byte(len(key)), // crypto key
 	}
 	data = append(data, key...)
 	return h.conn.Send(packet.PacketHandshakeAck, data, false)

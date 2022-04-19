@@ -15,7 +15,7 @@ import (
 
 const (
 	connDataType = 0 // 连接数据类型
-	testAddress  = "127.0.0.1:9999"
+	testAddress  = "127.0.0.1:9998"
 )
 
 type sendDataInfo struct {
@@ -118,7 +118,7 @@ func (h *testClientHandler) OnPacket(sess common.ISession, packet packet.IPacket
 		o bool
 		e error
 	)
-	data := *packet.Data()
+	data := packet.Data()
 	if o, e = h.sendDataList.compareData(data, true); !o {
 		err := fmt.Errorf("compare err: %v", e)
 		if h.t != nil {
@@ -127,7 +127,7 @@ func (h *testClientHandler) OnPacket(sess common.ISession, packet packet.IPacket
 			panic(err)
 		}
 	}
-	h.t.Logf("testClientHandler.OnPacket compared %v", data)
+	h.t.Logf("session %v  OnPacket compared %v", sess.GetId(), data)
 	return nil
 }
 
@@ -208,9 +208,9 @@ func (h *testServerHandler) OnDisconnect(sess common.ISession, err error) {
 
 func (h *testServerHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
 	if h.t != nil {
-		h.t.Logf("testServerHandler.OnPacket packet %v", *packet.Data())
+		h.t.Logf("testServerHandler.OnPacket packet %v", packet.Data())
 	}
-	err := sess.Send(*packet.Data(), true)
+	err := sess.Send(packet.Data(), true)
 	if err != nil {
 		str := fmt.Sprintf("OnData with session %v send err: %v", sess.GetId(), err)
 		if h.state == 1 {
@@ -245,7 +245,7 @@ func createTestServer(t *testing.T, state int32) *server.Server {
 		common.WithWriteBuffSize(5*4096),
 		common.WithConnDataType(connDataType),
 		common.WithPacketCompressType(packet.CompressSnappy),
-		common.WithPacketEncryptionType(packet.EncryptionAes),
+		common.WithPacketEncryptionType(packet.EncryptionDes),
 	)
 }
 
@@ -277,11 +277,12 @@ func createBenchmarkServerWithHandler(b *testing.B, state int32) *server.Server 
 }
 
 var letters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")
+var ran = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func randBytes(n int) []byte {
 	b := make([]byte, n)
 	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
+		b[i] = letters[ran.Intn(len(letters))]
 	}
 	return b
 }

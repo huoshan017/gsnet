@@ -30,11 +30,23 @@ const (
 	MemoryManagementPoolUserManualFree = 2    // 内存池分配使用者手动释放
 )
 
-type PacketOptions struct {
-	CType      CompressType
-	EType      EncryptionType
-	CryptoKey  []byte
-	PacketPool IPacketPool
+// bytes包定义
+type BytesPacket []byte
+
+func (p BytesPacket) Type() PacketType {
+	return PacketNormalData
+}
+
+func (p BytesPacket) Data() []byte {
+	return p
+}
+
+func (p *BytesPacket) PData() *[]byte {
+	return (*[]byte)(p)
+}
+
+func (p BytesPacket) MMType() MemoryManagementType {
+	return MemoryManagementSystemGC
 }
 
 // 基础包结构
@@ -42,18 +54,23 @@ type Packet struct {
 	typ   PacketType           // 类型
 	mType MemoryManagementType // 内存管理类型
 	data  *[]byte
+	data2 []byte
 }
 
 func (p Packet) Type() PacketType {
 	return p.typ
 }
 
-func (p Packet) Data() *[]byte {
+func (p Packet) PData() *[]byte {
 	return p.data
 }
 
-func (p *Packet) SetData(data *[]byte) {
-	p.data = data
+func (p Packet) Data() []byte {
+	if p.mType == MemoryManagementSystemGC {
+		return p.data2
+	} else {
+		return *p.data
+	}
 }
 
 func (p Packet) MMType() MemoryManagementType {
@@ -66,17 +83,8 @@ func (p *Packet) Set(typ PacketType, mType MemoryManagementType, data *[]byte) {
 	p.data = data
 }
 
-// bytes包定义
-type BytesPacket []byte
-
-func (p BytesPacket) Type() PacketType {
-	return PacketNormalData
-}
-
-func (p *BytesPacket) Data() *[]byte {
-	return (*[]byte)(p)
-}
-
-func (p BytesPacket) MMType() MemoryManagementType {
-	return MemoryManagementSystemGC
+func (p *Packet) Set2(typ PacketType, mType MemoryManagementType, data []byte) {
+	p.typ = typ
+	p.mType = MemoryManagementSystemGC
+	p.data2 = data
 }

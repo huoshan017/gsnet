@@ -28,18 +28,18 @@ func main() {
 		return
 	}
 	player_num := flag.Int("n", 1, "player num set")
-	send_num := flag.Int("s", 1, "send num set")
+	//send_num := flag.Int("s", 1, "send num set")
 	flag.Parse()
 
 	addr := *ip_str + ":" + *port_str
-	data := []byte(test_string)
+	//data := []byte(test_string)
 	rand.Seed(time.Now().Unix())
 	for n := 1; n <= *player_num; n++ {
 		go func(no int) {
 			var options common.Options
 			options.SetDataProto(&common.DefaultDataProto{})
-			conn := client.NewConnector(&options)
-			err := conn.Connect(addr)
+			connector := client.NewConnector(&options)
+			conn, err := connector.Connect(addr)
 			if err != nil {
 				fmt.Println("connector Connect err: ", err)
 				return
@@ -47,7 +47,7 @@ func main() {
 			fmt.Println("connected: ", addr)
 			defer conn.Close()
 
-			comp_num := int32(0)
+			/*comp_num := int32(0)
 			for i := 0; i < *send_num; i++ {
 				s := rand.Intn(len(data))
 				e := rand.Intn(len(data))
@@ -80,7 +80,7 @@ func main() {
 
 				comp_num += 1
 				time.Sleep(time.Microsecond)
-			}
+			}*/
 		}(n)
 	}
 

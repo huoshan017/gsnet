@@ -73,3 +73,8 @@ func NewGobMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgCli
 func NewThriftMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
 	return NewMsgClient(&codec.ThriftCodec{}, idMsgMapper, options...)
 }
+
+// NewMsgpackMsgClient create msgpack message client
+func NewMsgpackMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+	return NewMsgClient(&codec.MsgpackCodec{}, idMsgMapper, options...)
+}
