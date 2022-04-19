@@ -11,8 +11,8 @@ import (
 
 var (
 	r      = rand.New(rand.NewSource(time.Now().UnixNano()))
-	aesKey = GenAesKey(r)
-	desKey = GenDesKey(r)
+	aesKey = GenAesKeyDefault(r)
+	desKey = GenDesKeyDefault(r)
 )
 
 func testCrypto(encrypter IEncrypter, decrypter IDecrypter, t *testing.T, b *testing.B) {

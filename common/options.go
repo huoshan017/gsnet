@@ -8,6 +8,8 @@ import (
 	"github.com/huoshan017/gsnet/packet"
 )
 
+type GenCryptoKeyFunc func(*rand.Rand) []byte
+
 // 选项结构
 type Options struct {
 	noDelay                    bool
@@ -25,7 +27,7 @@ type Options struct {
 	packetPool                 packet.IPacketPool    // 包池
 	packetCompressType         packet.CompressType   // 包解压缩类型
 	packetEncryptionType       packet.EncryptionType // 包加解密类型
-	cryptoKey                  []byte                // 加解密key
+	genCryptoKeyFunc           GenCryptoKeyFunc      // 产生密钥的函数
 	rand                       *rand.Rand            // 随机数
 	connDataType               int                   // 连接数据结构类型
 	resendConfig               *ResendConfig         // 重发配置
@@ -229,12 +231,12 @@ func (options *Options) SetPacketEncryptionType(et packet.EncryptionType) {
 	options.packetEncryptionType = et
 }
 
-func (options *Options) GetPacketCryptoKey() []byte {
-	return options.cryptoKey
+func (options *Options) GetGenCryptoKeyFunc() GenCryptoKeyFunc {
+	return options.genCryptoKeyFunc
 }
 
-func (options *Options) SetPacketCryptoKey(key []byte) {
-	options.cryptoKey = key
+func (options *Options) SetGenCryptoKeyFunc(fun GenCryptoKeyFunc) {
+	options.genCryptoKeyFunc = fun
 }
 
 func (options *Options) GetRand() *rand.Rand {
@@ -376,8 +378,8 @@ func WithPacketEncryptionType(et packet.EncryptionType) Option {
 	}
 }
 
-func WithPacketCryptoKey(key []byte) Option {
+func WithGenCryptoKeyFunc(fun GenCryptoKeyFunc) Option {
 	return func(options *Options) {
-		options.SetPacketCryptoKey(key)
+		options.SetGenCryptoKeyFunc(fun)
 	}
 }

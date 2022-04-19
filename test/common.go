@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -278,11 +279,16 @@ func createBenchmarkServerWithHandler(b *testing.B, state int32) *server.Server 
 
 var letters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")
 var ran = rand.New(rand.NewSource(time.Now().UnixNano()))
+var lettersLen = len(letters)
+var locker sync.Mutex
 
 func randBytes(n int) []byte {
 	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[ran.Intn(len(letters))]
+	for i := 0; i < len(b); i++ {
+		locker.Lock()
+		r := ran.Int31n(int32(lettersLen))
+		locker.Unlock()
+		b[i] = letters[r]
 	}
 	return b
 }

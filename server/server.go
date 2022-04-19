@@ -207,9 +207,9 @@ func (s *Server) handleConn(c net.Conn) {
 	}
 
 	// 创建包创建器参数获取者
-	var getter common.IPacketBuilderArgsGetter
+	var argsGetter common.IPacketBuilderArgsGetter
 	if packetBuilder != nil {
-		getter = &packetBuilderArgsGetter{packetBuilder}
+		argsGetter = &packetBuilderArgsGetter{packetBuilder}
 	}
 
 	// 类型的指针值为空，其包含的接口类型的值不一定为空
@@ -221,7 +221,7 @@ func (s *Server) handleConn(c net.Conn) {
 	}()
 
 	// 创建基础包处理器
-	basePacketHandler := common.NewDefaultBasePacketHandler4Server(conn, getter, resendEventHandler, &s.options.Options)
+	basePacketHandler := common.NewDefaultBasePacketHandler4Server(conn, argsGetter, resendEventHandler, &s.options.Options)
 
 	// 先讓連接跑起來
 	conn.Run()

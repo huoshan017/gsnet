@@ -110,7 +110,6 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 			l := data[2]
 			if l > 0 {
 				key := data[3 : 3+l]
-				h.options.SetPacketCryptoKey(key)
 				if h.eventHandler != nil {
 					h.eventHandler.OnHandshakeDone(ct, et, key)
 					log.Infof("handshake ack, compress type %v, encryption type %v, crypto key %v", ct, et, key)

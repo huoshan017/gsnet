@@ -193,16 +193,16 @@ type msgHandlerServer struct {
 }
 
 func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerServer {
-	proxy := &msgHandlerServer{
+	server := &msgHandlerServer{
 		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper),
 		sessionHandler:   sessionHandler,
 	}
-	proxy.msgHandlerCommon.SetConnectHandle(sessionHandler.OnConnected)
-	proxy.msgHandlerCommon.SetDisconnectHandle(sessionHandler.OnDisconnected)
-	proxy.msgHandlerCommon.SetTickHandle(sessionHandler.OnTick)
-	proxy.msgHandlerCommon.SetErrorHandle(sessionHandler.OnError)
-	proxy.msgHandle = sessionHandler.OnMsgHandle
-	return proxy
+	server.msgHandlerCommon.SetConnectHandle(sessionHandler.OnConnected)
+	server.msgHandlerCommon.SetDisconnectHandle(sessionHandler.OnDisconnected)
+	server.msgHandlerCommon.SetTickHandle(sessionHandler.OnTick)
+	server.msgHandlerCommon.SetErrorHandle(sessionHandler.OnError)
+	server.msgHandle = sessionHandler.OnMsgHandle
+	return server
 }
 
 func (d *msgHandlerServer) OnPacket(s common.ISession, pak packet.IPacket) error {

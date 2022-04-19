@@ -172,7 +172,7 @@ func zeroUnpadding(origData []byte) []byte {
 
 var keyletters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")
 
-func GenAesKey(r *rand.Rand) []byte {
+func GenAesKeyDefault(r *rand.Rand) []byte {
 	b := make([]byte, 16)
 	for i := range b {
 		b[i] = keyletters[r.Intn(len(keyletters))]
@@ -180,7 +180,7 @@ func GenAesKey(r *rand.Rand) []byte {
 	return b
 }
 
-func GenDesKey(r *rand.Rand) []byte {
+func GenDesKeyDefault(r *rand.Rand) []byte {
 	b := make([]byte, 8)
 	for i := range b {
 		b[i] = keyletters[r.Intn(len(keyletters))]
@@ -188,11 +188,11 @@ func GenDesKey(r *rand.Rand) []byte {
 	return b
 }
 
-func GenCryptoKey(et EncryptionType, r *rand.Rand) []byte {
+func GenCryptoKeyDefault(et EncryptionType, r *rand.Rand) []byte {
 	if et == EncryptionAes {
-		return GenAesKey(r)
+		return GenAesKeyDefault(r)
 	} else if et == EncryptionDes {
-		return GenDesKey(r)
+		return GenDesKeyDefault(r)
 	} else {
 		return nil
 	}

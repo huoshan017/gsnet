@@ -40,10 +40,18 @@ func NewDefaultPacketBuilder(options *Options) *DefaultPacketBuilder {
 	pb := &DefaultPacketBuilder{
 		options: options,
 	}
+
+	encryptionType := options.GetPacketEncryptionType()
 	if pb.cryptoKey == nil {
-		pb.cryptoKey = packet.GenCryptoKey(options.GetPacketEncryptionType(), options.GetRand())
+		ran := options.GetRand() // options.GetRand() 不是线程安全的，不过这里是在同一goroutine中使用，不存在并发安全问题
+		fun := options.GetGenCryptoKeyFunc()
+		if fun != nil {
+			pb.cryptoKey = fun(ran)
+		} else {
+			pb.cryptoKey = packet.GenCryptoKeyDefault(encryptionType, ran)
+		}
 	}
-	if pb.Reset(options.GetPacketCompressType(), options.GetPacketEncryptionType(), pb.cryptoKey) != nil {
+	if pb.Reset(options.GetPacketCompressType(), encryptionType, pb.cryptoKey) != nil {
 		return nil
 	}
 	return pb

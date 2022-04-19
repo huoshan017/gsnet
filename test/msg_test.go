@@ -11,6 +11,7 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/msg"
+	"github.com/huoshan017/gsnet/packet"
 
 	"github.com/huoshan017/gsnet/test/tproto"
 )
@@ -28,8 +29,10 @@ var (
 )
 
 type testMsgConfig struct {
-	useHeartbeat bool
-	useResend    bool
+	useHeartbeat      bool
+	useResend         bool
+	useSnappyCompress bool
+	useAesCrypto      bool
 }
 
 func init() {
@@ -182,7 +185,7 @@ func (h *testPBMsgClientHandler) OnDisconnect(sess *msg.MsgSession, err error) {
 func (h *testPBMsgClientHandler) OnTick(sess *msg.MsgSession, tick time.Duration) {
 	if h.sn < sendCount {
 		var ping tproto.MsgPing
-		d := randBytes(100)
+		d := randBytes(50)
 		ping.Content = string(d)
 		err := sess.SendMsg(MsgIdPing, &ping)
 		if err != nil {
@@ -290,6 +293,12 @@ func newPBMsgServer2(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error
 	if config.useResend {
 		options = append(options, common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
 	}
+	if config.useSnappyCompress {
+		options = append(options, common.WithPacketCompressType(packet.CompressSnappy))
+	}
+	if config.useAesCrypto {
+		options = append(options, common.WithPacketEncryptionType(packet.EncryptionAes))
+	}
 	if config.useHeartbeat {
 		options = append(options, common.WithUseHeartbeat(true))
 	}
@@ -330,8 +339,8 @@ func testPBMsgClient(useResend bool, t *testing.T) {
 	t.Logf("client end")
 }
 
-func testPBMsgServer(useResend bool, t *testing.T) {
-	config := &testMsgConfig{useResend: useResend, useHeartbeat: true}
+func testPBMsgServer(useResend bool, useSnappyCompress bool, useAesCrypto bool, t *testing.T) {
+	config := &testMsgConfig{useResend: useResend, useSnappyCompress: useSnappyCompress, useAesCrypto: useAesCrypto, useHeartbeat: true}
 	s, err := newPBMsgServer2(config, t)
 	if err != nil {
 		t.Errorf("%v", err)
@@ -379,9 +388,17 @@ func TestPBMsgClientUseResend(t *testing.T) {
 }
 
 func TestPBMsgServer(t *testing.T) {
-	testPBMsgServer(false, t)
+	testPBMsgServer(false, false, false, t)
+}
+
+func TestPBMsgServerUseCompressAndEncryption(t *testing.T) {
+	testPBMsgServer(false, true, true, t)
 }
 
 func TestPBMsgServerUseResend(t *testing.T) {
-	testPBMsgServer(true, t)
+	testPBMsgServer(true, false, false, t)
+}
+
+func TestPBMsgServerUseCompressEncryptionAndResend(t *testing.T) {
+	testPBMsgServer(true, true, true, t)
 }
