@@ -1,6 +1,7 @@
 package test
 
 import (
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -125,10 +126,11 @@ func TestServer2(t *testing.T) {
 			t.Logf("client %v connected server", idx)
 			defer c.Close()
 
+			ran := rand.New(rand.NewSource(time.Now().UnixNano()))
 			ss := 0
 			for {
 				if ss < sendNum {
-					d := randBytes(100)
+					d := randBytes(100, ran)
 					err := c.Send(d, false)
 					if err != nil {
 						nn := atomic.AddInt32(&n, 1)

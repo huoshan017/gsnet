@@ -7,7 +7,8 @@ const (
 )
 
 var (
-	ErrBodyLenInvalid = errors.New("gsnet: receive body length too long")
+	ErrBodyLengthTooLong    = errors.New("gsnet: receive body length too long")
+	ErrHeaderLengthTooSmall = errors.New("gsnet: default packet header length too small")
 )
 
 type PacketType int8
@@ -29,6 +30,49 @@ const (
 	MemoryManagementPoolFrameworkFree  = 1    // 内存池分配由框架释放
 	MemoryManagementPoolUserManualFree = 2    // 内存池分配使用者手动释放
 )
+
+const (
+	DefaultPacketHeaderLen = 6
+)
+
+type CommonPacketHeader struct {
+	Type    PacketType
+	CType   CompressType
+	EType   EncryptionType
+	DataLen uint32
+}
+
+func (ph *CommonPacketHeader) SetType(typ PacketType) {
+	ph.Type = typ
+}
+
+func (ph *CommonPacketHeader) GetType() PacketType {
+	return ph.Type
+}
+
+func (ph *CommonPacketHeader) SetCompressType(typ CompressType) {
+	ph.CType = typ
+}
+
+func (ph *CommonPacketHeader) GetCompressType() CompressType {
+	return ph.CType
+}
+
+func (ph *CommonPacketHeader) SetEncryptionType(et EncryptionType) {
+	ph.EType = et
+}
+
+func (ph *CommonPacketHeader) GetEncryptionType() EncryptionType {
+	return ph.EType
+}
+
+func (ph *CommonPacketHeader) SetDataLength(length uint32) {
+	ph.DataLen = length
+}
+
+func (ph *CommonPacketHeader) GetDataLength() uint32 {
+	return ph.DataLen
+}
 
 // bytes包定义
 type BytesPacket []byte

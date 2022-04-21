@@ -188,7 +188,7 @@ func (s *Server) handleConn(c net.Conn) {
 	var (
 		conn          common.IConn
 		resendData    *common.ResendData
-		packetBuilder *common.DefaultPacketBuilder
+		packetBuilder *common.PacketBuilder
 	)
 
 	// 创建连接
@@ -196,7 +196,7 @@ func (s *Server) handleConn(c net.Conn) {
 	case 1:
 		conn = common.NewConn(c, s.options.Options)
 	default:
-		packetBuilder = common.NewDefaultPacketBuilder(&s.options.Options)
+		packetBuilder = common.NewPacketBuilder(&s.options.Options)
 		resendConfig := s.options.GetResendConfig()
 		if resendConfig != nil {
 			resendData = common.NewResendData(resendConfig)
@@ -333,7 +333,7 @@ func (s *Server) handleClose(err *sessionCloseInfo) {
 }
 
 type packetBuilderArgsGetter struct {
-	getter *common.DefaultPacketBuilder
+	getter *common.PacketBuilder
 }
 
 func (h *packetBuilderArgsGetter) Get() []any {

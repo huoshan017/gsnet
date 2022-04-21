@@ -157,12 +157,9 @@ func (c *Conn2) readLoop() {
 				break
 			}
 		}
-		//pak, err = c.options.GetPacketBuilder().DecodeReadFrom(c.reader)
 		pak, err = c.packetBuilder.DecodeReadFrom(c.reader)
 		if err == nil {
 			select {
-			// todo 是否一定需要接收goroutine也等待发送goroutine的错误
-			//case err = <-c.errWriteCh:
 			case <-c.closeCh:
 				err = c.genErrConnClosed()
 			case c.recvCh <- pak:
@@ -214,16 +211,12 @@ func (c *Conn2) writeLoop() {
 				b, pb, ba, pba := d.getData()
 
 				if b != nil {
-					//err = c.options.GetPacketBuilder().EncodeWriteTo(pt, b, c.writer)
 					err = c.packetBuilder.EncodeWriteTo(pt, b, c.writer)
 				} else if pb != nil {
-					//err = c.options.GetPacketBuilder().EncodeWriteTo(pt, *pb, c.writer)
 					err = c.packetBuilder.EncodeWriteTo(pt, *pb, c.writer)
 				} else if ba != nil {
-					//err = c.options.GetPacketBuilder().EncodeBytesArrayWriteTo(pt, ba, c.writer)
 					err = c.packetBuilder.EncodeBytesArrayWriteTo(pt, ba, c.writer)
 				} else if pba != nil {
-					//err = c.options.GetPacketBuilder().EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
 					err = c.packetBuilder.EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
 				}
 				if err == nil {

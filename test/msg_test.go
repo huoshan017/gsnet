@@ -3,6 +3,7 @@ package test
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -20,7 +21,7 @@ const (
 	MsgIdPing = msg.MsgIdType(1)
 	MsgIdPong = msg.MsgIdType(2)
 	sendCount = 5000
-	clientNum = 1000
+	clientNum = 2000
 )
 
 var (
@@ -54,7 +55,7 @@ func newPBMsgClient(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error)
 		options = append(options, common.WithUseHeartbeat(true))
 	}
 
-	c = msg.NewPBMsgClient(idMsgMapper, options...)
+	c = msg.NewProtoBufMsgClient(idMsgMapper, options...)
 
 	c.SetConnectHandle(func(sess *msg.MsgSession) {
 		t.Logf("connected")
@@ -66,10 +67,11 @@ func newPBMsgClient(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error)
 
 	var n int
 	var sendList [][]byte
+	ran := rand.New(rand.NewSource(time.Now().UnixNano()))
 	c.SetTickHandle(func(sess *msg.MsgSession, tick time.Duration) {
 		if n < sendCount {
 			var ping tproto.MsgPing
-			bs := randBytes(100)
+			bs := randBytes(100, ran)
 			sendList = append(sendList, bs)
 			ping.Content = string(bs)
 			err := c.Send(MsgIdPing, &ping)
@@ -156,7 +158,7 @@ func newPBMsgServer(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error)
 	if config.useHeartbeat {
 		options = append(options, common.WithUseHeartbeat(true))
 	}
-	s = msg.NewPBMsgServer(newTestPBMsgHandler, []any{t}, idMsgMapper, options...)
+	s = msg.NewProtoBufMsgServer(newTestPBMsgHandler, []any{t}, idMsgMapper, options...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
@@ -168,10 +170,11 @@ type testPBMsgClientHandler struct {
 	t        *testing.T
 	sn, rn   int
 	sendList [][]byte
+	ran      *rand.Rand
 }
 
 func newTestPBMsgClientHandler(t *testing.T, c *msg.MsgClient) *testPBMsgClientHandler {
-	return &testPBMsgClientHandler{t: t}
+	return &testPBMsgClientHandler{t: t, ran: rand.New(rand.NewSource(time.Now().UnixNano()))}
 }
 
 func (h *testPBMsgClientHandler) OnConnect(sess *msg.MsgSession) {
@@ -185,7 +188,7 @@ func (h *testPBMsgClientHandler) OnDisconnect(sess *msg.MsgSession, err error) {
 func (h *testPBMsgClientHandler) OnTick(sess *msg.MsgSession, tick time.Duration) {
 	if h.sn < sendCount {
 		var ping tproto.MsgPing
-		d := randBytes(50)
+		d := randBytes(50, h.ran)
 		ping.Content = string(d)
 		err := sess.SendMsg(MsgIdPing, &ping)
 		if err != nil {
@@ -193,6 +196,7 @@ func (h *testPBMsgClientHandler) OnTick(sess *msg.MsgSession, tick time.Duration
 		}
 		h.sendList = append(h.sendList, d)
 		h.sn += 1
+		//h.t.Logf("client send message %v", d)
 	}
 }
 
@@ -205,7 +209,6 @@ func (h *testPBMsgClientHandler) onMsgPong(sess *msg.MsgSession, msgobj any) err
 		err := fmt.Errorf("compare failed: %v to %v", []byte(m.Content), h.sendList[0])
 		panic(err)
 	}
-	//h.t.Logf("session %v received %v", sess.GetId(), m.Content)
 	h.sendList = h.sendList[1:]
 	h.rn += 1
 	if h.rn >= sendCount {
@@ -229,7 +232,7 @@ func newPBMsgClient2(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error
 	if config.useHeartbeat {
 		options = append(options, common.WithUseHeartbeat(true))
 	}
-	c = msg.NewPBMsgClient(idMsgMapper, options...)
+	c = msg.NewProtoBufMsgClient(idMsgMapper, options...)
 
 	handler := newTestPBMsgClientHandler(t, c)
 	c.SetConnectHandle(handler.OnConnect)
@@ -272,6 +275,7 @@ func (h *testPBMsgHandler2) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdTyp
 		if !o {
 			h.t.Errorf("server receive message must Ping")
 		}
+		//h.t.Logf("session %v OnMsgHandle %v", sess.GetId(), []byte(m.Content))
 		var rm tproto.MsgPong
 		rm.Content = m.Content
 		return sess.SendMsgNoCopy(MsgIdPong, &rm)
@@ -302,7 +306,7 @@ func newPBMsgServer2(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error
 	if config.useHeartbeat {
 		options = append(options, common.WithUseHeartbeat(true))
 	}
-	s = msg.NewPBMsgServer(newTestPBMsgHandler2, []any{t}, idMsgMapper, options...)
+	s = msg.NewProtoBufMsgServer(newTestPBMsgHandler2, []any{t}, idMsgMapper, options...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
@@ -340,7 +344,7 @@ func testPBMsgClient(useResend bool, t *testing.T) {
 }
 
 func testPBMsgServer(useResend bool, useSnappyCompress bool, useAesCrypto bool, t *testing.T) {
-	config := &testMsgConfig{useResend: useResend, useSnappyCompress: useSnappyCompress, useAesCrypto: useAesCrypto, useHeartbeat: true}
+	config := &testMsgConfig{useResend: useResend, useSnappyCompress: useSnappyCompress, useAesCrypto: useAesCrypto, useHeartbeat: false}
 	s, err := newPBMsgServer2(config, t)
 	if err != nil {
 		t.Errorf("%v", err)
@@ -361,7 +365,6 @@ func testPBMsgServer(useResend bool, useSnappyCompress bool, useAesCrypto bool, 
 		go func() {
 			c, err := newPBMsgClient2(config, t)
 			if err != nil {
-				//t.Errorf("%v", err)
 				wg.Done()
 				count := atomic.AddInt32(&remainCount, -1)
 				t.Logf("new protobuf message client err: %v, remain client %v", err, count)

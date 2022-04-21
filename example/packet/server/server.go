@@ -12,7 +12,6 @@ import (
 )
 
 type testServerHandler struct {
-	state int32 // 1 表示服务器模式  2 表示客户端模式
 }
 
 func newTestServerHandler(args ...any) common.ISessionEventHandler {
@@ -29,10 +28,10 @@ func (h *testServerHandler) OnDisconnect(sess common.ISession, err error) {
 }
 
 func (h *testServerHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
-	log.Infof("session %v OnPacket packet %v", sess.GetId(), packet.Data())
+	//log.Infof("session %v OnPacket packet %v", sess.GetId(), packet.Data())
 	err := sess.Send(packet.Data(), true)
 	if err != nil {
-		str := fmt.Sprintf("OnData with session %v send err: %v", sess.GetId(), err)
+		str := fmt.Sprintf("OnPacket with session %v send err: %v", sess.GetId(), err)
 		log.Infof(str)
 	}
 	return err
@@ -51,7 +50,7 @@ func createTestServer() *server.Server {
 		common.WithReadBuffSize(10*4096),
 		common.WithWriteBuffSize(5*4096),
 		common.WithPacketCompressType(packet.CompressSnappy),
-		common.WithPacketEncryptionType(packet.EncryptionDes),
+		common.WithPacketEncryptionType(packet.EncryptionAes),
 	)
 }
 

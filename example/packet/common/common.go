@@ -11,18 +11,14 @@ const (
 )
 
 type SendDataInfo struct {
-	list        [][]byte
-	num         int32
-	cnum        int32
-	numCh       chan int32
-	numChClosed bool
+	list [][]byte
+	cnum int32
 }
 
 func CreateSendDataInfo(cnum int32) *SendDataInfo {
 	return &SendDataInfo{
-		list:  make([][]byte, 0),
-		cnum:  cnum,
-		numCh: make(chan int32, 1),
+		list: make([][]byte, 0),
+		cnum: cnum,
 	}
 }
 
@@ -44,19 +40,4 @@ func (info *SendDataInfo) CompareData(data []byte, isForward bool) (bool, error)
 
 func (info *SendDataInfo) compareForward(toLock bool) {
 	info.list = info.list[1:]
-	info.num += 1
-	if !info.numChClosed && info.num >= info.cnum {
-		info.numCh <- info.num
-		close(info.numCh)
-		info.numChClosed = true
-	}
-}
-
-func (info *SendDataInfo) waitEnd() int32 {
-	num := <-info.numCh
-	return num
-}
-
-func (info *SendDataInfo) getComparedNum() int32 {
-	return info.num
 }

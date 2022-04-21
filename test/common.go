@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
-	"sync"
 	"testing"
 	"time"
 
@@ -75,13 +74,14 @@ type testClientHandler struct {
 	b            *testing.B
 	state        int32 // 1 客户端模式   2 服务器模式
 	sendDataList *sendDataInfo
+	ran          *rand.Rand
 }
 
 func newTestClientHandler(args ...any) common.ISessionEventHandler {
 	if len(args) < 2 {
 		panic("At least need 2 arguments")
 	}
-	h := &testClientHandler{}
+	h := &testClientHandler{ran: rand.New(rand.NewSource(time.Now().UnixNano()))}
 	var o bool
 	h.t, o = args[0].(*testing.T)
 	if !o {
@@ -133,7 +133,7 @@ func (h *testClientHandler) OnPacket(sess common.ISession, packet packet.IPacket
 }
 
 func (h *testClientHandler) OnTick(sess common.ISession, tick time.Duration) {
-	d := randBytes(100)
+	d := randBytes(100, h.ran)
 	err := sess.Send(d, false)
 	if err != nil {
 		if h.t != nil {
@@ -278,16 +278,12 @@ func createBenchmarkServerWithHandler(b *testing.B, state int32) *server.Server 
 }
 
 var letters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")
-var ran = rand.New(rand.NewSource(time.Now().UnixNano()))
 var lettersLen = len(letters)
-var locker sync.Mutex
 
-func randBytes(n int) []byte {
+func randBytes(n int, ran *rand.Rand) []byte {
 	b := make([]byte, n)
 	for i := 0; i < len(b); i++ {
-		locker.Lock()
 		r := ran.Int31n(int32(lettersLen))
-		locker.Unlock()
 		b[i] = letters[r]
 	}
 	return b

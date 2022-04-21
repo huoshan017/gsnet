@@ -13,3 +13,18 @@ type IPacketPool interface {
 	Get() IPacket
 	Put(IPacket)
 }
+
+type IPacketHeader interface {
+	SetType(PacketType)
+	GetType() PacketType
+	SetCompressType(CompressType)
+	GetCompressType() CompressType
+	SetEncryptionType(EncryptionType)
+	GetEncryptionType() EncryptionType
+	SetDataLength(uint32)
+	GetDataLength() uint32
+	Get(key string) any
+	Set(key string, data any)
+	FormatTo(buf []byte) error
+	UnformatFrom(buf []byte) error
+}

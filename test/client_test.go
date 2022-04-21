@@ -3,6 +3,7 @@ package test
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -17,13 +18,14 @@ type testClientUseRunHandler struct {
 	state      int32 // 1 客户端模式   2 服务器模式
 	sentList   [][]byte
 	compareNum int32
+	ran        *rand.Rand
 }
 
 func newTestClientUseRunHandler(args ...any) common.ISessionEventHandler {
 	if len(args) < 2 {
 		panic("At least need 2 arguments")
 	}
-	h := &testClientUseRunHandler{}
+	h := &testClientUseRunHandler{ran: rand.New(rand.NewSource(time.Now().UnixNano()))}
 	var o bool
 	h.t, o = args[0].(*testing.T)
 	if !o {
@@ -73,7 +75,7 @@ func (h *testClientUseRunHandler) OnPacket(sess common.ISession, packet packet.I
 }
 
 func (h *testClientUseRunHandler) OnTick(sess common.ISession, tick time.Duration) {
-	d := randBytes(100)
+	d := randBytes(100, h.ran)
 	err := sess.Send(d, false)
 	if err != nil {
 		if h.t != nil {
@@ -228,13 +230,14 @@ func TestClientUseUpdate(t *testing.T) {
 	}
 	defer tc.Close()
 
+	ran := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		err = tc.Update()
 		if err != nil {
 			t.Logf("test client update err %v", err)
 			break
 		}
-		d := randBytes(30)
+		d := randBytes(30, ran)
 		err = tc.Send(d, false)
 		if err != nil {
 			t.Logf("test client send err: %+v", err)

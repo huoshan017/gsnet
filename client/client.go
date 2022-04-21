@@ -46,14 +46,18 @@ func NewClient(handler common.ISessionEventHandler, options ...common.Option) *C
 func (c *Client) Connect(addr string) error {
 	connector := c.newConnector()
 	conn, err := connector.Connect(addr)
-	c.doConnectResult(conn, err)
+	if err == nil {
+		c.doConnectResult(conn)
+	}
 	return err
 }
 
 func (c *Client) ConnectWithTimeout(addr string, timeout time.Duration) error {
 	connector := c.newConnector()
 	conn, err := connector.ConnectWithTimeout(addr, timeout)
-	c.doConnectResult(conn, err)
+	if err == nil {
+		c.doConnectResult(conn)
+	}
 	return err
 }
 
@@ -61,7 +65,7 @@ func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(
 	connector := c.newConnector()
 	connector.ConnectAsync(addr, timeout, func(err error) {
 		callback(err)
-		c.doConnectResult(connector.GetConn(), err)
+		c.doConnectResult(connector.GetConn())
 	})
 }
 
@@ -70,9 +74,9 @@ func (c *Client) newConnector() *Connector {
 	return c.connector
 }
 
-func (c *Client) doConnectResult(con net.Conn, err error) {
+func (c *Client) doConnectResult(con net.Conn) {
 	var (
-		packetBuilder *common.DefaultPacketBuilder
+		packetBuilder *common.PacketBuilder
 		resend        *common.ResendData
 	)
 
@@ -80,7 +84,7 @@ func (c *Client) doConnectResult(con net.Conn, err error) {
 	case 1:
 		c.conn = common.NewConn(con, c.options.Options)
 	default:
-		packetBuilder = common.NewDefaultPacketBuilder(&c.options.Options)
+		packetBuilder = common.NewPacketBuilder(&c.options.Options)
 		resendConfig := c.options.GetResendConfig()
 		if resendConfig != nil {
 			resend = common.NewResendData(resendConfig)
@@ -94,7 +98,7 @@ func (c *Client) doConnectResult(con net.Conn, err error) {
 
 	c.sess = common.NewSessionNoId(c.conn)
 
-	// 创建包事件处理器
+	// 包事件处理器
 	var pakEvtHandler common.IPacketEventHandler
 	if packetBuilder != nil {
 		pakEvtHandler = &packetEventHandler{handler: packetBuilder}
@@ -114,8 +118,12 @@ func (c *Client) doConnectResult(con net.Conn, err error) {
 
 	// update模式下先把握手处理掉
 	if c.options.GetRunMode() == RunModeOnlyUpdate {
+		var (
+			res bool
+			err error
+		)
 		for {
-			res, err := c.handleHandshake(0)
+			res, err = c.handleHandshake(0)
 			if err != nil || res {
 				break
 			}
@@ -310,7 +318,7 @@ func (c *Client) handleErr(err error) error {
 }
 
 type packetEventHandler struct {
-	handler *common.DefaultPacketBuilder
+	handler *common.PacketBuilder
 }
 
 func (h *packetEventHandler) OnHandshakeDone(args ...any) error {
@@ -320,18 +328,25 @@ func (h *packetEventHandler) OnHandshakeDone(args ...any) error {
 		key []byte
 		o   bool
 	)
-	ct, o = args[0].(packet.CompressType)
-	if !o {
-		return errors.New("gsnet: handshake complete cast compress type failed")
+	lenArgs := len(args)
+	if lenArgs > 0 {
+		ct, o = args[0].(packet.CompressType)
+		if !o {
+			return errors.New("gsnet: handshake complete cast compress type failed")
+		}
+		if lenArgs > 1 {
+			et, o = args[1].(packet.EncryptionType)
+			if !o {
+				return errors.New("gsnet: handshake complete cast encryption type failed")
+			}
+			if lenArgs > 2 {
+				key, o = args[2].([]byte)
+				if !o {
+					return errors.New("gsnet: handshake complete cast crypto key type failed")
+				}
+			}
+		}
+		h.handler.Reset(ct, et, key)
 	}
-	et, o = args[1].(packet.EncryptionType)
-	if !o {
-		return errors.New("gsnet: handshake complete cast encryption type failed")
-	}
-	key, o = args[2].([]byte)
-	if !o {
-		return errors.New("gsnet: handshake complete cast crypto key type failed")
-	}
-	h.handler.Reset(ct, et, key)
 	return nil
 }

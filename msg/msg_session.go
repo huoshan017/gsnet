@@ -39,7 +39,6 @@ func (s *MsgSession) SendMsg(msgid MsgIdType, msg any) error {
 	if err != nil {
 		return err
 	}
-	//data := make([]byte, 4+len(msgdata))
 	pData := pool.GetBuffPool().Alloc(int32(4 + len(msgdata)))
 	genMsgIdHeader(msgid, *pData)
 	copy((*pData)[4:], msgdata[:])

@@ -51,9 +51,11 @@ func NewAesEncrypter(key []byte) (*AesEncrypter, error) {
 }
 
 func (c *AesEncrypter) Encrypt(data []byte) ([]byte, error) {
+	//log.Infof("AesEncrypter encrypt %v", data)
 	origData := pkcs7Padding(data, c.blockSize)
 	cryted := make([]byte, len(origData))
 	c.blockModeEncrypter.CryptBlocks(cryted, origData)
+	//log.Infof("AesEncrypter after encrypt %v", cryted)
 	return cryted, nil
 }
 
@@ -75,9 +77,11 @@ func NewAesDecrypter(key []byte) (*AesDecrypter, error) {
 }
 
 func (c *AesDecrypter) Decrypt(data []byte) ([]byte, error) {
+	//log.Infof("AesDecrypter decrypt %v", data)
 	orig := make([]byte, len(data))
 	c.blockModeDecrypter.CryptBlocks(orig, data)
 	orig = pkcs7Unpadding(orig)
+	//log.Infof("AesDecrypter after decrypt %v", orig)
 	return orig, nil
 }
 
@@ -170,7 +174,7 @@ func zeroUnpadding(origData []byte) []byte {
 	})
 }
 
-var keyletters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")
+var keyletters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJLMNOPQRSTUVWXYZ01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")
 
 func GenAesKeyDefault(r *rand.Rand) []byte {
 	b := make([]byte, 16)

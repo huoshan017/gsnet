@@ -40,37 +40,37 @@ const (
 )
 
 type DefaultBasePacketHandler struct {
-	cors         bool
-	conn         IConn
-	eventHandler IPacketEventHandler
-	getter       IPacketBuilderArgsGetter
-	resend       IResendEventHandler
-	options      *Options
-	lastTime     time.Time
-	state        HandlerState
+	cors               bool
+	conn               IConn
+	packetEventHandler IPacketEventHandler
+	argsGetter         IPacketBuilderArgsGetter
+	resendEventHandler IResendEventHandler
+	options            *Options
+	lastTime           time.Time
+	state              HandlerState
 }
 
-func NewDefaultBasePacketHandler4Client(conn IConn, eventHandler IPacketEventHandler, resend IResendEventHandler, options *Options) *DefaultBasePacketHandler {
+func NewDefaultBasePacketHandler4Client(conn IConn, packetEventHandler IPacketEventHandler, resendEventHandler IResendEventHandler, options *Options) *DefaultBasePacketHandler {
 	return &DefaultBasePacketHandler{
-		cors:         true,
-		conn:         conn,
-		eventHandler: eventHandler,
-		resend:       resend,
-		options:      options,
-		lastTime:     time.Now(),
-		state:        HandlerStateNotBegin,
+		cors:               true,
+		conn:               conn,
+		packetEventHandler: packetEventHandler,
+		resendEventHandler: resendEventHandler,
+		options:            options,
+		lastTime:           time.Now(),
+		state:              HandlerStateNotBegin,
 	}
 }
 
-func NewDefaultBasePacketHandler4Server(conn IConn, getter IPacketBuilderArgsGetter, resend IResendEventHandler, options *Options) *DefaultBasePacketHandler {
+func NewDefaultBasePacketHandler4Server(conn IConn, argsGetter IPacketBuilderArgsGetter, resendEventHandler IResendEventHandler, options *Options) *DefaultBasePacketHandler {
 	return &DefaultBasePacketHandler{
-		cors:     false,
-		conn:     conn,
-		getter:   getter,
-		resend:   resend,
-		options:  options,
-		lastTime: time.Now(),
-		state:    HandlerStateNotBegin,
+		cors:               false,
+		conn:               conn,
+		argsGetter:         argsGetter,
+		resendEventHandler: resendEventHandler,
+		options:            options,
+		lastTime:           time.Now(),
+		state:              HandlerStateNotBegin,
 	}
 }
 
@@ -110,12 +110,12 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 			l := data[2]
 			if l > 0 {
 				key := data[3 : 3+l]
-				if h.eventHandler != nil {
-					h.eventHandler.OnHandshakeDone(ct, et, key)
+				if h.packetEventHandler != nil {
+					h.packetEventHandler.OnHandshakeDone(ct, et, key)
 					log.Infof("handshake ack, compress type %v, encryption type %v, crypto key %v", ct, et, key)
 				}
 			} else {
-				h.eventHandler.OnHandshakeDone(ct, et)
+				h.packetEventHandler.OnHandshakeDone(ct, et)
 				log.Infof("handshake ack, compress type %v, encryption type %v", ct, et)
 			}
 			res = 2
@@ -150,8 +150,8 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 			err = ErrBasePacketHandlerServerCantRecvHeartbeatAck
 		}
 	case packet.PacketSentAck:
-		if h.resend != nil {
-			res = h.resend.OnAck(pak)
+		if h.resendEventHandler != nil {
+			res = h.resendEventHandler.OnAck(pak)
 			if res < 0 {
 				log.Fatalf("gsnet: length of rend list less than ack num")
 				err = ErrResendDataInvalid
@@ -169,8 +169,8 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 
 func (h *DefaultBasePacketHandler) OnPostHandle(pak packet.IPacket) error {
 	var err error
-	if h.resend != nil {
-		h.resend.OnProcessed(1)
+	if h.resendEventHandler != nil {
+		h.resendEventHandler.OnProcessed(1)
 	}
 	return err
 }
@@ -219,8 +219,8 @@ func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 			}
 		}
 	}
-	if h.resend != nil {
-		err = h.resend.OnUpdate(h.conn)
+	if h.resendEventHandler != nil {
+		err = h.resendEventHandler.OnUpdate(h.conn)
 	}
 	return err
 }
@@ -230,12 +230,12 @@ func (h *DefaultBasePacketHandler) sendHandshake() error {
 }
 
 func (h *DefaultBasePacketHandler) sendHandshakeAck() error {
-	if h.getter == nil {
+	if h.argsGetter == nil {
 		return nil
 	}
 	ct := h.options.GetPacketCompressType()
 	et := h.options.GetPacketEncryptionType()
-	args := h.getter.Get()
+	args := h.argsGetter.Get()
 	if len(args) < 1 {
 		return errors.New("gsnet: packet builder arguments not enough")
 	}

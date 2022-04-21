@@ -114,7 +114,7 @@ func (c *Conn) readLoop() {
 		// todo  1. 判断长度是否超过限制 2. 用内存池来优化
 		bodyLen := c.options.dataProto.GetBodyLen(header)
 		if bodyLen > packet.MaxPacketLength {
-			err = packet.ErrBodyLenInvalid
+			err = packet.ErrBodyLengthTooLong
 			break
 		}
 

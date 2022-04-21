@@ -22,25 +22,28 @@ type IPacketBuilderArgsGetter interface {
 	Get() []any
 }
 
-const (
-	DefaultPacketHeaderLen = 6
-)
-
 // builder for type `Packet`
-type DefaultPacketBuilder struct {
-	options      *Options
-	compressor   packet.ICompressor
-	decompressor packet.IDecompressor
-	encrypter    packet.IEncrypter
-	decrypter    packet.IDecrypter
-	cryptoKey    []byte
+type PacketBuilder struct {
+	sendHeaderPacket packet.IPacketHeader
+	sendHeaderBuff   []byte
+	recvHeaderPacket packet.IPacketHeader
+	recvHeaderBuff   []byte
+	options          *Options
+	compressor       packet.ICompressor
+	decompressor     packet.IDecompressor
+	encrypter        packet.IEncrypter
+	decrypter        packet.IDecrypter
+	cryptoKey        []byte
 }
 
-func NewDefaultPacketBuilder(options *Options) *DefaultPacketBuilder {
-	pb := &DefaultPacketBuilder{
+func NewPacketBuilder(options *Options) *PacketBuilder {
+	pb := &PacketBuilder{
 		options: options,
 	}
-
+	packetHeaderLength := options.GetPacketHeaderLength()
+	if packetHeaderLength <= 0 {
+		packetHeaderLength = packet.DefaultPacketHeaderLen
+	}
 	encryptionType := options.GetPacketEncryptionType()
 	if pb.cryptoKey == nil {
 		ran := options.GetRand() // options.GetRand() 不是线程安全的，不过这里是在同一goroutine中使用，不存在并发安全问题
@@ -54,10 +57,14 @@ func NewDefaultPacketBuilder(options *Options) *DefaultPacketBuilder {
 	if pb.Reset(options.GetPacketCompressType(), encryptionType, pb.cryptoKey) != nil {
 		return nil
 	}
+
+	pb.sendHeaderBuff = make([]byte, packetHeaderLength)
+	pb.recvHeaderBuff = make([]byte, packetHeaderLength)
+
 	return pb
 }
 
-func (pb *DefaultPacketBuilder) Reset(compressType packet.CompressType, encryptionType packet.EncryptionType, key []byte) error {
+func (pb *PacketBuilder) Reset(compressType packet.CompressType, encryptionType packet.EncryptionType, key []byte) error {
 	var err error
 	err = pb.createEncrypter(encryptionType, key)
 	if err != nil {
@@ -79,10 +86,37 @@ func (pb *DefaultPacketBuilder) Reset(compressType packet.CompressType, encrypti
 		return err
 	}
 
+	if pb.sendHeaderPacket == nil {
+		createPacketHeaderFunc := pb.options.GetCreatePacketHeaderFunc()
+		if createPacketHeaderFunc == nil {
+			pb.sendHeaderPacket = NewDefaultPacketHeader(pb.options)
+		} else {
+			pb.sendHeaderPacket = createPacketHeaderFunc(pb.options)
+		}
+	} else {
+		pb.sendHeaderPacket.SetCompressType(compressType)
+		pb.sendHeaderPacket.SetEncryptionType(encryptionType)
+		//log.Infof("!!!!!!!!! sendHeaderPacekt packetType(%v) dataLength(%v) compressType(%v) encryptionType(%v) key(%v)",
+		//	pb.sendHeaderPacket.GetType(), pb.sendHeaderPacket.GetDataLength(), pb.sendHeaderPacket.GetCompressType(), pb.sendHeaderPacket.GetEncryptionType(), key)
+	}
+	if pb.recvHeaderPacket == nil {
+		createPacketHeaderFunc := pb.options.GetCreatePacketHeaderFunc()
+		if createPacketHeaderFunc == nil {
+			pb.recvHeaderPacket = NewDefaultPacketHeader(pb.options)
+		} else {
+			pb.recvHeaderPacket = createPacketHeaderFunc(pb.options)
+		}
+	} else {
+		pb.recvHeaderPacket.SetCompressType(compressType)
+		pb.recvHeaderPacket.SetEncryptionType(encryptionType)
+		//log.Infof("!!!!!!!!! recvHeaderPacekt packetType(%v) dataLength(%v) compressType(%v) encryptionType(%v) key(%v)",
+		//	pb.recvHeaderPacket.GetType(), pb.recvHeaderPacket.GetDataLength(), pb.recvHeaderPacket.GetCompressType(), pb.recvHeaderPacket.GetEncryptionType(), key)
+	}
+
 	return nil
 }
 
-func (pc *DefaultPacketBuilder) Close() {
+func (pc *PacketBuilder) Close() {
 	if pc.compressor != nil {
 		pc.compressor.Close()
 		pc.compressor = nil
@@ -93,11 +127,11 @@ func (pc *DefaultPacketBuilder) Close() {
 	}
 }
 
-func (pc *DefaultPacketBuilder) GetCryptoKey() []byte {
+func (pc *PacketBuilder) GetCryptoKey() []byte {
 	return pc.cryptoKey
 }
 
-func (pc *DefaultPacketBuilder) createEncrypter(encryptionType packet.EncryptionType, key []byte) error {
+func (pc *PacketBuilder) createEncrypter(encryptionType packet.EncryptionType, key []byte) error {
 	var (
 		encrypter packet.IEncrypter
 		err       error
@@ -121,7 +155,7 @@ func (pc *DefaultPacketBuilder) createEncrypter(encryptionType packet.Encryption
 	return err
 }
 
-func (pc *DefaultPacketBuilder) createDecrypter(encryptionType packet.EncryptionType, key []byte) error {
+func (pc *PacketBuilder) createDecrypter(encryptionType packet.EncryptionType, key []byte) error {
 	var (
 		decrypter packet.IDecrypter
 		err       error
@@ -145,7 +179,7 @@ func (pc *DefaultPacketBuilder) createDecrypter(encryptionType packet.Encryption
 	return err
 }
 
-func (pc *DefaultPacketBuilder) createCompressor(compressType packet.CompressType) error {
+func (pc *PacketBuilder) createCompressor(compressType packet.CompressType) error {
 	var (
 		compressor packet.ICompressor
 		err        error
@@ -165,7 +199,7 @@ func (pc *DefaultPacketBuilder) createCompressor(compressType packet.CompressTyp
 	return err
 }
 
-func (pc *DefaultPacketBuilder) createDecompressor(compressType packet.CompressType) error {
+func (pc *PacketBuilder) createDecompressor(compressType packet.CompressType) error {
 	var (
 		decompressor packet.IDecompressor
 		err          error
@@ -185,9 +219,7 @@ func (pc *DefaultPacketBuilder) createDecompressor(compressType packet.CompressT
 	return err
 }
 
-func (pc *DefaultPacketBuilder) EncodeWriteTo(pType packet.PacketType, data []byte, writer io.Writer) error {
-	//pc.checkAndCreateCompressorAndEncrypter()
-
+func (pc *PacketBuilder) EncodeWriteTo(pType packet.PacketType, data []byte, writer io.Writer) error {
 	var err error
 
 	// 压缩处理和加密处理
@@ -199,10 +231,14 @@ func (pc *DefaultPacketBuilder) EncodeWriteTo(pType packet.PacketType, data []by
 	}
 
 	dataLen := len(data)
-	var header = [DefaultPacketHeaderLen]byte{}
-	pc.formatHeader(header[:], dataLen, pType)
+	pc.sendHeaderPacket.SetType(pType)
+	pc.sendHeaderPacket.SetDataLength(uint32(dataLen))
+	err = pc.sendHeaderPacket.FormatTo(pc.sendHeaderBuff[:])
+	if err != nil {
+		return err
+	}
 
-	_, err = writer.Write(header[:])
+	_, err = writer.Write(pc.sendHeaderBuff[:])
 	if err == nil {
 		_, err = writer.Write(data)
 	}
@@ -210,11 +246,8 @@ func (pc *DefaultPacketBuilder) EncodeWriteTo(pType packet.PacketType, data []by
 	return err
 }
 
-func (pc *DefaultPacketBuilder) EncodeBytesArrayWriteTo(pType packet.PacketType, datas [][]byte, writer io.Writer) error {
-	//pc.checkAndCreateCompressorAndEncrypter()
-
+func (pc *PacketBuilder) EncodeBytesArrayWriteTo(pType packet.PacketType, datas [][]byte, writer io.Writer) error {
 	var (
-		header  = [DefaultPacketHeaderLen]byte{}
 		dataLen int
 		err     error
 	)
@@ -224,13 +257,17 @@ func (pc *DefaultPacketBuilder) EncodeBytesArrayWriteTo(pType packet.PacketType,
 	}
 
 	if isBasePacket(pType) || pc.isNoCompressAndEncryption() {
-		pc.formatHeader(header[:], dataLen, pType)
-		_, err = writer.Write(header[:])
+		pc.sendHeaderPacket.SetType(pType)
+		pc.sendHeaderPacket.SetDataLength(uint32(dataLen))
+		err = pc.sendHeaderPacket.FormatTo(pc.sendHeaderBuff[:])
 		if err == nil {
-			for i := 0; i < len(datas); i++ {
-				_, err = writer.Write(datas[i])
-				if err != nil {
-					break
+			_, err = writer.Write(pc.sendHeaderBuff[:])
+			if err == nil {
+				for i := 0; i < len(datas); i++ {
+					_, err = writer.Write(datas[i])
+					if err != nil {
+						break
+					}
 				}
 			}
 		}
@@ -246,10 +283,15 @@ func (pc *DefaultPacketBuilder) EncodeBytesArrayWriteTo(pType packet.PacketType,
 		data, err = pc.compressAndEncrypt(*temp)
 		pool.GetBuffPool().Free(temp)
 		if err == nil {
-			pc.formatHeader(header[:], len(data), pType)
-			_, err = writer.Write(header[:])
+			dataLen = len(data)
+			pc.sendHeaderPacket.SetType(pType)
+			pc.sendHeaderPacket.SetDataLength(uint32(dataLen))
+			err = pc.sendHeaderPacket.FormatTo(pc.sendHeaderBuff[:])
 			if err == nil {
-				_, err = writer.Write(data)
+				_, err = writer.Write(pc.sendHeaderBuff[:])
+				if err == nil {
+					_, err = writer.Write(data)
+				}
 			}
 		}
 	}
@@ -257,12 +299,9 @@ func (pc *DefaultPacketBuilder) EncodeBytesArrayWriteTo(pType packet.PacketType,
 	return err
 }
 
-func (pc *DefaultPacketBuilder) EncodeBytesPointerArrayWriteTo(pType packet.PacketType, pBytesArray []*[]byte, writer io.Writer) error {
-	//pc.checkAndCreateCompressorAndEncrypter()
-
+func (pc *PacketBuilder) EncodeBytesPointerArrayWriteTo(pType packet.PacketType, pBytesArray []*[]byte, writer io.Writer) error {
 	var (
 		dataLen int
-		header  = [DefaultPacketHeaderLen]byte{}
 		err     error
 	)
 
@@ -271,13 +310,17 @@ func (pc *DefaultPacketBuilder) EncodeBytesPointerArrayWriteTo(pType packet.Pack
 	}
 
 	if isBasePacket(pType) || pc.isNoCompressAndEncryption() {
-		pc.formatHeader(header[:], dataLen, pType)
-		_, err = writer.Write(header[:])
+		pc.sendHeaderPacket.SetType(pType)
+		pc.sendHeaderPacket.SetDataLength(uint32(dataLen))
+		err = pc.sendHeaderPacket.FormatTo(pc.sendHeaderBuff[:])
 		if err == nil {
-			for i := 0; i < len(*pBytesArray[i]); i++ {
-				_, err = writer.Write(*pBytesArray[i])
-				if err != nil {
-					break
+			_, err = writer.Write(pc.sendHeaderBuff[:])
+			if err == nil {
+				for i := 0; i < len(*pBytesArray[i]); i++ {
+					_, err = writer.Write(*pBytesArray[i])
+					if err != nil {
+						break
+					}
 				}
 			}
 		}
@@ -293,31 +336,34 @@ func (pc *DefaultPacketBuilder) EncodeBytesPointerArrayWriteTo(pType packet.Pack
 		data, err = pc.compressAndEncrypt(*temp)
 		pool.GetBuffPool().Free(temp)
 		if err == nil {
-			pc.formatHeader(header[:], len(data), pType)
-			_, err = writer.Write(header[:])
+			dataLen = len(data)
+			pc.sendHeaderPacket.SetType(pType)
+			pc.sendHeaderPacket.SetDataLength(uint32(dataLen))
+			err = pc.sendHeaderPacket.FormatTo(pc.sendHeaderBuff[:])
 			if err == nil {
-				_, err = writer.Write(data)
+				_, err = writer.Write(pc.sendHeaderBuff[:])
+				if err == nil {
+					_, err = writer.Write(data)
+				}
 			}
 		}
 	}
 	return err
 }
 
-func (pc *DefaultPacketBuilder) DecodeReadFrom(reader io.Reader) (packet.IPacket, error) {
-	//pc.checkAndCreateDecompressorAndDecrypter()
-
-	var header = [DefaultPacketHeaderLen]byte{}
+func (pc *PacketBuilder) DecodeReadFrom(reader io.Reader) (packet.IPacket, error) {
 	// read header
-	_, err := io.ReadFull(reader, header[:])
+	_, err := io.ReadFull(reader, pc.recvHeaderBuff[:])
 	if err != nil {
 		return nil, err
 	}
 
-	dataLen, packetType, _, _ := pc.unformatHeader(header[:])
-
-	if dataLen > packet.MaxPacketLength {
-		return nil, packet.ErrBodyLenInvalid
+	err = pc.recvHeaderPacket.UnformatFrom(pc.recvHeaderBuff[:])
+	if err != nil {
+		return nil, err
 	}
+
+	dataLen := pc.recvHeaderPacket.GetDataLength()
 
 	pData := pool.GetBuffPool().Alloc(int32(dataLen))
 
@@ -328,6 +374,7 @@ func (pc *DefaultPacketBuilder) DecodeReadFrom(reader io.Reader) (packet.IPacket
 	}
 
 	var pak *packet.Packet
+	packetType := pc.recvHeaderPacket.GetType()
 	if isBasePacket(packetType) || pc.isNoCompressAndEncryption() {
 		p := pc.options.GetPacketPool().Get()
 		pak = any(p).(*packet.Packet)
@@ -347,7 +394,7 @@ func (pc *DefaultPacketBuilder) DecodeReadFrom(reader io.Reader) (packet.IPacket
 	return pak, nil
 }
 
-func (pc *DefaultPacketBuilder) compressAndEncrypt(data []byte) ([]byte, error) {
+func (pc *PacketBuilder) compressAndEncrypt(data []byte) ([]byte, error) {
 	var (
 		err error
 	)
@@ -367,7 +414,7 @@ func (pc *DefaultPacketBuilder) compressAndEncrypt(data []byte) ([]byte, error) 
 	return data, err
 }
 
-func (pc *DefaultPacketBuilder) decryptAndDecompress(data []byte) ([]byte, error) {
+func (pc *PacketBuilder) decryptAndDecompress(data []byte) ([]byte, error) {
 	var (
 		err error
 	)
@@ -386,11 +433,11 @@ func (pc *DefaultPacketBuilder) decryptAndDecompress(data []byte) ([]byte, error
 	return data, nil
 }
 
-func (pc DefaultPacketBuilder) isNoCompressAndEncryption() bool {
+func (pc PacketBuilder) isNoCompressAndEncryption() bool {
 	return pc.compressor == nil && pc.decompressor == nil && pc.encrypter == nil && pc.decrypter == nil
 }
 
-func (pc DefaultPacketBuilder) formatHeader(header []byte, dataLen int, pType packet.PacketType) {
+/*func (pc PacketBuilder) formatHeader(header []byte, dataLen int, pType packet.PacketType) {
 	// data length
 	header[0] = byte(dataLen >> 16 & 0xff)
 	header[1] = byte(dataLen >> 8 & 0xff)
@@ -400,7 +447,7 @@ func (pc DefaultPacketBuilder) formatHeader(header []byte, dataLen int, pType pa
 	header[5] = byte(pc.options.GetPacketEncryptionType()) // encryption type
 }
 
-func (pc DefaultPacketBuilder) unformatHeader(header []byte) (uint32, packet.PacketType, packet.CompressType, packet.EncryptionType) {
+func (pc PacketBuilder) unformatHeader(header []byte) (uint32, packet.PacketType, packet.CompressType, packet.EncryptionType) {
 	dataLen := uint32(header[0]) << 16 & 0xff0000
 	dataLen += uint32(header[1]) << 8 & 0xff00
 	dataLen += uint32(header[2]) & 0xff
@@ -408,7 +455,7 @@ func (pc DefaultPacketBuilder) unformatHeader(header []byte) (uint32, packet.Pac
 	compressType := packet.CompressType(header[4])
 	encryptionType := packet.EncryptionType(header[5])
 	return dataLen, packetType, compressType, encryptionType
-}
+}*/
 
 func isBasePacket(pakType packet.PacketType) bool {
 	return pakType >= packet.PacketHandshake && pakType <= packet.PacketSentAck

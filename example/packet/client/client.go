@@ -1,8 +1,12 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
+	"os"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/huoshan017/gsnet/client"
@@ -32,6 +36,8 @@ func (h *testClientUseUpdateHandler) OnDisconnect(sess common.ISession, err erro
 	log.Infof("disconnected, err: %v", err)
 }
 
+var compared int32
+
 func (h *testClientUseUpdateHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
 	var (
 		o bool
@@ -46,7 +52,9 @@ func (h *testClientUseUpdateHandler) OnPacket(sess common.ISession, packet packe
 	if h.compareNum >= 50000 {
 		sess.Close()
 	}
-	log.Infof("compared %v", h.compareNum)
+	if atomic.CompareAndSwapInt32(&compared, 0, 1) {
+		log.Infof("compared %v", h.compareNum)
+	}
 	return nil
 }
 
@@ -65,9 +73,8 @@ func createTestClientUseUpdate(userData any) *client.Client {
 }
 
 var letters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")
-var ran = rand.New(rand.NewSource(time.Now().UnixNano()))
 
-func randBytes(n int) []byte {
+func randBytes(n int, ran *rand.Rand) []byte {
 	b := make([]byte, n)
 	for i := range b {
 		b[i] = letters[ran.Intn(len(letters))]
@@ -76,33 +83,56 @@ func randBytes(n int) []byte {
 }
 
 func main() {
-	sendNum := 10
-	sd := ex_packet_common.CreateSendDataInfo(int32(sendNum))
-	tc := createTestClientUseUpdate(sd)
-	err := tc.Connect(ex_packet_common.TestAddress)
-	if err != nil {
-		log.Fatalf("test client connect err: %+v", err)
+	if len(os.Args) < 2 {
+		log.Fatalf("args num invalid")
 		return
 	}
-	defer tc.Close()
+	var clientNum int
+	flag.IntVar(&clientNum, "client_num", 1, "client number")
+	flag.Parse()
 
-	for {
-		err = tc.Update()
-		if err != nil {
-			log.Infof("test client update err %v", err)
-			break
-		}
-		d := randBytes(30)
-		err = tc.Send(d, false)
-		if err != nil {
-			log.Infof("test client send err: %+v", err)
-			break
-		}
-		sd.AppendSendData(d)
-		time.Sleep(time.Millisecond)
+	log.Infof("client num %v", clientNum)
+
+	var leftNum int32 = int32(clientNum)
+	var wg sync.WaitGroup
+	wg.Add(clientNum)
+	for i := 0; i < clientNum; i++ {
+		go func() {
+			defer func() {
+				wg.Done()
+				atomic.AddInt32(&leftNum, -1)
+				log.Infof("left client %v", leftNum)
+			}()
+
+			sd := ex_packet_common.CreateSendDataInfo(10)
+			tc := createTestClientUseUpdate(sd)
+			err := tc.Connect(ex_packet_common.TestAddress)
+			if err != nil {
+				log.Infof("test client connect err: %+v", err)
+				return
+			}
+			defer tc.Close()
+
+			ran := rand.New(rand.NewSource(time.Now().UnixNano()))
+			for {
+				err = tc.Update()
+				if err != nil {
+					log.Infof("test client update err %v", err)
+					break
+				}
+				d := randBytes(30, ran)
+				err = tc.Send(d, true)
+				if err != nil {
+					log.Infof("test client send err: %+v", err)
+					break
+				}
+				sd.AppendSendData(d)
+				time.Sleep(time.Millisecond)
+			}
+		}()
 	}
 
-	time.Sleep(time.Second)
+	wg.Wait()
 
 	log.Infof("test done")
 }
