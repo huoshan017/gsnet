@@ -252,6 +252,53 @@ func TestClientUseUpdate(t *testing.T) {
 	t.Logf("test done")
 }
 
+func TestClientAsyncConnect(t *testing.T) {
+	ts := createTestServer(t, 1)
+	err := ts.Listen(testAddress)
+	if err != nil {
+		t.Errorf("server for test client listen err: %+v", err)
+		return
+	}
+	defer ts.End()
+
+	go ts.Start()
+
+	t.Logf("server for test client running")
+
+	sendNum := 10
+	sd := createSendDataInfo(int32(sendNum))
+	tc := createTestClientUseUpdate(t, 2, sd)
+	tc.ConnectAsync(testAddress, 0, func(err error) {
+		if err != nil {
+			t.Logf("test client connect async err %v", err)
+		}
+	})
+	defer tc.Close()
+
+	ran := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for {
+		err = tc.Update()
+		if err != nil {
+			t.Logf("test client update err %v", err)
+			break
+		}
+		if tc.IsConnected() {
+			d := randBytes(30, ran)
+			err = tc.Send(d, false)
+			if err != nil {
+				t.Logf("test client send err: %+v", err)
+				break
+			}
+			sd.appendSendData(d)
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	time.Sleep(time.Second)
+
+	t.Logf("test done")
+}
+
 func BenchmarkClient(b *testing.B) {
 	bs := createBenchmarkServerWithHandler(b, 1)
 	err := bs.Listen(testAddress)

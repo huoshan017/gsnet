@@ -63,7 +63,7 @@ func TestConnector(t *testing.T) {
 	waitTime := time.Millisecond * 100
 	ticker := time.NewTicker(waitTime)
 	for connected == false {
-		connector.WaitResult(0)
+		connector.WaitResult()
 		<-ticker.C
 		t.Logf("wait %v", waitTime)
 	}

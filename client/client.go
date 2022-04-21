@@ -62,10 +62,15 @@ func (c *Client) ConnectWithTimeout(addr string, timeout time.Duration) error {
 }
 
 func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(error)) {
+	if c.options.GetRunMode() != RunModeOnlyUpdate {
+		panic(ErrClientRunUpdateMode)
+	}
 	connector := c.newConnector()
 	connector.ConnectAsync(addr, timeout, func(err error) {
+		if err == nil {
+			c.doConnectResult(connector.GetConn())
+		}
 		callback(err)
-		c.doConnectResult(connector.GetConn())
 	})
 }
 
@@ -135,6 +140,9 @@ func (c *Client) doConnectResult(con net.Conn) {
 }
 
 func (c *Client) Send(data []byte, copyData bool) error {
+	if c.connector.GetState() != ConnStateConnected {
+		return errors.New("gsnet: client not establish connection")
+	}
 	return c.sess.Send(data, copyData)
 }
 
@@ -143,13 +151,15 @@ func (c *Client) Update() error {
 		return ErrClientRunUpdateMode
 	}
 
+	var err error
+
 	// 连接状态
-	if c.sess == nil {
-		c.connector.WaitResult(0)
-		return nil
+	if c.IsConnecting() {
+		_, err = c.connector.WaitResult()
+		return err
 	}
 
-	err := c.handle(1)
+	err = c.handle(1)
 	return c.handleErr(err)
 }
 
@@ -202,17 +212,15 @@ func (c *Client) GetSession() common.ISession {
 	return c.sess
 }
 
+func (c *Client) IsNotConnect() bool {
+	return c.connector.IsNotConnect()
+}
+
 func (c *Client) IsConnecting() bool {
-	if c.conn == nil {
-		return false
-	}
 	return c.connector.IsConnecting()
 }
 
 func (c *Client) IsConnected() bool {
-	if c.conn == nil {
-		return false
-	}
 	return c.connector.IsConnected()
 }
 
