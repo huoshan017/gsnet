@@ -32,15 +32,29 @@ type Client struct {
 func NewClient(handler common.ISessionEventHandler, options ...common.Option) *Client {
 	c := &Client{
 		handler: handler,
+		options: ClientOptions{Options: *common.NewOptions()},
 	}
-	c.ctx, c.cancel = context.WithCancel(context.Background())
 	for _, option := range options {
 		option(&c.options.Options)
 	}
+	c.init()
+	return c
+}
+
+func NewClientWithOptions(handler common.ISessionEventHandler, options *ClientOptions) *Client {
+	c := &Client{
+		options: *options,
+		handler: handler,
+	}
+	c.init()
+	return c
+}
+
+func (c *Client) init() {
+	c.ctx, c.cancel = context.WithCancel(context.Background())
 	if c.options.GetPacketPool() == nil {
 		c.options.SetPacketPool(packet.GetDefaultPacketPool())
 	}
-	return c
 }
 
 func (c *Client) Connect(addr string) error {

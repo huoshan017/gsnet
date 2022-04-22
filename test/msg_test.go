@@ -306,6 +306,7 @@ func newPBMsgServer2(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error
 	if config.useHeartbeat {
 		options = append(options, common.WithUseHeartbeat(true))
 	}
+	options = append(options, msg.WithHeaderFormatFunc(msg.DefaultMsgHeaderFormat), msg.WithHeaderUnformatFunc(msg.DefaultMsgHeaderUnformat))
 	s = msg.NewProtoBufMsgServer(newTestPBMsgHandler2, []any{t}, idMsgMapper, options...)
 	err := s.Listen(testAddress)
 	if err != nil {

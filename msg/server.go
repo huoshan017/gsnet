@@ -12,6 +12,7 @@ type NewMsgSessionHandlerFunc func(args ...any) IMsgSessionEventHandler
 // MsgServer struct
 type MsgServer struct {
 	*server.Server
+	options MsgServerOptions
 	newFunc NewMsgSessionHandlerFunc
 	codec   IMsgCodec
 	mapper  *IdMsgMapper
@@ -24,15 +25,18 @@ func NewMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCo
 		codec:   codec,
 		mapper:  mapper,
 	}
-	var newSessionHandler server.NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
-		msgSessionHandler := s.newFunc(args...)
-		ms := newMsgHandlerServer(msgSessionHandler, s.codec, s.mapper)
-		return common.ISessionEventHandler(ms)
+	for i := 0; i < len(options); i++ {
+		options[i](&s.options.Options)
 	}
 	if len(funcArgs) > 0 {
-		options = append(options, server.WithNewSessionHandlerFuncArgs(funcArgs...))
+		s.options.SetNewSessionHandlerFuncArgs(funcArgs...)
 	}
-	s.Server = server.NewServer(newSessionHandler, options...)
+	var newSessionHandler server.NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
+		msgSessionHandler := s.newFunc(args...)
+		ms := newMsgHandlerServer(msgSessionHandler, s.codec, s.mapper, &s.options.MsgOptions)
+		return common.ISessionEventHandler(ms)
+	}
+	s.Server = server.NewServerWithOptions(newSessionHandler, &s.options.ServerOptions)
 	return s
 }
 

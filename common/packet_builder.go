@@ -18,17 +18,13 @@ type IPacketBuilder interface {
 	Close()
 }
 
-type IPacketBuilderArgsGetter interface {
-	Get() []any
-}
-
 // builder for type `Packet`
 type PacketBuilder struct {
+	options          *Options
 	sendHeaderPacket packet.IPacketHeader
 	sendHeaderBuff   []byte
 	recvHeaderPacket packet.IPacketHeader
 	recvHeaderBuff   []byte
-	options          *Options
 	compressor       packet.ICompressor
 	decompressor     packet.IDecompressor
 	encrypter        packet.IEncrypter
@@ -96,8 +92,6 @@ func (pb *PacketBuilder) Reset(compressType packet.CompressType, encryptionType 
 	} else {
 		pb.sendHeaderPacket.SetCompressType(compressType)
 		pb.sendHeaderPacket.SetEncryptionType(encryptionType)
-		//log.Infof("!!!!!!!!! sendHeaderPacekt packetType(%v) dataLength(%v) compressType(%v) encryptionType(%v) key(%v)",
-		//	pb.sendHeaderPacket.GetType(), pb.sendHeaderPacket.GetDataLength(), pb.sendHeaderPacket.GetCompressType(), pb.sendHeaderPacket.GetEncryptionType(), key)
 	}
 	if pb.recvHeaderPacket == nil {
 		createPacketHeaderFunc := pb.options.GetCreatePacketHeaderFunc()
@@ -109,8 +103,6 @@ func (pb *PacketBuilder) Reset(compressType packet.CompressType, encryptionType 
 	} else {
 		pb.recvHeaderPacket.SetCompressType(compressType)
 		pb.recvHeaderPacket.SetEncryptionType(encryptionType)
-		//log.Infof("!!!!!!!!! recvHeaderPacekt packetType(%v) dataLength(%v) compressType(%v) encryptionType(%v) key(%v)",
-		//	pb.recvHeaderPacket.GetType(), pb.recvHeaderPacket.GetDataLength(), pb.recvHeaderPacket.GetCompressType(), pb.recvHeaderPacket.GetEncryptionType(), key)
 	}
 
 	return nil
@@ -436,26 +428,6 @@ func (pc *PacketBuilder) decryptAndDecompress(data []byte) ([]byte, error) {
 func (pc PacketBuilder) isNoCompressAndEncryption() bool {
 	return pc.compressor == nil && pc.decompressor == nil && pc.encrypter == nil && pc.decrypter == nil
 }
-
-/*func (pc PacketBuilder) formatHeader(header []byte, dataLen int, pType packet.PacketType) {
-	// data length
-	header[0] = byte(dataLen >> 16 & 0xff)
-	header[1] = byte(dataLen >> 8 & 0xff)
-	header[2] = byte(dataLen & 0xff)
-	header[3] = byte(pType)                                // packet type
-	header[4] = byte(pc.options.GetPacketCompressType())   // compress type
-	header[5] = byte(pc.options.GetPacketEncryptionType()) // encryption type
-}
-
-func (pc PacketBuilder) unformatHeader(header []byte) (uint32, packet.PacketType, packet.CompressType, packet.EncryptionType) {
-	dataLen := uint32(header[0]) << 16 & 0xff0000
-	dataLen += uint32(header[1]) << 8 & 0xff00
-	dataLen += uint32(header[2]) & 0xff
-	packetType := packet.PacketType(header[3])
-	compressType := packet.CompressType(header[4])
-	encryptionType := packet.EncryptionType(header[5])
-	return dataLen, packetType, compressType, encryptionType
-}*/
 
 func isBasePacket(pakType packet.PacketType) bool {
 	return pakType >= packet.PacketHandshake && pakType <= packet.PacketSentAck

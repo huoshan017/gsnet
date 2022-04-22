@@ -51,11 +51,20 @@ type msgHandlerCommon struct {
 	sess             *MsgSession
 }
 
-func newMsgHandlerCommon(codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerCommon {
-	d := &msgHandlerCommon{
-		sess: &MsgSession{codec: codec, mapper: mapper},
+func newMsgHandlerCommon(codec IMsgCodec, mapper *IdMsgMapper, options *MsgOptions) *msgHandlerCommon {
+	//newHeaderFunc := options.GetNewHeaderFunc()
+	//if newHeaderFunc == nil {
+	//	newHeaderFunc = NewDefaultMsgHeader
+	//}
+	return &msgHandlerCommon{
+		sess: &MsgSession{
+			codec:   codec,
+			mapper:  mapper,
+			options: options,
+			//threadUnsafeHeader: newHeaderFunc(options),
+			//threadSafeHeader:   newHeaderFunc(options),
+		},
 	}
-	return d
 }
 
 func (d *msgHandlerCommon) SetConnectHandle(handle func(*MsgSession)) {
@@ -116,9 +125,9 @@ type msgHandlerClient struct {
 	handleMap map[MsgIdType]func(*MsgSession, any) error
 }
 
-func newMsgHandlerClient(codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerClient {
+func newMsgHandlerClient(codec IMsgCodec, mapper *IdMsgMapper, options *MsgOptions) *msgHandlerClient {
 	return &msgHandlerClient{
-		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper),
+		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper, options),
 		handleMap:        make(map[MsgIdType]func(*MsgSession, any) error),
 	}
 }
@@ -148,9 +157,9 @@ type msgHandlerServer struct {
 	msgHandle      func(*MsgSession, MsgIdType, any) error
 }
 
-func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper) *msgHandlerServer {
+func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper, options *MsgOptions) *msgHandlerServer {
 	server := &msgHandlerServer{
-		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper),
+		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper, options),
 		sessionHandler:   sessionHandler,
 	}
 	server.msgHandlerCommon.SetConnectHandle(sessionHandler.OnConnected)

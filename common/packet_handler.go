@@ -31,6 +31,10 @@ type IPacketEventHandler interface {
 	OnHandshakeDone(args ...any) error
 }
 
+type IPacketBuilderArgsGetter interface {
+	Get() []any
+}
+
 type HandlerState int32
 
 const (

@@ -23,8 +23,8 @@ type IPacketHeader interface {
 	GetEncryptionType() EncryptionType
 	SetDataLength(uint32)
 	GetDataLength() uint32
-	Get(key string) any
-	Set(key string, data any)
+	GetValue(string) any
+	SetValue(string, any)
 	FormatTo(buf []byte) error
 	UnformatFrom(buf []byte) error
 }

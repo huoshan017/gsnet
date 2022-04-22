@@ -29,7 +29,7 @@ type Options struct {
 	packetEncryptionType       packet.EncryptionType  // 包加解密类型
 	genCryptoKeyFunc           GenCryptoKeyFunc       // 产生密钥的函数
 	rand                       *rand.Rand             // 随机数
-	createPacketHeaderFunc     CreateHeaderPacketFunc // 创建包头函数
+	createPacketHeaderFunc     CreatePacketHeaderFunc // 创建包头函数
 	packetHeaderLength         uint8                  // 包头长度
 	connDataType               int                    // 连接数据结构类型
 	resendConfig               *ResendConfig          // 重发配置
@@ -37,13 +37,29 @@ type Options struct {
 	heartbeatTimeSpan          time.Duration          // 心跳间隔
 	minHeartbeatTimeSpan       time.Duration          // 最小心跳间隔
 	disconnectHeartbeatTimeout time.Duration          // 断连的心跳超时
+	customDatas                map[string]any         // 自定义数据
 
 	// todo 以下是需要实现的配置逻辑
 	// flushWriteInterval time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
 }
 
+// 创建Options
+func NewOptions() *Options {
+	return &Options{
+		customDatas: make(map[string]any),
+	}
+}
+
 // 选项
 type Option func(*Options)
+
+func (options *Options) GetCustomData(key string) any {
+	return options.customDatas[key]
+}
+
+func (options *Options) SetCustomData(key string, data any) {
+	options.customDatas[key] = data
+}
 
 func (options *Options) GetNodelay() bool {
 	return options.noDelay
@@ -248,11 +264,11 @@ func (options *Options) SetPacketHeaderLength(length uint8) {
 	options.packetHeaderLength = length
 }
 
-func (options *Options) GetCreatePacketHeaderFunc() CreateHeaderPacketFunc {
+func (options *Options) GetCreatePacketHeaderFunc() CreatePacketHeaderFunc {
 	return options.createPacketHeaderFunc
 }
 
-func (options *Options) SetCreatePacketHeaderFunc(fun CreateHeaderPacketFunc) {
+func (options *Options) SetCreatePacketHeaderFunc(fun CreatePacketHeaderFunc) {
 	options.createPacketHeaderFunc = fun
 }
 
@@ -394,7 +410,7 @@ func WithPacketHeaderLength(length uint8) Option {
 	}
 }
 
-func WithCreatePacketHeaderFunc(fun CreateHeaderPacketFunc) Option {
+func WithCreatePacketHeaderFunc(fun CreatePacketHeaderFunc) Option {
 	return func(options *Options) {
 		options.SetCreatePacketHeaderFunc(fun)
 	}

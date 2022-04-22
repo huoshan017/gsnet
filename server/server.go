@@ -45,7 +45,7 @@ func NewServer(newFunc NewSessionHandlerFunc, options ...common.Option) *Server 
 		sessMap:        make(map[uint64]*common.Session),
 		endLoopCh:      make(chan struct{}),
 	}
-	s.init(options...)
+	s.initWith(options...)
 	return s
 }
 
@@ -56,14 +56,29 @@ func NewServerWithHandler(handler common.ISessionEventHandler, options ...common
 		sessMap:         make(map[uint64]*common.Session),
 		endLoopCh:       make(chan struct{}),
 	}
-	s.init(options...)
+	s.initWith(options...)
 	return s
 }
 
-func (s *Server) init(options ...common.Option) {
+func NewServerWithOptions(newFunc NewSessionHandlerFunc, options *ServerOptions) *Server {
+	s := &Server{
+		newHandlerFunc: newFunc,
+		options:        *options,
+		sessMap:        make(map[uint64]*common.Session),
+		endLoopCh:      make(chan struct{}),
+	}
+	s.init()
+	return s
+}
+
+func (s *Server) initWith(options ...common.Option) {
 	for _, option := range options {
 		option(&s.options.Options)
 	}
+	s.init()
+}
+
+func (s *Server) init() {
 	if s.options.GetConnMaxCount() <= 0 {
 		s.options.SetConnMaxCount(DefaultServerMaxConnCount)
 	}

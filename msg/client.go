@@ -11,16 +11,18 @@ import (
 // MsgClient struct
 type MsgClient struct {
 	*client.Client
+	options MsgClientOptions
 	handler *msgHandlerClient
 }
 
 // NewMsgClient create a message client
 func NewMsgClient(msgCodec IMsgCodec, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
-	handler := newMsgHandlerClient(msgCodec, idMsgMapper)
-	c := &MsgClient{
-		Client:  client.NewClient(handler, options...),
-		handler: handler,
+	c := &MsgClient{}
+	c.handler = newMsgHandlerClient(msgCodec, idMsgMapper, &c.options.MsgOptions)
+	for i := 0; i < len(options); i++ {
+		options[i](&c.options.Options)
 	}
+	c.Client = client.NewClientWithOptions(c.handler, &c.options.ClientOptions)
 	return c
 }
 

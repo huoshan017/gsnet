@@ -2,7 +2,7 @@ package common
 
 import "github.com/huoshan017/gsnet/packet"
 
-type CreateHeaderPacketFunc func(*Options) packet.IPacketHeader
+type CreatePacketHeaderFunc func(*Options) packet.IPacketHeader
 
 type DefaultPacketHeader struct {
 	packet.CommonPacketHeader
@@ -17,11 +17,11 @@ func NewDefaultPacketHeader(options *Options) packet.IPacketHeader {
 	return header
 }
 
-func (ph *DefaultPacketHeader) Get(key string) any {
+func (ph *DefaultPacketHeader) GetValue(string) any {
 	return nil
 }
 
-func (ph *DefaultPacketHeader) Set(key string, data any) {
+func (ph *DefaultPacketHeader) SetValue(string, any) {
 }
 
 func (ph *DefaultPacketHeader) FormatTo(buf []byte) error {

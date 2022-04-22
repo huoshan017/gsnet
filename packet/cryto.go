@@ -51,11 +51,9 @@ func NewAesEncrypter(key []byte) (*AesEncrypter, error) {
 }
 
 func (c *AesEncrypter) Encrypt(data []byte) ([]byte, error) {
-	//log.Infof("AesEncrypter encrypt %v", data)
 	origData := pkcs7Padding(data, c.blockSize)
 	cryted := make([]byte, len(origData))
 	c.blockModeEncrypter.CryptBlocks(cryted, origData)
-	//log.Infof("AesEncrypter after encrypt %v", cryted)
 	return cryted, nil
 }
 
@@ -77,11 +75,9 @@ func NewAesDecrypter(key []byte) (*AesDecrypter, error) {
 }
 
 func (c *AesDecrypter) Decrypt(data []byte) ([]byte, error) {
-	//log.Infof("AesDecrypter decrypt %v", data)
 	orig := make([]byte, len(data))
 	c.blockModeDecrypter.CryptBlocks(orig, data)
 	orig = pkcs7Unpadding(orig)
-	//log.Infof("AesDecrypter after decrypt %v", orig)
 	return orig, nil
 }
 
@@ -126,7 +122,6 @@ func (c *DesEncrypter) Encrypt(data []byte) ([]byte, error) {
 		data = data[c.blockSize:]
 		dst = dst[c.blockSize:]
 	}
-	//log.Infof("gsnet: des encrypted get data %v", out)
 	return out, nil
 }
 
@@ -148,7 +143,6 @@ func NewDesDecrypter(key []byte) (*DesDecrypter, error) {
 }
 
 func (c *DesDecrypter) Decrypt(data []byte) ([]byte, error) {
-	//log.Infof("gsnet: des to descrypt data %v", data)
 	out := make([]byte, len(data))
 	dst := out
 	if len(data)%c.blockSize != 0 {
