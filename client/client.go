@@ -166,7 +166,7 @@ func (c *Client) Update() error {
 	}
 
 	// 还未连接
-	if c.IsNotConnect() {
+	if c.IsNotConnect() || c.IsDisconnected() {
 		return nil
 	}
 
