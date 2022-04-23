@@ -165,6 +165,11 @@ func (c *Client) Update() error {
 		return ErrClientRunUpdateMode
 	}
 
+	// 还未连接
+	if c.IsNotConnect() {
+		return nil
+	}
+
 	var err error
 
 	// 连接状态
