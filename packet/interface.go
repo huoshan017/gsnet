@@ -17,6 +17,10 @@ type IPacketPool interface {
 type IPacketHeader interface {
 	SetType(PacketType)
 	GetType() PacketType
+	SetMagicNumber(int32)
+	GetMagicNumber() int32
+	SetVersion(int32)
+	GetVersion() int32
 	SetCompressType(CompressType)
 	GetCompressType() CompressType
 	SetEncryptionType(EncryptionType)

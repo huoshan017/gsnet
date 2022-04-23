@@ -52,17 +52,11 @@ type msgHandlerCommon struct {
 }
 
 func newMsgHandlerCommon(codec IMsgCodec, mapper *IdMsgMapper, options *MsgOptions) *msgHandlerCommon {
-	//newHeaderFunc := options.GetNewHeaderFunc()
-	//if newHeaderFunc == nil {
-	//	newHeaderFunc = NewDefaultMsgHeader
-	//}
 	return &msgHandlerCommon{
 		sess: &MsgSession{
 			codec:   codec,
 			mapper:  mapper,
 			options: options,
-			//threadUnsafeHeader: newHeaderFunc(options),
-			//threadSafeHeader:   newHeaderFunc(options),
 		},
 	}
 }

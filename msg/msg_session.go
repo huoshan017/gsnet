@@ -22,9 +22,6 @@ type MsgSession struct {
 	codec   IMsgCodec
 	mapper  *IdMsgMapper
 	options *MsgOptions
-	//threadUnsafeHeader IMsgHeader // thread unsafe message header object
-	//threadSafeHeader   IMsgHeader // thread safe message header object
-	//locker             sync.Mutex
 }
 
 func (s *MsgSession) GetSess() common.ISession {
@@ -44,41 +41,25 @@ func (s *MsgSession) GetData(key string) any {
 }
 
 func (s *MsgSession) SendMsg(msgid MsgIdType, msg any) error {
-	return s.sendMsg(msgid, msg, false)
-}
-
-func (s *MsgSession) SendMsgThreadSafe(msgid MsgIdType, msg any) error {
-	return s.sendMsg(msgid, msg, true)
-}
-
-func (s *MsgSession) SendMsgNoCopy(msgid MsgIdType, msg any) error {
-	return s.sendMsgNoCopy(msgid, msg, false)
-}
-
-func (s *MsgSession) SendMsgNoCopyThreadSafe(msgid MsgIdType, msg any) error {
-	return s.sendMsgNoCopy(msgid, msg, true)
-}
-
-func (s *MsgSession) sendMsg(msgid MsgIdType, msg any, threadSafe bool) error {
 	msgdata, err := s.codec.Encode(msg)
 	if err != nil {
 		return err
 	}
 	pData := pool.GetBuffPool().Alloc(int32(int(s.getHeaderLength()) + len(msgdata)))
-	if err = s.formatHeaderTo(*pData, msgid, threadSafe); err != nil {
+	if err = s.formatHeaderTo(*pData, msgid); err != nil {
 		return err
 	}
 	copy((*pData)[s.getHeaderLength():], msgdata[:])
 	return s.sess.SendPoolBuffer(pData, packet.MemoryManagementPoolUserManualFree)
 }
 
-func (s *MsgSession) sendMsgNoCopy(msgid MsgIdType, msg any, threadSafe bool) error {
+func (s *MsgSession) SendMsgNoCopy(msgid MsgIdType, msg any) error {
 	msgdata, err := s.codec.Encode(msg)
 	if err != nil {
 		return err
 	}
 	idHeader := make([]byte, s.getHeaderLength())
-	if err = s.formatHeaderTo(idHeader, msgid, threadSafe); err != nil {
+	if err = s.formatHeaderTo(idHeader, msgid); err != nil {
 		return err
 	}
 	return s.sess.SendBytesArray([][]byte{idHeader, msgdata}, false)
@@ -93,7 +74,7 @@ func (s *MsgSession) CloseWait(secs int) {
 }
 
 func (s *MsgSession) splitIdAndMsg(msgdata []byte) (MsgIdType, any, error) {
-	msgid, err := s.unformatHeaderFrom(msgdata, false)
+	msgid, err := s.unformatHeaderFrom(msgdata)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -111,25 +92,8 @@ func (s *MsgSession) splitIdAndMsg(msgdata []byte) (MsgIdType, any, error) {
 	return msgid, msgobj, nil
 }
 
-func (s *MsgSession) formatHeaderTo(data []byte, msgid MsgIdType, threadSafe bool) error {
+func (s *MsgSession) formatHeaderTo(data []byte, msgid MsgIdType) error {
 	var err error
-	/*
-		if s.options.GetNewHeaderFunc() != nil { // default msg header
-			if threadSafe { // thread safe
-				s.locker.Lock()
-				defer s.locker.Unlock()
-				s.threadSafeHeader.SetId(msgid)
-				if err = s.threadSafeHeader.FormatTo(data); err != nil {
-					return err
-				}
-			} else { // thread unsafe
-				s.threadUnsafeHeader.SetId(msgid)
-				if err = s.threadUnsafeHeader.FormatTo(data); err != nil {
-					return err
-				}
-			}
-		}
-	*/
 	if s.options.GetHeaderFormatFunc() != nil {
 		err = s.options.GetHeaderFormatFunc()(msgid, data)
 	} else {
@@ -138,26 +102,11 @@ func (s *MsgSession) formatHeaderTo(data []byte, msgid MsgIdType, threadSafe boo
 	return err
 }
 
-func (s *MsgSession) unformatHeaderFrom(data []byte, threadSafe bool) (MsgIdType, error) {
+func (s *MsgSession) unformatHeaderFrom(data []byte) (MsgIdType, error) {
 	var (
 		msgid MsgIdType
 		err   error
 	)
-	/*if s.options.GetNewHeaderFunc() != nil {
-		if threadSafe {
-			s.locker.Lock()
-			defer s.locker.Unlock()
-			if err = s.threadSafeHeader.UnformatFrom(data); err != nil {
-				return 0, err
-			}
-			msgid = s.threadSafeHeader.GetId()
-		} else {
-			if err = s.threadUnsafeHeader.UnformatFrom(data); err != nil {
-				return 0, err
-			}
-			msgid = s.threadUnsafeHeader.GetId()
-		}
-	}*/
 	if s.options.GetHeaderUnformatFunc() != nil {
 		msgid, err = s.options.GetHeaderUnformatFunc()(data)
 	} else {

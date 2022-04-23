@@ -28,8 +28,8 @@ func (d *testData4ClientOptions) check(options ...common.Option) {
 
 func TestMsgOptions(t *testing.T) {
 	var ds = testData4ServerOptions{}
-	ds.check(WithHeaderLength(4))
+	ds.check(WithHeaderLength(4), WithHeaderFormatFunc(DefaultMsgHeaderFormat), WithHeaderUnformatFunc(DefaultMsgHeaderUnformat))
 
 	var dc = testData4ClientOptions{}
-	dc.check(WithHeaderLength(10))
+	dc.check(WithHeaderLength(10), WithHeaderFormatFunc(DefaultMsgHeaderFormat), WithHeaderUnformatFunc(DefaultMsgHeaderUnformat))
 }

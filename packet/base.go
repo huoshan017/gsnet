@@ -50,6 +50,22 @@ func (ph *CommonPacketHeader) GetType() PacketType {
 	return ph.Type
 }
 
+func (ph *CommonPacketHeader) SetVersion(version int32) {
+
+}
+
+func (ph *CommonPacketHeader) GetVersion() int32 {
+	return 0
+}
+
+func (ph *CommonPacketHeader) SetMagicNumber(number int32) {
+
+}
+
+func (ph *CommonPacketHeader) GetMagicNumber() int32 {
+	return 0
+}
+
 func (ph *CommonPacketHeader) SetCompressType(typ CompressType) {
 	ph.CType = typ
 }

@@ -227,23 +227,35 @@ func (c *Client) GetSession() common.ISession {
 }
 
 func (c *Client) IsNotConnect() bool {
+	if c.connector == nil {
+		return true
+	}
 	return c.connector.IsNotConnect()
 }
 
 func (c *Client) IsConnecting() bool {
+	if c.connector == nil {
+		return false
+	}
 	return c.connector.IsConnecting()
 }
 
 func (c *Client) IsConnected() bool {
+	if c.connector == nil {
+		return false
+	}
 	return c.connector.IsConnected()
 }
 
 func (c *Client) IsDisconnected() bool {
-	return c.conn == nil || c.connector.IsDisconnected()
+	if c.connector == nil {
+		return false
+	}
+	return c.connector.IsDisconnected()
 }
 
 func (c *Client) IsDisconnecting() bool {
-	if c.conn == nil {
+	if c.connector == nil {
 		return false
 	}
 	return c.connector.IsDisconnecting()
