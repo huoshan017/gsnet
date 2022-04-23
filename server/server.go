@@ -209,15 +209,15 @@ func (s *Server) handleConn(c net.Conn) {
 	// 创建连接
 	switch s.options.GetConnDataType() {
 	case 1:
-		conn = common.NewConn(c, s.options.Options)
+		conn = common.NewSimpleConn(c, s.options.Options)
 	default:
 		packetBuilder = common.NewPacketBuilder(&s.options.Options)
 		resendConfig := s.options.GetResendConfig()
 		if resendConfig != nil {
 			resendData = common.NewResendData(resendConfig)
-			conn = common.NewConn2UseResend(c, packetBuilder, resendData, &s.options.Options)
+			conn = common.NewConnUseResend(c, packetBuilder, resendData, &s.options.Options)
 		} else {
-			conn = common.NewConn2(c, packetBuilder, &s.options.Options)
+			conn = common.NewConn(c, packetBuilder, &s.options.Options)
 		}
 	}
 

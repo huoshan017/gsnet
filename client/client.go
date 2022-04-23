@@ -101,7 +101,7 @@ func (c *Client) doConnectResult(con net.Conn) {
 
 	switch c.options.GetConnDataType() {
 	case 1:
-		c.conn = common.NewConn(con, c.options.Options)
+		c.conn = common.NewSimpleConn(con, c.options.Options)
 	default:
 		packetBuilder = common.NewPacketBuilder(&c.options.Options)
 		resendConfig := c.options.GetResendConfig()
@@ -109,9 +109,9 @@ func (c *Client) doConnectResult(con net.Conn) {
 			resend = common.NewResendData(resendConfig)
 		}
 		if resend != nil {
-			c.conn = common.NewConn2UseResend(con, packetBuilder, resend, &c.options.Options)
+			c.conn = common.NewConnUseResend(con, packetBuilder, resend, &c.options.Options)
 		} else {
-			c.conn = common.NewConn2(con, packetBuilder, &c.options.Options)
+			c.conn = common.NewConn(con, packetBuilder, &c.options.Options)
 		}
 	}
 

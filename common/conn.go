@@ -3,46 +3,68 @@ package common
 import (
 	"bufio"
 	"context"
-	"io"
 	"net"
 	"sync/atomic"
 	"time"
 
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/packet"
+	"github.com/huoshan017/gsnet/pool"
 )
 
-const (
-	DefaultConnRecvChanLen = 100
-	DefaultConnSendChanLen = 100
-	DefaultReadTimeout     = time.Second * 5
-	DefaultWriteTimeout    = time.Second * 5
-	MinConnTick            = 10 * time.Millisecond
-	DefaultConnTick        = 30 * time.Millisecond
-)
-
-type Conn struct {
-	conn       net.Conn
-	options    Options
-	writer     *bufio.Writer
-	reader     *bufio.Reader
-	recvCh     chan packet.IPacket // 缓存从网络接收的数据，对应一个接收者一个发送者
-	sendCh     chan []byte         // 缓存发往网络的数据，对应一个接收者一个发送者
-	closeCh    chan struct{}       // 关闭通道
-	closed     int32               // 是否关闭
-	errCh      chan error          // 错误通道
-	errWriteCh chan error          // 写错误通道
-	ticker     *time.Ticker        // 定时器
+// wrapperSendData send data wrapper
+type wrapperSendData struct {
+	data   any
+	pt_mmt int32
 }
 
-// 创建新连接
-func NewConn(conn net.Conn, options Options) *Conn {
+// wrapperSendData.getData transfer any data to the right type
+func (sd *wrapperSendData) getData() ([]byte, *[]byte, [][]byte, []*[]byte) {
+	return GetSendData(sd.data)
+}
+
+// only free to returns from wrapperSendData.getData with same instance
+func (sd *wrapperSendData) toFree(b []byte, pb *[]byte, ba [][]byte, pba []*[]byte) {
+	mmt := sd.pt_mmt & 0xffff
+	FreeSendData2(packet.MemoryManagementType(mmt), b, pb, ba, pba)
+}
+
+// wrapperSendData.recycle recycle free send data to pool
+func (sd *wrapperSendData) recycle() {
+	if sd.data == nil {
+		panic("gsnet: wrapper send data nil")
+	}
+	b, pb, ba, pba := sd.getData()
+	sd.toFree(b, pb, ba, pba)
+}
+
+// Conn2 struct
+type Conn struct {
+	conn               net.Conn
+	options            *Options
+	writer             *bufio.Writer
+	reader             *bufio.Reader
+	recvCh             chan packet.IPacket  // 缓存从网络接收的数据，对应一个接收者一个发送者
+	sendCh             chan wrapperSendData // 缓存发往网络的数据，对应一个接收者一个发送者
+	closeCh            chan struct{}        // 关闭通道
+	closed             int32                // 是否关闭
+	errCh              chan error           // 错误通道
+	errWriteCh         chan error           // 写错误通道
+	ticker             *time.Ticker         // 定时器
+	packetBuilder      IPacketBuilder       // 包创建器
+	resendEventHandler IResendEventHandler  // 重发事件处理器
+}
+
+// NewConn2WithResend create Conn2 instance use resend
+func NewConnUseResend(conn net.Conn, packetBuilder IPacketBuilder, resend IResendEventHandler, options *Options) *Conn {
 	c := &Conn{
-		conn:       conn,
-		options:    options,
-		closeCh:    make(chan struct{}),
-		errCh:      make(chan error, 1),
-		errWriteCh: make(chan error, 1),
+		conn:               conn,
+		options:            options,
+		closeCh:            make(chan struct{}),
+		errCh:              make(chan error, 1),
+		errWriteCh:         make(chan error, 1),
+		packetBuilder:      packetBuilder,
+		resendEventHandler: resend,
 	}
 
 	if c.options.writeBuffSize <= 0 {
@@ -57,19 +79,14 @@ func NewConn(conn net.Conn, options Options) *Conn {
 		c.reader = bufio.NewReaderSize(conn, c.options.readBuffSize)
 	}
 
-	if c.options.recvChanLen <= 0 {
-		c.options.recvChanLen = DefaultConnRecvChanLen
+	if c.options.GetRecvChanLen() <= 0 {
+		c.options.SetRecvChanLen(DefaultConnRecvChanLen)
+	}
+	if c.options.GetSendChanLen() <= 0 {
+		c.options.SetSendChanLen(DefaultConnSendChanLen)
 	}
 	c.recvCh = make(chan packet.IPacket, c.options.recvChanLen)
-
-	if c.options.sendChanLen <= 0 {
-		c.options.sendChanLen = DefaultConnSendChanLen
-	}
-	c.sendCh = make(chan []byte, c.options.sendChanLen)
-
-	if c.options.dataProto == nil {
-		c.options.dataProto = &DefaultDataProto{}
-	}
+	c.sendCh = make(chan wrapperSendData, c.options.sendChanLen)
 
 	if tcpConn, ok := c.conn.(*net.TCPConn); ok {
 		if c.options.noDelay {
@@ -83,19 +100,45 @@ func NewConn(conn net.Conn, options Options) *Conn {
 		}
 	}
 
-	if c.options.tickSpan > 0 && c.options.tickSpan < MinConnTick {
+	var tickSpan = c.options.GetTickSpan()
+	if tickSpan > 0 && tickSpan < MinConnTick {
 		c.options.tickSpan = MinConnTick
+	}
+
+	// resend config
+	resendConfig := c.options.GetResendConfig()
+	if resendConfig != nil {
+		if tickSpan <= 0 || tickSpan > resendConfig.AckSentSpan {
+			tickSpan = resendConfig.AckSentSpan
+			c.options.SetTickSpan(tickSpan)
+		}
 	}
 
 	return c
 }
 
+// NewConn2 create a Conn2 instance
+func NewConn(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Conn {
+	return NewConnUseResend(conn, packetBuilder, nil, options)
+}
+
+// Conn2.LocalAddr get local address for connection
+func (c *Conn) LocalAddr() net.Addr {
+	return c.conn.LocalAddr()
+}
+
+// Conn2.RemoteAddr get remote address for connection
+func (c *Conn) RemoteAddr() net.Addr {
+	return c.conn.RemoteAddr()
+}
+
+// Conn2.Run read loop and write loop runing in goroutine
 func (c *Conn) Run() {
 	go c.readLoop()
 	go c.writeLoop()
 }
 
-// 读循环
+// Conn2.readLoop read loop goroutine
 func (c *Conn) readLoop() {
 	defer func() {
 		if err := recover(); err != nil {
@@ -103,34 +146,24 @@ func (c *Conn) readLoop() {
 		}
 	}()
 
-	var err error
-	header := make([]byte, c.options.dataProto.GetHeaderLen())
+	var (
+		pak packet.IPacket
+		err error
+	)
 	for err == nil {
-		err = c.readBytes(header)
-		if err != nil {
-			break
+		if c.options.readTimeout != 0 {
+			err = c.conn.SetReadDeadline(time.Now().Add(c.options.readTimeout))
+			if err != nil {
+				break
+			}
 		}
-
-		// todo  1. 判断长度是否超过限制 2. 用内存池来优化
-		bodyLen := c.options.dataProto.GetBodyLen(header)
-		if bodyLen > packet.MaxPacketLength {
-			err = packet.ErrBodyLengthTooLong
-			break
-		}
-
-		body := make([]byte, bodyLen)
-		err = c.readBytes(body)
-		if err != nil {
-			break
-		}
-
-		pp := packet.BytesPacket(body)
-
-		select {
-		case err = <-c.errWriteCh:
-		case <-c.closeCh:
-			err = c.genErrConnClosed()
-		case c.recvCh <- &pp:
+		pak, err = c.packetBuilder.DecodeReadFrom(c.reader)
+		if err == nil {
+			select {
+			case <-c.closeCh:
+				err = c.genErrConnClosed()
+			case c.recvCh <- pak:
+			}
 		}
 	}
 	// 错误写入通道
@@ -143,61 +176,70 @@ func (c *Conn) readLoop() {
 	close(c.recvCh)
 }
 
-// 读数据包
-func (c *Conn) readBytes(data []byte) (err error) {
-	select {
-	case <-c.closeCh:
-		err = c.genErrConnClosed()
-	case err = <-c.errWriteCh: // 接收写协程的错误
-	default:
-	}
-
-	if err != nil {
-		return
-	}
-
-	if c.options.readTimeout != 0 {
-		c.conn.SetReadDeadline(time.Now().Add(c.options.readTimeout))
-	}
-
-	_, err = io.ReadFull(c.reader, data)
-	if err != nil {
-		log.Infof("gsnet: io.ReadFull err: %v", err)
-	}
-	return
-}
-
-// 写循环
+// Conn2.writeLoop write loop goroutine
 func (c *Conn) writeLoop() {
 	defer func() {
+		// 退出时回收内存池分配的内存
+		for d := range c.sendCh {
+			d.recycle()
+		}
 		if err := recover(); err != nil {
 			log.WithStack(err)
 		}
 	}()
+
 	var err error
 	for d := range c.sendCh {
-		// 写入数据头
-		err = c.writeBytes(c.options.dataProto.EncodeBodyLen(d))
+		if c.options.writeTimeout != 0 {
+			err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+		}
+		if err == nil {
+			if d.data == nil {
+				panic("gsnet: wrapper send data nil")
+			}
+
+			// 多线程情况下，在发送数据之前调用重发的接口缓存数据，防止发送完对方收到再发确认包过来时还没来得及缓存造成确认失败
+			if c.resendEventHandler != nil {
+				mmt := packet.MemoryManagementType(d.pt_mmt & 0xffff)
+				if !c.resendEventHandler.OnSent(d.data, mmt) {
+					err = ErrSentPacketCacheFull
+				}
+			}
+
+			if err == nil {
+				pt := packet.PacketType((d.pt_mmt >> 16) & 0xffff)
+				b, pb, ba, pba := d.getData()
+
+				if b != nil {
+					err = c.packetBuilder.EncodeWriteTo(pt, b, c.writer)
+				} else if pb != nil {
+					err = c.packetBuilder.EncodeWriteTo(pt, *pb, c.writer)
+				} else if ba != nil {
+					err = c.packetBuilder.EncodeBytesArrayWriteTo(pt, ba, c.writer)
+				} else if pba != nil {
+					err = c.packetBuilder.EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
+				}
+				if err == nil {
+					// have data in buffer
+					if c.writer.Buffered() > 0 {
+						if c.options.writeTimeout != 0 {
+							err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+						}
+						if err == nil {
+							err = c.writer.Flush()
+						}
+					}
+				}
+				// no use resend
+				if c.resendEventHandler == nil {
+					d.toFree(b, pb, ba, pba)
+				}
+			}
+		}
 		if err != nil {
 			break
-		}
-		// 写入数据
-		err = c.writeBytes(d)
-		if err != nil {
-			break
-		}
-		// 数据还在缓冲
-		if c.writer.Buffered() > 0 {
-			if c.options.writeTimeout != 0 {
-				c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
-			}
-			err = c.writer.Flush()
-			if err != nil {
-				break
-			}
 		}
 	}
-	// 错误写入通道由读协程接收
 	if err != nil {
 		c.errWriteCh <- err
 	}
@@ -205,38 +247,25 @@ func (c *Conn) writeLoop() {
 	close(c.errWriteCh)
 }
 
-// 写数据包
-func (c *Conn) writeBytes(data []byte) (err error) {
-	select {
-	case <-c.closeCh:
-		err = c.genErrConnClosed()
-		return
-	default:
-	}
-
-	if c.options.writeTimeout != 0 {
-		c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
-	}
-
-	_, err = c.writer.Write(data)
-	if err != nil {
-		log.Infof("gsnet: w.writer.Write err: %v", err)
-	}
-	return
-}
-
-// 正常关闭
+// Conn2.Close close connection
 func (c *Conn) Close() {
 	c.closeWait(0)
 }
 
-// 等待關閉
+// Conn2.CloseWait close connection wait seconds
 func (c *Conn) CloseWait(secs int) {
 	c.closeWait(secs)
 }
 
-// 關閉
+// Conn2.closeWait implementation for close connection
 func (c *Conn) closeWait(secs int) {
+	defer func() {
+		// 清理接收通道内存池分配的内存
+		for d := range c.recvCh {
+			c.options.GetPacketPool().Put(d)
+		}
+	}()
+
 	if !atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
 		return
 	}
@@ -249,17 +278,18 @@ func (c *Conn) closeWait(secs int) {
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
+	c.packetBuilder.Close()
 	close(c.closeCh)
 	close(c.sendCh)
 }
 
-// 是否关闭
+// Conn2.IsClosed the connection is closed
 func (c *Conn) IsClosed() bool {
 	return atomic.LoadInt32(&c.closed) > 0
 }
 
-// 发送数据，必須與Close函數在同一goroutine調用
-func (c *Conn) Send(typ packet.PacketType, data []byte, toCopy bool) error {
+// Conn2.Send send bytes data (发送数据，必須與Close函數在同一goroutine調用)
+func (c *Conn) Send(pt packet.PacketType, data []byte, copyData bool) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
 	}
@@ -270,104 +300,243 @@ func (c *Conn) Send(typ packet.PacketType, data []byte, toCopy bool) error {
 			return c.genErrConnClosed()
 		}
 		return err
-	case <-c.closeCh:
-		return c.genErrConnClosed()
-	case c.sendCh <- data:
-	}
-	return nil
-}
-
-func (c *Conn) SendPoolBuffer(packet.PacketType, *[]byte, packet.MemoryManagementType) error {
-	return ErrNotImplement("Conn.SendPoolBuffer")
-}
-
-func (c *Conn) SendBytesArray(packet.PacketType, [][]byte, bool) error {
-	return ErrNotImplement("Conn.SendBytesArray")
-}
-
-func (c *Conn) SendPoolBufferArray(packet.PacketType, []*[]byte, packet.MemoryManagementType) error {
-	return ErrNotImplement("Conn.SendPoolBufferArray")
-}
-
-// 非阻塞发送
-func (c *Conn) SendNonblock(pt packet.Packet, data []byte, toCopy bool) error {
-	if atomic.LoadInt32(&c.closed) > 0 {
-		return c.genErrConnClosed()
-	}
-	err := c.recvErr()
-	if err != nil {
-		return err
-	}
-	select {
-	case <-c.closeCh:
-		return c.genErrConnClosed()
-	case c.sendCh <- data:
-	default:
-		return ErrSendChanFull
-	}
-	return nil
-}
-
-// 接收数据
-func (c *Conn) Recv() (packet.IPacket, error) {
-	if atomic.LoadInt32(&c.closed) > 0 {
-		return nil, c.genErrConnClosed()
-	}
-	err := c.recvErr()
-	if err != nil {
-		return nil, err
-	}
-
-	data := <-c.recvCh
-	if data == nil {
-		return nil, c.genErrConnClosed()
-	}
-	return data, nil
-}
-
-// 非阻塞接收数据
-func (c *Conn) RecvNonblock() (packet.IPacket, error) {
-	if atomic.LoadInt32(&c.closed) > 0 {
-		return nil, ErrConnClosed
-	}
-	err := c.recvErr()
-	if err != nil {
-		return nil, err
-	}
-
-	var data packet.IPacket
-	select {
-	case data = <-c.recvCh:
-		if data == nil {
-			return nil, c.genErrConnClosed()
+	case err = <-c.errWriteCh:
+		if err == nil {
+			return c.genErrConnClosed()
 		}
-	default:
-		return nil, ErrRecvChanEmpty
+	case <-c.closeCh:
+		return c.genErrConnClosed()
+	case c.sendCh <- c.getWrapperSendBytes(pt, data, copyData):
 	}
-	return data, nil
+	return nil
 }
 
-// 接收错误
-func (c *Conn) recvErr() error {
+// Conn2.SendPoolBuffer send buffer data with pool allocated (发送内存池缓存)
+func (c *Conn) SendPoolBuffer(pt packet.PacketType, pData *[]byte, mmType packet.MemoryManagementType) error {
+	if atomic.LoadInt32(&c.closed) > 0 {
+		return c.genErrConnClosed()
+	}
+	var err error
 	select {
-	case err := <-c.errCh:
+	case err = <-c.errCh:
 		if err == nil {
 			return c.genErrConnClosed()
 		}
 		return err
+	case err = <-c.errWriteCh:
+		if err == nil {
+			return c.genErrConnClosed()
+		}
 	case <-c.closeCh:
 		return c.genErrConnClosed()
-	default:
+	case c.sendCh <- c.getWrapperSendPoolBuffer(pt, pData, mmType):
 	}
 	return nil
 }
 
+// Conn2.SendBytesArray send bytes array data (发送缓冲数组)
+func (c *Conn) SendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool) error {
+	if atomic.LoadInt32(&c.closed) > 0 {
+		return c.genErrConnClosed()
+	}
+	var err error
+	select {
+	case err = <-c.errCh:
+		if err == nil {
+			return c.genErrConnClosed()
+		}
+		return err
+	case err = <-c.errWriteCh:
+		if err == nil {
+			return c.genErrConnClosed()
+		}
+	case <-c.closeCh:
+		return c.genErrConnClosed()
+	case c.sendCh <- c.getWrapperSendBytesArray(pt, datas, copyData):
+	}
+	return nil
+}
+
+// Conn2.SendPoolBufferArray send buffer array data with pool allocated (发送内存池缓存数组)
+func (c *Conn) SendPoolBufferArray(pt packet.PacketType, pDatas []*[]byte, mmType packet.MemoryManagementType) error {
+	if atomic.LoadInt32(&c.closed) > 0 {
+		return c.genErrConnClosed()
+	}
+	var err error
+	select {
+	case err = <-c.errCh:
+		if err == nil {
+			return c.genErrConnClosed()
+		}
+		return err
+	case err = <-c.errWriteCh:
+		if err == nil {
+			return c.genErrConnClosed()
+		}
+	case <-c.closeCh:
+		return c.genErrConnClosed()
+	case c.sendCh <- c.getWrapperSendPoolBufferArray(pt, pDatas, mmType):
+	}
+	return nil
+}
+
+// Conn2.SendNonblock send data no bloacked (非阻塞发送)
+func (c *Conn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) error {
+	if atomic.LoadInt32(&c.closed) > 0 {
+		return c.genErrConnClosed()
+	}
+	var err error
+	select {
+	case err = <-c.errCh:
+		if err == nil {
+			err = c.genErrConnClosed()
+		}
+	case err = <-c.errWriteCh:
+		if err == nil {
+			err = c.genErrConnClosed()
+		}
+	case <-c.closeCh:
+		err = c.genErrConnClosed()
+	case c.sendCh <- c.getWrapperSendBytes(pt, data, copyData):
+	default:
+		err = ErrSendChanFull
+	}
+	return err
+}
+
+func mergePacketTypeAndMMT(pt packet.PacketType, mmt packet.MemoryManagementType) int32 {
+	return (int32(pt) << 16 & 0x7fff0000) | int32(mmt)
+}
+
+// Conn2.getWrapperSendBytes wrap bytes data for send
+func (c *Conn) getWrapperSendBytes(pt packet.PacketType, data []byte, copyData bool) wrapperSendData {
+	if !copyData {
+		return wrapperSendData{data: data, pt_mmt: mergePacketTypeAndMMT(pt, packet.MemoryManagementSystemGC)}
+	}
+	b := pool.GetBuffPool().Alloc(int32(len(data)))
+	copy(*b, data)
+	return wrapperSendData{data: b, pt_mmt: mergePacketTypeAndMMT(pt, packet.MemoryManagementPoolUserManualFree)}
+}
+
+// Conn2.getWrapperSendBytesArray wrap bytes array data for send
+func (c *Conn) getWrapperSendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool) wrapperSendData {
+	if !copyData {
+		return wrapperSendData{data: datas, pt_mmt: mergePacketTypeAndMMT(pt, packet.MemoryManagementSystemGC)}
+	}
+
+	var ds [][]byte
+	for i := 0; i < len(datas); i++ {
+		b := pool.GetBuffPool().Alloc(int32(len(datas[i])))
+		copy(*b, datas[i])
+		ds = append(ds, *b)
+	}
+
+	return wrapperSendData{data: ds, pt_mmt: mergePacketTypeAndMMT(pt, packet.MemoryManagementPoolUserManualFree)}
+}
+
+// Conn2.getWrapperSendPoolBuffer wrap pool buffer for send
+func (c *Conn) getWrapperSendPoolBuffer(pt packet.PacketType, pData *[]byte, mt packet.MemoryManagementType) wrapperSendData {
+	var sd wrapperSendData
+	switch mt {
+	case packet.MemoryManagementSystemGC:
+		sd.data = pData
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | int32(mt)
+	case packet.MemoryManagementPoolFrameworkFree:
+		b := pool.GetBuffPool().Alloc(int32(len(*pData)))
+		copy(*b, *pData)
+		sd.data = b
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | packet.MemoryManagementPoolUserManualFree
+	case packet.MemoryManagementPoolUserManualFree:
+		sd.data = pData
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | int32(mt)
+	}
+	return sd
+}
+
+// Conn2.getWrapperSendPoolBufferArray wrap pool buffer array data for send
+func (c *Conn) getWrapperSendPoolBufferArray(pt packet.PacketType, pDataArray []*[]byte, mt packet.MemoryManagementType) wrapperSendData {
+	var sd wrapperSendData
+	switch mt {
+	case packet.MemoryManagementSystemGC:
+		sd.data = pDataArray
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | int32(mt)
+	case packet.MemoryManagementPoolFrameworkFree:
+		var pda []*[]byte
+		for i := 0; i < len(pDataArray); i++ {
+			b := pool.GetBuffPool().Alloc(int32(len(*pDataArray[i])))
+			copy(*b, *pDataArray[i])
+			pda = append(pda, b)
+		}
+		sd.data = pda
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | packet.MemoryManagementPoolUserManualFree
+	case packet.MemoryManagementPoolUserManualFree:
+		sd.data = pDataArray
+		sd.pt_mmt = mergePacketTypeAndMMT(pt, mt) //(int32(pt)<<16)&0x7fff0000 | int32(mt)
+	}
+	return sd
+}
+
+// Conn2.Recv recv packet (接收数据)
+func (c *Conn) Recv() (packet.IPacket, error) {
+	if atomic.LoadInt32(&c.closed) > 0 {
+		return nil, c.genErrConnClosed()
+	}
+	var pak packet.IPacket
+	var err error
+	select {
+	case err = <-c.errCh:
+		if err == nil {
+			err = c.genErrConnClosed()
+		}
+	case err = <-c.errWriteCh:
+		if err == nil {
+			err = c.genErrConnClosed()
+		}
+	case <-c.closeCh:
+		err = c.genErrConnClosed()
+	case pak = <-c.recvCh:
+		if pak == nil {
+			return nil, c.genErrConnClosed()
+		}
+	}
+	return pak, err
+}
+
+// Conn2.RecvNonblock recv packet no blocked (非阻塞接收数据)
+func (c *Conn) RecvNonblock() (packet.IPacket, error) {
+	if atomic.LoadInt32(&c.closed) > 0 {
+		return nil, ErrConnClosed
+	}
+	var pak packet.IPacket
+	var err error
+	select {
+	case err = <-c.errCh:
+		if err == nil {
+			err = c.genErrConnClosed()
+		}
+	case err = <-c.errWriteCh:
+		if err == nil {
+			err = c.genErrConnClosed()
+		}
+	case <-c.closeCh:
+		err = c.genErrConnClosed()
+	case pak = <-c.recvCh:
+		if pak == nil {
+			err = c.genErrConnClosed()
+		}
+	default:
+		err = ErrRecvChanEmpty
+	}
+	return pak, err
+}
+
+// Conn2.genErrConnClosed generate connection closed error
 func (c *Conn) genErrConnClosed() error {
 	//debug.PrintStack()
 	return ErrConnClosed
 }
 
-// 等待选择结果
+// Conn2.Wait wait packet or timer (等待选择结果)
 func (c *Conn) Wait(ctx context.Context) (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
@@ -378,7 +547,7 @@ func (c *Conn) Wait(ctx context.Context) (packet.IPacket, error) {
 	}
 
 	var (
-		d   packet.IPacket
+		p   packet.IPacket
 		err error
 	)
 
@@ -386,12 +555,16 @@ func (c *Conn) Wait(ctx context.Context) (packet.IPacket, error) {
 		select {
 		case <-ctx.Done():
 			err = ErrCancelWait
-		case d = <-c.recvCh:
-			if d == nil {
+		case p = <-c.recvCh:
+			if p == nil {
 				err = ErrConnClosed
 			}
 		case <-c.ticker.C:
 		case err = <-c.errCh:
+			if err == nil {
+				err = ErrConnClosed
+			}
+		case err = <-c.errWriteCh:
 			if err == nil {
 				err = ErrConnClosed
 			}
@@ -400,23 +573,19 @@ func (c *Conn) Wait(ctx context.Context) (packet.IPacket, error) {
 		select {
 		case <-ctx.Done():
 			err = ErrCancelWait
-		case d = <-c.recvCh:
-			if d == nil {
+		case p = <-c.recvCh:
+			if p == nil {
 				err = ErrConnClosed
 			}
 		case err = <-c.errCh:
 			if err == nil {
 				err = ErrConnClosed
 			}
+		case err = <-c.errWriteCh:
+			if err == nil {
+				err = ErrConnClosed
+			}
 		}
 	}
-	return d, err
-}
-
-func (c *Conn) LocalAddr() net.Addr {
-	return c.conn.LocalAddr()
-}
-
-func (c *Conn) RemoteAddr() net.Addr {
-	return c.conn.RemoteAddr()
+	return p, err
 }

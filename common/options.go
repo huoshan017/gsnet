@@ -12,13 +12,13 @@ type GenCryptoKeyFunc func(*rand.Rand) []byte
 
 // 选项结构
 type Options struct {
-	noDelay                    bool
-	keepAlived                 bool
-	keepAlivedPeriod           time.Duration
-	readTimeout                time.Duration
-	writeTimeout               time.Duration
-	tickSpan                   time.Duration
-	dataProto                  IDataProto
+	noDelay          bool
+	keepAlived       bool
+	keepAlivedPeriod time.Duration
+	readTimeout      time.Duration
+	writeTimeout     time.Duration
+	tickSpan         time.Duration
+	//dataProto                  IDataProto
 	sendChanLen                int
 	recvChanLen                int
 	writeBuffSize              int
@@ -107,14 +107,6 @@ func (options *Options) GetTickSpan() time.Duration {
 
 func (options *Options) SetTickSpan(span time.Duration) {
 	options.tickSpan = span
-}
-
-func (options *Options) GetDataProto() IDataProto {
-	return options.dataProto
-}
-
-func (options *Options) SetDataProto(proto IDataProto) {
-	options.dataProto = proto
 }
 
 func (options *Options) GetSendChanLen() int {
@@ -305,12 +297,6 @@ func WithWriteTimeout(timeout time.Duration) Option {
 func WithTickSpan(span time.Duration) Option {
 	return func(options *Options) {
 		options.SetTickSpan(span)
-	}
-}
-
-func WithDataProto(proto IDataProto) Option {
-	return func(options *Options) {
-		options.SetDataProto(proto)
 	}
 }
 

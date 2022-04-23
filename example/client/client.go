@@ -37,7 +37,6 @@ func main() {
 	for n := 1; n <= *player_num; n++ {
 		go func(no int) {
 			var options common.Options
-			options.SetDataProto(&common.DefaultDataProto{})
 			connector := client.NewConnector(&options)
 			conn, err := connector.Connect(addr)
 			if err != nil {

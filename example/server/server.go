@@ -43,7 +43,7 @@ func main() {
 			if !o {
 				continue
 			}
-			conn := common.NewConn(con, common.Options{})
+			conn := common.NewSimpleConn(con, common.Options{})
 			conn.Run()
 			c += 1
 			go func(no int, conn common.IConn) {
