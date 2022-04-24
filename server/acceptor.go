@@ -75,7 +75,7 @@ func (s *Acceptor) serve(listener net.Listener) error {
 		}
 		conn, err = listener.Accept()
 		if err != nil {
-			if net_err, ok := err.(net.Error); ok && net_err.Temporary() {
+			if net_err, ok := err.(net.Error); ok && net_err.Timeout() /*net_err.Temporary()*/ {
 				if delay == 0 {
 					delay = 5 * time.Millisecond
 				} else {

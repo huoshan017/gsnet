@@ -3,9 +3,10 @@ package common
 import "time"
 
 const (
-	DefaultSentAckTimeSpan            = time.Millisecond * 200 // 默认发送确认包间隔时间
-	DefaultAckSentNum                 = 10                     // 默认确认发送包数
-	DefaultHeartbeatTimeSpan          = time.Second * 10       // 默认发送心跳间隔时间
-	DefaultMinimumHeartbeatTimeSpan   = time.Second * 3        // 最小心跳发送间隔
-	DefaultDisconnectHeartbeatTimeout = time.Second * 30       // 断开连接的心跳超时
+	DefaultConnRecvChanLen = 100                   // 缺省连接接收通道长度
+	DefaultConnSendChanLen = 100                   // 缺省连接发送通道长度
+	DefaultReadTimeout     = time.Second * 5       // 缺省读超时
+	DefaultWriteTimeout    = time.Second * 5       // 缺省写超时
+	MinConnTick            = 10 * time.Millisecond // 连接中的最小tick
+	DefaultConnTick        = 30 * time.Millisecond // 缺省tick
 )

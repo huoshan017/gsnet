@@ -102,7 +102,7 @@ func NewConnUseResend(conn net.Conn, packetBuilder IPacketBuilder, resend IResen
 
 	var tickSpan = c.options.GetTickSpan()
 	if tickSpan > 0 && tickSpan < MinConnTick {
-		c.options.tickSpan = MinConnTick
+		c.options.SetTickSpan(MinConnTick)
 	}
 
 	// resend config
@@ -481,8 +481,10 @@ func (c *Conn) Recv() (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, c.genErrConnClosed()
 	}
-	var pak packet.IPacket
-	var err error
+	var (
+		pak packet.IPacket
+		err error
+	)
 	select {
 	case err = <-c.errCh:
 		if err == nil {
@@ -507,8 +509,12 @@ func (c *Conn) RecvNonblock() (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
 	}
-	var pak packet.IPacket
-	var err error
+
+	var (
+		pak packet.IPacket
+		err error
+	)
+
 	select {
 	case err = <-c.errCh:
 		if err == nil {
@@ -542,49 +548,35 @@ func (c *Conn) Wait(ctx context.Context) (packet.IPacket, error) {
 		return nil, ErrConnClosed
 	}
 
+	var (
+		p        packet.IPacket
+		err      error
+		tickerCh <-chan time.Time
+	)
+
 	if c.ticker == nil && c.options.tickSpan > 0 {
 		c.ticker = time.NewTicker(c.options.tickSpan)
 	}
 
-	var (
-		p   packet.IPacket
-		err error
-	)
-
 	if c.ticker != nil {
-		select {
-		case <-ctx.Done():
-			err = ErrCancelWait
-		case p = <-c.recvCh:
-			if p == nil {
-				err = ErrConnClosed
-			}
-		case <-c.ticker.C:
-		case err = <-c.errCh:
-			if err == nil {
-				err = ErrConnClosed
-			}
-		case err = <-c.errWriteCh:
-			if err == nil {
-				err = ErrConnClosed
-			}
+		tickerCh = c.ticker.C
+	}
+
+	select {
+	case <-ctx.Done():
+		err = ErrCancelWait
+	case p = <-c.recvCh:
+		if p == nil {
+			err = ErrConnClosed
 		}
-	} else {
-		select {
-		case <-ctx.Done():
-			err = ErrCancelWait
-		case p = <-c.recvCh:
-			if p == nil {
-				err = ErrConnClosed
-			}
-		case err = <-c.errCh:
-			if err == nil {
-				err = ErrConnClosed
-			}
-		case err = <-c.errWriteCh:
-			if err == nil {
-				err = ErrConnClosed
-			}
+	case <-tickerCh:
+	case err = <-c.errCh:
+		if err == nil {
+			err = ErrConnClosed
+		}
+	case err = <-c.errWriteCh:
+		if err == nil {
+			err = ErrConnClosed
 		}
 	}
 	return p, err

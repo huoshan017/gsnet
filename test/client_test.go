@@ -335,3 +335,18 @@ func BenchmarkClient(b *testing.B) {
 
 	b.Logf("benchmark done")
 }
+
+func TestNilChannel(t *testing.T) {
+	var (
+		nilCh chan struct{}
+		strCh = make(chan string)
+	)
+	for i := 0; i < 10; i++ {
+		select {
+		case <-nilCh:
+		case <-strCh:
+		default:
+			time.Sleep(time.Second)
+		}
+	}
+}

@@ -105,6 +105,14 @@ func (s *Server) Listen(addr string) error {
 	return nil
 }
 
+func (s *Server) ListenAndServe(addr string) error {
+	err := s.Listen(addr)
+	if err == nil {
+		s.Start()
+	}
+	return err
+}
+
 func (s *Server) SetMainTickHandle(handle func(time.Duration)) {
 	s.mainTickHandle = handle
 }
@@ -119,49 +127,40 @@ func (s *Server) Start() {
 		s.acceptor.Serve()
 	}()
 
-	var ticker *time.Ticker
-	var lastTime time.Time
+	var (
+		ticker   *time.Ticker
+		lastTime time.Time
+		tickerCh <-chan time.Time
+		conn     net.Conn
+		o        bool = true
+	)
+
 	if s.mainTickHandle != nil && s.options.GetTickSpan() > 0 {
 		ticker = time.NewTicker(s.options.GetTickSpan())
 		lastTime = time.Now()
 	}
 
-	var conn net.Conn
-	var o bool = true
 	if ticker != nil {
-		for o {
-			select {
-			case <-s.endLoopCh:
-				o = false
-			case conn, o = <-s.acceptor.GetNewConnChan():
-				if !o { // 已关闭
-					continue
-				}
-				s.handleConn(conn)
-			case <-ticker.C:
-				now := time.Now()
-				tick := now.Sub(lastTime)
-				s.mainTickHandle(tick)
-				lastTime = now
-			case c := <-s.sessCloseInfoChan:
-				s.handleClose(c)
+		tickerCh = ticker.C
+	}
+
+	for o {
+		select {
+		case <-s.endLoopCh:
+			o = false
+		case conn, o = <-s.acceptor.GetNewConnChan():
+			if !o { // 已关闭
+				continue
 			}
+			s.handleConn(conn)
+		case <-tickerCh:
+			s.handleTick(&lastTime)
+		case c := <-s.sessCloseInfoChan:
+			s.handleClose(c)
 		}
+	}
+	if ticker != nil {
 		ticker.Stop()
-	} else {
-		for o {
-			select {
-			case <-s.endLoopCh:
-				o = false
-			case conn, o = <-s.acceptor.GetNewConnChan():
-				if !o {
-					continue
-				}
-				s.handleConn(conn)
-			case c := <-s.sessCloseInfoChan:
-				s.handleClose(c)
-			}
-		}
 	}
 }
 
@@ -175,6 +174,13 @@ func (s *Server) End() {
 
 func (s *Server) getSessCloseInfoChan() chan *sessionCloseInfo {
 	return s.sessCloseInfoChan
+}
+
+func (s *Server) handleTick(lastTime *time.Time) {
+	now := time.Now()
+	tick := now.Sub(*lastTime)
+	s.mainTickHandle(tick)
+	*lastTime = now
 }
 
 func (s *Server) handleHandshake(conn common.IConn, basePacketHandler common.IBasePacketHandler) (bool, error) {

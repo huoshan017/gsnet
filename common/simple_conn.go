@@ -12,14 +12,7 @@ import (
 	"github.com/huoshan017/gsnet/packet"
 )
 
-const (
-	DefaultConnRecvChanLen = 100
-	DefaultConnSendChanLen = 100
-	DefaultReadTimeout     = time.Second * 5
-	DefaultWriteTimeout    = time.Second * 5
-	MinConnTick            = 10 * time.Millisecond
-	DefaultConnTick        = 30 * time.Millisecond
-)
+const ()
 
 type IDataProto interface {
 	GetHeaderLen() uint8
