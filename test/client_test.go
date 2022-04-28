@@ -187,7 +187,7 @@ func (h *testClientUseUpdateHandler) OnPacket(sess common.ISession, packet packe
 	if h.compareNum >= 100 {
 		sess.Close()
 	}
-	h.t.Logf("compared %v", h.compareNum)
+	//h.t.Logf("compared %v", h.compareNum)
 	return nil
 }
 

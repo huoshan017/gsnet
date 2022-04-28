@@ -413,9 +413,9 @@ func (c *SimpleConn) genErrConnClosed() error {
 }
 
 // 等待选择结果
-func (c *SimpleConn) Wait(ctx context.Context) (packet.IPacket, error) {
+func (c *SimpleConn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacket, int32, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
-		return nil, ErrConnClosed
+		return nil, 0, ErrConnClosed
 	}
 
 	if c.ticker == nil && c.options.tickSpan > 0 {
@@ -423,39 +423,35 @@ func (c *SimpleConn) Wait(ctx context.Context) (packet.IPacket, error) {
 	}
 
 	var (
-		d   packet.IPacket
-		err error
+		d        packet.IPacket
+		id       int32
+		chTicker <-chan time.Time
+		err      error
 	)
 
 	if c.ticker != nil {
-		select {
-		case <-ctx.Done():
-			err = ErrCancelWait
-		case d = <-c.recvCh:
-			if d == nil {
-				err = ErrConnClosed
-			}
-		case <-c.ticker.C:
-		case err = <-c.errCh:
-			if err == nil {
-				err = ErrConnClosed
-			}
+		chTicker = c.ticker.C
+	}
+
+	select {
+	case <-ctx.Done():
+		err = ErrCancelWait
+	case d = <-c.recvCh:
+		if d == nil {
+			err = ErrConnClosed
 		}
-	} else {
-		select {
-		case <-ctx.Done():
-			err = ErrCancelWait
-		case d = <-c.recvCh:
-			if d == nil {
-				err = ErrConnClosed
-			}
-		case err = <-c.errCh:
-			if err == nil {
-				err = ErrConnClosed
-			}
+	case <-chTicker:
+	case pak, o := <-chPak:
+		if o {
+			d = pak.pak
+			id = pak.id
+		}
+	case err = <-c.errCh:
+		if err == nil {
+			err = ErrConnClosed
 		}
 	}
-	return d, err
+	return d, id, err
 }
 
 func (c *SimpleConn) LocalAddr() net.Addr {

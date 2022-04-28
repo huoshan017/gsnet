@@ -5,6 +5,7 @@ import (
 	"net"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
@@ -31,7 +32,6 @@ type Server struct {
 	mainTickHandle    func(time.Duration)
 	options           ServerOptions
 	sessCloseInfoChan chan *sessionCloseInfo
-	sessionIdCounter  uint64
 	sessMap           map[uint64]*common.Session
 	ctx               context.Context
 	cancel            context.CancelFunc
@@ -189,7 +189,7 @@ func (s *Server) handleHandshake(conn common.IConn, basePacketHandler common.IBa
 		res int32
 		err error
 	)
-	pak, err = conn.Wait(s.ctx)
+	pak, _, err = conn.Wait(s.ctx, nil)
 	if err == nil && pak != nil {
 		res, err = basePacketHandler.OnHandleHandshake(pak)
 	}
@@ -261,8 +261,7 @@ func (s *Server) handleConn(c net.Conn) {
 	}
 
 	// 創建會話
-	s.sessionIdCounter += 1
-	sess := common.NewSession(conn, s.sessionIdCounter)
+	sess := common.NewSession(conn, getNextSessionId())
 	sess.SetResendData(resendData)
 	s.sessMap[sess.GetId()] = sess
 	s.waitWg.Add(1)
@@ -296,17 +295,27 @@ func (s *Server) handleConn(c net.Conn) {
 			var (
 				lastTime time.Time = time.Now()
 				pak      packet.IPacket
+				id       int32
 			)
 			for run {
-				pak, err = conn.Wait(s.ctx)
+				pak, id, err = conn.Wait(s.ctx, sess.GetPacketChannel())
 				if err == nil {
 					if pak != nil {
-						var res, err = basePacketHandler.OnPreHandle(pak)
-						if err == nil && res == 0 {
-							err = handler.OnPacket(sess, pak)
-						}
-						if err == nil {
-							err = basePacketHandler.OnPostHandle(pak)
+						if id != 0 {
+							inboundHandle := sess.GetInboundHandles()[id]
+							if inboundHandle != nil {
+								err = inboundHandle(sess, pak)
+							} else {
+								log.Infof("gsnet: inbound handle with id %v not found", id)
+							}
+						} else {
+							var res, err = basePacketHandler.OnPreHandle(pak)
+							if err == nil && res == 0 {
+								err = handler.OnPacket(sess, pak)
+							}
+							if err == nil {
+								err = basePacketHandler.OnPostHandle(pak)
+							}
 						}
 						// free packet to pool
 						s.options.GetPacketPool().Put(pak)
@@ -359,4 +368,12 @@ type packetBuilderArgsGetter struct {
 
 func (h *packetBuilderArgsGetter) Get() []any {
 	return []any{h.getter.GetCryptoKey()}
+}
+
+var (
+	globalSessionIdCounter uint64
+)
+
+func getNextSessionId() uint64 {
+	return atomic.AddUint64(&globalSessionIdCounter, 1)
 }

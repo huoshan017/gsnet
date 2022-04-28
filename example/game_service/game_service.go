@@ -133,7 +133,7 @@ func (h *SessionHandler) onPlayerEnterGame(sess *msg.MsgSession, msg any) error 
 	p.token = req.Token
 	p.sess = sess
 	playerMgr.Add(p)
-	sess.SetData("player", pd)
+	sess.SetUserData("player", pd)
 	sess.SendMsg(game_proto.MsgIdGamePlayerEnterResp, &resp)
 	fmt.Println("Player ", p.account, " entered game")
 	return nil

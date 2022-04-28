@@ -381,7 +381,7 @@ func (pc *PacketBuilder) DecodeReadFrom(reader io.Reader) (packet.IPacket, error
 		}
 		p := pc.options.GetPacketPool().Get()
 		pak = any(p).(*packet.Packet)
-		pak.Set2(packetType, packet.MemoryManagementSystemGC, data)
+		pak.SetGCData(packetType, packet.MemoryManagementSystemGC, data)
 	}
 	return pak, nil
 }

@@ -1,6 +1,8 @@
 package packet
 
-import "errors"
+import (
+	"errors"
+)
 
 const (
 	MaxPacketLength = 128 * 1024
@@ -111,10 +113,19 @@ func (p BytesPacket) MMType() MemoryManagementType {
 
 // 基础包结构
 type Packet struct {
-	typ   PacketType           // 类型
-	mType MemoryManagementType // 内存管理类型
-	data  *[]byte
-	data2 []byte
+	typ    PacketType           // 类型
+	mType  MemoryManagementType // 内存管理类型
+	data   *[]byte              // 数据缓冲地址
+	offset int32                // 有效数据偏移
+	data2  []byte               // GC对应的数据
+}
+
+func (p *Packet) Reset() {
+	p.typ = PacketNormalData
+	p.mType = MemoryManagementSystemGC
+	p.data = nil
+	p.offset = 0
+	p.data2 = nil
 }
 
 func (p Packet) Type() PacketType {
@@ -129,7 +140,7 @@ func (p Packet) Data() []byte {
 	if p.mType == MemoryManagementSystemGC {
 		return p.data2
 	} else {
-		return *p.data
+		return (*p.data)[p.offset:]
 	}
 }
 
@@ -143,8 +154,30 @@ func (p *Packet) Set(typ PacketType, mType MemoryManagementType, data *[]byte) {
 	p.data = data
 }
 
-func (p *Packet) Set2(typ PacketType, mType MemoryManagementType, data []byte) {
+func (p *Packet) SetGCData(typ PacketType, mType MemoryManagementType, data []byte) {
 	p.typ = typ
 	p.mType = MemoryManagementSystemGC
 	p.data2 = data
+}
+
+func (p *Packet) ChangeDataOwnership(newPak *Packet, dataOffset int32, toMMType MemoryManagementType) {
+	newPak.typ = p.typ
+	newPak.offset = dataOffset
+	if p.mType == MemoryManagementSystemGC {
+		newPak.data2 = p.data2
+		p.data2 = nil
+		p.mType = MemoryManagementSystemGC
+	} else {
+		newPak.data = p.data
+		p.data = nil
+		if toMMType != MemoryManagementSystemGC {
+			newPak.mType = toMMType
+		} else {
+			newPak.mType = p.mType
+		}
+	}
+}
+
+func (p *Packet) Offset(offset int32) {
+	p.offset = offset
 }

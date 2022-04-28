@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	ErrClientRunUpdateMode   = errors.New("gsnet: client run update mode")
-	ErrClientRunMainLoopMode = errors.New("gsnet: client run main loop mode")
+	ErrClientRunUpdateMode          = errors.New("gsnet: client run update mode")
+	ErrClientRunMainLoopMode        = errors.New("gsnet: client run main loop mode")
+	ErrClientConnectionNotEstablish = errors.New("gsnet: client not establish connection")
 )
 
 // 数据客户端
@@ -155,9 +156,30 @@ func (c *Client) doConnectResult(con net.Conn) {
 
 func (c *Client) Send(data []byte, copyData bool) error {
 	if c.connector.GetState() != ConnStateConnected {
-		return errors.New("gsnet: client not establish connection")
+		return ErrClientConnectionNotEstablish
 	}
 	return c.sess.Send(data, copyData)
+}
+
+func (c *Client) SendPoolBuffer(buffer *[]byte) error {
+	if c.connector.GetState() != ConnStateConnected {
+		return ErrClientConnectionNotEstablish
+	}
+	return c.sess.SendPoolBuffer(buffer)
+}
+
+func (c *Client) SendBytesArray(bytesArray [][]byte, copyData bool) error {
+	if c.connector.GetState() != ConnStateConnected {
+		return errors.New("gsnet: client not establish connection")
+	}
+	return c.sess.SendBytesArray(bytesArray, copyData)
+}
+
+func (c *Client) SendPoolBufferArray(bufferArray []*[]byte) error {
+	if c.connector.GetState() != ConnStateConnected {
+		return errors.New("gsnet: client not establish connection")
+	}
+	return c.sess.SendPoolBufferArray(bufferArray)
 }
 
 func (c *Client) Update() error {
@@ -277,7 +299,7 @@ func (c *Client) handleHandshake(mode int32) (bool, error) {
 		return false, err
 	}
 	if mode == 0 {
-		pak, err = c.conn.Wait(c.ctx)
+		pak, _, err = c.conn.Wait(c.ctx, nil)
 	} else {
 		pak, err = c.conn.RecvNonblock()
 	}
@@ -299,7 +321,7 @@ func (c *Client) handle(mode int32) error {
 	)
 
 	if mode == 0 {
-		pak, err = c.conn.Wait(c.ctx)
+		pak, _, err = c.conn.Wait(c.ctx, c.sess.GetPacketChannel())
 	} else {
 		pak, err = c.conn.RecvNonblock()
 	}

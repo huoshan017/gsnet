@@ -113,7 +113,7 @@ func withMsgOptionValue(options *common.Options, setValue func(*MsgClientOptions
 	} else {
 		sp := (*server.ServerOptions)(unsafe.Pointer(options))
 		if sp == nil {
-			msp := (*MsgServerOptions)(unsafe.Pointer(options))
+			msp := (*MsgServerOptions)(unsafe.Pointer(sp))
 			if msp == nil {
 				panic("type *Options transfer to *MsgServerOptions failed")
 			}

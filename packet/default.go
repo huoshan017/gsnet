@@ -23,7 +23,8 @@ func NewDefaultPacketPool() *DefaultPacketPool {
 }
 
 func (p *DefaultPacketPool) Get() IPacket {
-	pak := p.pool.Get().(IPacket)
+	pak := p.pool.Get().(*Packet)
+	pak.Reset()
 	p.usingPackets.Store(pak, true)
 	return pak
 }
@@ -37,7 +38,9 @@ func (p *DefaultPacketPool) Put(pak IPacket) {
 		return
 	}
 	if pak.MMType() == MemoryManagementPoolFrameworkFree || pak.MMType() == MemoryManagementPoolUserManualFree {
-		pool.GetBuffPool().Free(pak.PData())
+		if pak.PData() != nil {
+			pool.GetBuffPool().Free(pak.PData())
+		}
 	}
 	p.pool.Put(pak)
 }

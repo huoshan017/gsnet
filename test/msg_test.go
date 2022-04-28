@@ -21,7 +21,7 @@ const (
 	MsgIdPing = msg.MsgIdType(1)
 	MsgIdPong = msg.MsgIdType(2)
 	sendCount = 5000
-	clientNum = 3000
+	clientNum = 5000
 )
 
 var (
@@ -278,7 +278,7 @@ func (h *testPBMsgHandler2) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdTyp
 		//h.t.Logf("session %v OnMsgHandle %v", sess.GetId(), []byte(m.Content))
 		var rm tproto.MsgPong
 		rm.Content = m.Content
-		return sess.SendMsgNoCopy(MsgIdPong, &rm)
+		return sess.SendMsg(MsgIdPong, &rm)
 	}
 	return nil
 }

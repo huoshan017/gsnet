@@ -6,6 +6,7 @@ import (
 )
 
 var (
+	ErrNoError             = errors.New("no error")
 	ErrConnClosed          = errors.New("connetion is closed")
 	ErrSendChanFull        = errors.New("send chan full")
 	ErrRecvChanEmpty       = errors.New("recv chan empty")

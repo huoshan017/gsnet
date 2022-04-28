@@ -109,9 +109,9 @@ func (d *msgHandlerCommon) SendMsg(s common.ISession, msgid MsgIdType, msgobj an
 	return d.sess.SendMsg(msgid, msgobj)
 }
 
-func (d *msgHandlerCommon) SendMsgNoCopy(s common.ISession, msgid MsgIdType, msgobj any) error {
+func (d *msgHandlerCommon) SendMsgOnCopy(s common.ISession, msgid MsgIdType, msgobj any) error {
 	d.sess.sess = s
-	return d.sess.SendMsgNoCopy(msgid, msgobj)
+	return d.sess.SendMsgOnCopy(msgid, msgobj)
 }
 
 type msgHandlerClient struct {

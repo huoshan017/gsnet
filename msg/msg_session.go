@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/huoshan017/gsnet/common"
-	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/pool"
 )
 
@@ -32,15 +31,15 @@ func (s *MsgSession) GetId() uint64 {
 	return s.sess.GetId()
 }
 
-func (s *MsgSession) SetData(key string, value any) {
-	s.sess.SetData(key, value)
+func (s *MsgSession) SetUserData(key string, value any) {
+	s.sess.SetUserData(key, value)
 }
 
 func (s *MsgSession) GetData(key string) any {
-	return s.sess.GetData(key)
+	return s.sess.GetUserData(key)
 }
 
-func (s *MsgSession) SendMsg(msgid MsgIdType, msg any) error {
+func (s *MsgSession) SendMsgOnCopy(msgid MsgIdType, msg any) error {
 	msgdata, err := s.codec.Encode(msg)
 	if err != nil {
 		return err
@@ -50,10 +49,10 @@ func (s *MsgSession) SendMsg(msgid MsgIdType, msg any) error {
 		return err
 	}
 	copy((*pData)[s.getHeaderLength():], msgdata[:])
-	return s.sess.SendPoolBuffer(pData, packet.MemoryManagementPoolUserManualFree)
+	return s.sess.SendPoolBuffer(pData)
 }
 
-func (s *MsgSession) SendMsgNoCopy(msgid MsgIdType, msg any) error {
+func (s *MsgSession) SendMsg(msgid MsgIdType, msg any) error {
 	msgdata, err := s.codec.Encode(msg)
 	if err != nil {
 		return err

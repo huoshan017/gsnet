@@ -38,7 +38,7 @@ func (sd *wrapperSendData) recycle() {
 	sd.toFree(b, pb, ba, pba)
 }
 
-// Conn2 struct
+// Conn struct
 type Conn struct {
 	conn               net.Conn
 	options            *Options
@@ -55,7 +55,7 @@ type Conn struct {
 	resendEventHandler IResendEventHandler  // 重发事件处理器
 }
 
-// NewConn2WithResend create Conn2 instance use resend
+// NewConnWithResend create Conn2 instance use resend
 func NewConnUseResend(conn net.Conn, packetBuilder IPacketBuilder, resend IResendEventHandler, options *Options) *Conn {
 	c := &Conn{
 		conn:               conn,
@@ -117,28 +117,28 @@ func NewConnUseResend(conn net.Conn, packetBuilder IPacketBuilder, resend IResen
 	return c
 }
 
-// NewConn2 create a Conn2 instance
+// NewConn create a Conn2 instance
 func NewConn(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Conn {
 	return NewConnUseResend(conn, packetBuilder, nil, options)
 }
 
-// Conn2.LocalAddr get local address for connection
+// Conn.LocalAddr get local address for connection
 func (c *Conn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
-// Conn2.RemoteAddr get remote address for connection
+// Conn.RemoteAddr get remote address for connection
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
-// Conn2.Run read loop and write loop runing in goroutine
+// Conn.Run read loop and write loop runing in goroutine
 func (c *Conn) Run() {
 	go c.readLoop()
 	go c.writeLoop()
 }
 
-// Conn2.readLoop read loop goroutine
+// Conn.readLoop read loop goroutine
 func (c *Conn) readLoop() {
 	defer func() {
 		if err := recover(); err != nil {
@@ -176,7 +176,7 @@ func (c *Conn) readLoop() {
 	close(c.recvCh)
 }
 
-// Conn2.writeLoop write loop goroutine
+// Conn.writeLoop write loop goroutine
 func (c *Conn) writeLoop() {
 	defer func() {
 		// 退出时回收内存池分配的内存
@@ -247,17 +247,17 @@ func (c *Conn) writeLoop() {
 	close(c.errWriteCh)
 }
 
-// Conn2.Close close connection
+// Conn.Close close connection
 func (c *Conn) Close() {
 	c.closeWait(0)
 }
 
-// Conn2.CloseWait close connection wait seconds
+// Conn.CloseWait close connection wait seconds
 func (c *Conn) CloseWait(secs int) {
 	c.closeWait(secs)
 }
 
-// Conn2.closeWait implementation for close connection
+// Conn.closeWait implementation for close connection
 func (c *Conn) closeWait(secs int) {
 	defer func() {
 		// 清理接收通道内存池分配的内存
@@ -283,12 +283,12 @@ func (c *Conn) closeWait(secs int) {
 	close(c.sendCh)
 }
 
-// Conn2.IsClosed the connection is closed
+// Conn.IsClosed the connection is closed
 func (c *Conn) IsClosed() bool {
 	return atomic.LoadInt32(&c.closed) > 0
 }
 
-// Conn2.Send send bytes data (发送数据，必須與Close函數在同一goroutine調用)
+// Conn.Send send bytes data (发送数据，必須與Close函數在同一goroutine調用)
 func (c *Conn) Send(pt packet.PacketType, data []byte, copyData bool) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
@@ -311,7 +311,7 @@ func (c *Conn) Send(pt packet.PacketType, data []byte, copyData bool) error {
 	return nil
 }
 
-// Conn2.SendPoolBuffer send buffer data with pool allocated (发送内存池缓存)
+// Conn.SendPoolBuffer send buffer data with pool allocated (发送内存池缓存)
 func (c *Conn) SendPoolBuffer(pt packet.PacketType, pData *[]byte, mmType packet.MemoryManagementType) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
@@ -334,7 +334,7 @@ func (c *Conn) SendPoolBuffer(pt packet.PacketType, pData *[]byte, mmType packet
 	return nil
 }
 
-// Conn2.SendBytesArray send bytes array data (发送缓冲数组)
+// Conn.SendBytesArray send bytes array data (发送缓冲数组)
 func (c *Conn) SendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
@@ -357,7 +357,7 @@ func (c *Conn) SendBytesArray(pt packet.PacketType, datas [][]byte, copyData boo
 	return nil
 }
 
-// Conn2.SendPoolBufferArray send buffer array data with pool allocated (发送内存池缓存数组)
+// Conn.SendPoolBufferArray send buffer array data with pool allocated (发送内存池缓存数组)
 func (c *Conn) SendPoolBufferArray(pt packet.PacketType, pDatas []*[]byte, mmType packet.MemoryManagementType) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
@@ -380,7 +380,7 @@ func (c *Conn) SendPoolBufferArray(pt packet.PacketType, pDatas []*[]byte, mmTyp
 	return nil
 }
 
-// Conn2.SendNonblock send data no bloacked (非阻塞发送)
+// Conn.SendNonblock send data no bloacked (非阻塞发送)
 func (c *Conn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
@@ -408,7 +408,7 @@ func mergePacketTypeAndMMT(pt packet.PacketType, mmt packet.MemoryManagementType
 	return (int32(pt) << 16 & 0x7fff0000) | int32(mmt)
 }
 
-// Conn2.getWrapperSendBytes wrap bytes data for send
+// Conn.getWrapperSendBytes wrap bytes data for send
 func (c *Conn) getWrapperSendBytes(pt packet.PacketType, data []byte, copyData bool) wrapperSendData {
 	if !copyData {
 		return wrapperSendData{data: data, pt_mmt: mergePacketTypeAndMMT(pt, packet.MemoryManagementSystemGC)}
@@ -418,7 +418,7 @@ func (c *Conn) getWrapperSendBytes(pt packet.PacketType, data []byte, copyData b
 	return wrapperSendData{data: b, pt_mmt: mergePacketTypeAndMMT(pt, packet.MemoryManagementPoolUserManualFree)}
 }
 
-// Conn2.getWrapperSendBytesArray wrap bytes array data for send
+// Conn.getWrapperSendBytesArray wrap bytes array data for send
 func (c *Conn) getWrapperSendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool) wrapperSendData {
 	if !copyData {
 		return wrapperSendData{data: datas, pt_mmt: mergePacketTypeAndMMT(pt, packet.MemoryManagementSystemGC)}
@@ -434,7 +434,7 @@ func (c *Conn) getWrapperSendBytesArray(pt packet.PacketType, datas [][]byte, co
 	return wrapperSendData{data: ds, pt_mmt: mergePacketTypeAndMMT(pt, packet.MemoryManagementPoolUserManualFree)}
 }
 
-// Conn2.getWrapperSendPoolBuffer wrap pool buffer for send
+// Conn.getWrapperSendPoolBuffer wrap pool buffer for send
 func (c *Conn) getWrapperSendPoolBuffer(pt packet.PacketType, pData *[]byte, mt packet.MemoryManagementType) wrapperSendData {
 	var sd wrapperSendData
 	switch mt {
@@ -453,7 +453,7 @@ func (c *Conn) getWrapperSendPoolBuffer(pt packet.PacketType, pData *[]byte, mt 
 	return sd
 }
 
-// Conn2.getWrapperSendPoolBufferArray wrap pool buffer array data for send
+// Conn.getWrapperSendPoolBufferArray wrap pool buffer array data for send
 func (c *Conn) getWrapperSendPoolBufferArray(pt packet.PacketType, pDataArray []*[]byte, mt packet.MemoryManagementType) wrapperSendData {
 	var sd wrapperSendData
 	switch mt {
@@ -476,7 +476,7 @@ func (c *Conn) getWrapperSendPoolBufferArray(pt packet.PacketType, pDataArray []
 	return sd
 }
 
-// Conn2.Recv recv packet (接收数据)
+// Conn.Recv recv packet (接收数据)
 func (c *Conn) Recv() (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, c.genErrConnClosed()
@@ -504,7 +504,7 @@ func (c *Conn) Recv() (packet.IPacket, error) {
 	return pak, err
 }
 
-// Conn2.RecvNonblock recv packet no blocked (非阻塞接收数据)
+// Conn.RecvNonblock recv packet no blocked (非阻塞接收数据)
 func (c *Conn) RecvNonblock() (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
@@ -536,20 +536,21 @@ func (c *Conn) RecvNonblock() (packet.IPacket, error) {
 	return pak, err
 }
 
-// Conn2.genErrConnClosed generate connection closed error
+// Conn.genErrConnClosed generate connection closed error
 func (c *Conn) genErrConnClosed() error {
 	//debug.PrintStack()
 	return ErrConnClosed
 }
 
-// Conn2.Wait wait packet or timer (等待选择结果)
-func (c *Conn) Wait(ctx context.Context) (packet.IPacket, error) {
+// Conn.Wait wait packet or timer (等待选择结果)
+func (c *Conn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacket, int32, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
-		return nil, ErrConnClosed
+		return nil, 0, ErrConnClosed
 	}
 
 	var (
 		p        packet.IPacket
+		id       int32
 		err      error
 		tickerCh <-chan time.Time
 	)
@@ -570,6 +571,13 @@ func (c *Conn) Wait(ctx context.Context) (packet.IPacket, error) {
 			err = ErrConnClosed
 		}
 	case <-tickerCh:
+	case pak, o := <-chPak:
+		if o {
+			p = pak.pak
+			id = pak.id
+		} else {
+			log.Infof("gsnet: inbound channel is closed")
+		}
 	case err = <-c.errCh:
 		if err == nil {
 			err = ErrConnClosed
@@ -579,5 +587,5 @@ func (c *Conn) Wait(ctx context.Context) (packet.IPacket, error) {
 			err = ErrConnClosed
 		}
 	}
-	return p, err
+	return p, id, err
 }
