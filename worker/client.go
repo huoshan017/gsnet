@@ -14,6 +14,8 @@ type clientHandler struct {
 	commonHandler
 	owner    *Client
 	idPacket common.IdWithPacket
+	pcount   int32
+	count    int32
 }
 
 func newClientHandler(c *Client) *clientHandler {
@@ -21,10 +23,10 @@ func newClientHandler(c *Client) *clientHandler {
 }
 
 func (h *clientHandler) OnPacket(sess common.ISession, pak packet.IPacket) error {
-	sessId := common.BufferToUint64(pak.Data())
+	sessId := common.BufferToUint64(pak.Data()[:8])
 	chPak := h.owner.getPakChan(sessId)
 	if chPak == nil {
-		log.Infof("gsnet: worker client cant get channel for session %v", sessId)
+		log.Infof("gsnet: not yet bound handle for session %v", sessId)
 		return nil
 	}
 	if pak.MMType() == packet.MemoryManagementSystemGC {
@@ -39,12 +41,15 @@ func (h *clientHandler) OnPacket(sess common.ISession, pak packet.IPacket) error
 			if _, o = pak.(*packet.BytesPacket); o {
 				h.idPacket.Set(h.owner.id, pak)
 			} else {
-				//log.Infof("gsnet: packet data type not supported")
 				return ErrPacketTypeNotSupported
 			}
 		}
 	}
+	h.pcount += 1
+	log.Infof("!!!!!!!!!!!! pcount %v, pak %+v", h.pcount, h.idPacket.GetPak())
 	chPak <- h.idPacket
+	h.count += 1
+	log.Infof("!!!!!!!!!!!! count %v, pak %+v", h.count, h.idPacket.GetPak())
 	return nil
 }
 
@@ -53,14 +58,12 @@ type Client struct {
 	handler  *clientHandler
 	id       int32
 	name     string
-	pakChans map[uint64]chan common.IdWithPacket
-	locker   sync.RWMutex
+	pakChans sync.Map
 }
 
 func newClient(name string, options ...common.Option) *Client {
 	c := &Client{
-		name:     name,
-		pakChans: make(map[uint64]chan common.IdWithPacket),
+		name: name,
 	}
 	c.handler = newClientHandler(c)
 	c.c = client.NewClient(c.handler, options...)
@@ -83,11 +86,9 @@ func (c *Client) DialTimeout(address string, timeout time.Duration) error {
 	return nil
 }
 
-func (c *Client) AttachPacketHandle(sess common.ISession, handle func(common.ISession, packet.IPacket) error) {
+func (c *Client) BoundPacketHandle(sess common.ISession, handle func(common.ISession, packet.IPacket) error) {
 	sess.AddInboundHandle(c.id, handle)
-	c.locker.Lock()
-	c.pakChans[sess.GetId()] = sess.GetPacketChannel()
-	c.locker.Unlock()
+	c.pakChans.Store(sess.GetId(), sess.GetPacketChannel())
 }
 
 func (c *Client) NewSessionChannel(sess common.ISession) *common.SessionChannel {
@@ -111,9 +112,14 @@ func (c *Client) SetErrorHandle(handle func(error)) {
 }
 
 func (c *Client) getPakChan(id uint64) chan common.IdWithPacket {
-	c.locker.RLock()
-	defer c.locker.RUnlock()
-	return c.pakChans[id]
+	var (
+		d any
+		o bool
+	)
+	if d, o = c.pakChans.Load(id); !o {
+		return nil
+	}
+	return d.(chan common.IdWithPacket)
 }
 
 type clientManager struct {

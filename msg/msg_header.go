@@ -72,7 +72,7 @@ func DefaultMsgHeaderUnformat(data []byte) (MsgIdType, error) {
 	}
 	var msgid MsgIdType
 	for i := 0; i < DefaultMsgHeaderLength; i++ {
-		msgid += MsgIdType(data[i] << (8 * (DefaultMsgHeaderLength - i - 1)))
+		msgid += (MsgIdType(data[i]) << (8 * (DefaultMsgHeaderLength - i - 1)))
 	}
 	return msgid, nil
 }

@@ -358,7 +358,6 @@ func (s *Server) handleClose(err *sessionCloseInfo) {
 		}
 		delete(s.sessMap, err.sessionId)
 		s.waitWg.Done()
-		log.Info("handleClose sess count ", len(s.sessMap), ", sessionId: ", err.sessionId)
 	}
 }
 

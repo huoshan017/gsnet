@@ -16,7 +16,7 @@ func (h *serverHandler) setPacketHandle(handle func(common.ISession, packet.IPac
 }
 
 func (h *serverHandler) OnPacket(sess common.ISession, pak packet.IPacket) error {
-	sessId := common.BufferToUint64(pak.Data())
+	sessId := common.BufferToUint64(pak.Data()[:8])
 	sessChannel := common.NewSessionChannel(sessId, sess)
 	if pak.MMType() == packet.MemoryManagementSystemGC {
 		p := packet.BytesPacket(pak.Data()[8:])

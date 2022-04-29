@@ -135,6 +135,7 @@ type testClientUseUpdateHandler struct {
 	t            *testing.T
 	state        int32 // 1 客户端模式   2 服务器模式
 	sendDataList *sendDataInfo
+	totalNum     int32
 	compareNum   int32
 }
 
@@ -151,6 +152,9 @@ func newTestClientUseUpdateHandler(args ...any) common.ISessionEventHandler {
 	h.state = args[1].(int32)
 	if len(args) > 2 {
 		h.sendDataList, _ = args[2].(*sendDataInfo)
+	}
+	if len(args) > 3 {
+		h.totalNum = args[3].(int32)
 	}
 	return h
 }
@@ -184,7 +188,7 @@ func (h *testClientUseUpdateHandler) OnPacket(sess common.ISession, packet packe
 		}
 	}
 	h.compareNum += 1
-	if h.compareNum >= 100 {
+	if h.compareNum >= h.totalNum {
 		sess.Close()
 	}
 	//h.t.Logf("compared %v", h.compareNum)
@@ -202,9 +206,9 @@ func (h *testClientUseUpdateHandler) OnError(err error) {
 	}
 }
 
-func createTestClientUseUpdate(t *testing.T, state int32, userData any) *client.Client {
+func createTestClientUseUpdate(t *testing.T, state int32, userData any, count int32) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseUpdateHandler(t, state, userData), client.WithRunMode(client.RunModeOnlyUpdate))
+	return client.NewClient(newTestClientUseUpdateHandler(t, state, userData, count), client.WithRunMode(client.RunModeOnlyUpdate))
 }
 
 func TestClientUseUpdate(t *testing.T) {
@@ -222,7 +226,7 @@ func TestClientUseUpdate(t *testing.T) {
 
 	sendNum := 10
 	sd := createSendDataInfo(int32(sendNum))
-	tc := createTestClientUseUpdate(t, 2, sd)
+	tc := createTestClientUseUpdate(t, 2, sd, 100)
 	err = tc.Connect(testAddress)
 	if err != nil {
 		t.Errorf("test client connect err: %+v", err)
@@ -267,7 +271,7 @@ func TestClientAsyncConnect(t *testing.T) {
 
 	sendNum := 10
 	sd := createSendDataInfo(int32(sendNum))
-	tc := createTestClientUseUpdate(t, 2, sd)
+	tc := createTestClientUseUpdate(t, 2, sd, 100)
 	tc.ConnectAsync(testAddress, 0, func(err error) {
 		if err != nil {
 			t.Logf("test client connect async err %v", err)

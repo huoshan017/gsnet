@@ -18,6 +18,14 @@ func (ip *IdWithPacket) Set(id int32, pak packet.IPacket) {
 	ip.pak = pak
 }
 
+func (ip *IdWithPacket) GetId() int32 {
+	return ip.id
+}
+
+func (ip *IdWithPacket) GetPak() packet.IPacket {
+	return ip.pak
+}
+
 // 连接接口
 type IConn interface {
 	LocalAddr() net.Addr

@@ -51,20 +51,15 @@ func FreeSendData2(mmt packet.MemoryManagementType, b []byte, pb *[]byte, ba [][
 }
 
 func Uint64ToBuffer(num uint64, buffer []byte) {
-	buffer[0] = byte(num & 0xff)
-	buffer[1] = byte(num >> 8 & 0xff)
-	buffer[2] = byte(num >> 16 & 0xff)
-	buffer[3] = byte(num >> 24 & 0xff)
-	buffer[4] = byte(num >> 32 & 0xff)
-	buffer[5] = byte(num >> 40 & 0xff)
-	buffer[6] = byte(num >> 48 & 0xff)
-	buffer[7] = byte(num >> 56 & 0xff)
+	for i := 0; i < 8; i++ {
+		buffer[i] = byte(num >> (8 * i) & 0xff)
+	}
 }
 
 func BufferToUint64(buffer []byte) uint64 {
 	var num uint64
 	for i := 0; i < 8; i++ {
-		num += uint64(buffer[i] << (8 * i))
+		num += (uint64(buffer[i]) << (8 * i))
 	}
 	return num
 }

@@ -2,6 +2,8 @@ package test
 
 import (
 	"math/rand"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -70,7 +72,7 @@ func (h *serverHandlerUseWorkerClient) OnError(err error) {
 func (h *serverHandlerUseWorkerClient) getWorkerSess(sess common.ISession) common.ISession {
 	if h.workerSess == nil {
 		if c := worker.GetClient(workerClientName); c != nil {
-			c.AttachPacketHandle(sess, h.OnPacketFromWorkerServer)
+			c.BoundPacketHandle(sess, h.OnPacketFromWorkerServer)
 			h.workerSess = c.NewSessionChannel(sess)
 		}
 	}
@@ -139,6 +141,74 @@ func createWorkerServer(address string, t *testing.T) *worker.Server {
 	return s
 }
 
+func TestWorkerServer(t *testing.T) {
+	ws := createWorkerServer(workerServerAddress, t)
+	if ws == nil {
+		return
+	}
+	defer ws.End()
+
+	swc := createServerUseWorkerClient(testAddress, t)
+	if swc == nil {
+		return
+	}
+	defer swc.End()
+
+	var (
+		clientNum        = 900
+		compareNum int32 = 20
+		wg         sync.WaitGroup
+		count      int32
+	)
+
+	wg.Add(clientNum)
+	for i := 0; i < clientNum; i++ {
+		sd := createSendDataInfo(100)
+		client := createTestClientUseUpdate(t, 1, sd, compareNum)
+		go func(no int) {
+			defer func() {
+				wg.Done()
+				t.Logf("already complete %v", atomic.AddInt32(&count, 1))
+			}()
+
+			err := client.Connect(testAddress)
+			if err != nil {
+				t.Logf("test client connect err %v", err)
+				return
+			}
+			defer client.Close()
+
+			t.Logf("test client %v connected server", no)
+
+			ran := rand.New(rand.NewSource(time.Now().UnixNano()))
+			for {
+				err = client.Update()
+				if err != nil {
+					t.Logf("test client update err %v", err)
+					break
+				}
+				if client.IsConnected() {
+					rn := ran.Intn(128) + 1
+					d := randBytes(rn, ran)
+					err = client.Send(d, false)
+					if err != nil {
+						t.Logf("test client send err: %+v", err)
+						break
+					}
+					sd.appendSendData(d)
+				}
+				time.Sleep(time.Millisecond * 10)
+			}
+		}(i + 1)
+	}
+
+	wg.Wait()
+
+	time.Sleep(time.Second)
+
+	t.Logf("test done")
+}
+
 func TestWorkerClient(t *testing.T) {
 	ws := createWorkerServer(workerServerAddress, t)
 	if ws == nil {
@@ -152,9 +222,9 @@ func TestWorkerClient(t *testing.T) {
 	}
 	defer swc.End()
 
-	sendNum := 1000
-	sd := createSendDataInfo(int32(sendNum))
-	client := createTestClientUseUpdate(t, 1, sd)
+	sd := createSendDataInfo(int32(1000))
+	var compareNum int32 = 100
+	client := createTestClientUseUpdate(t, 1, sd, compareNum)
 	err := client.Connect(testAddress)
 	if err != nil {
 		t.Logf("test client connect err %v", err)
@@ -164,7 +234,6 @@ func TestWorkerClient(t *testing.T) {
 
 	t.Logf("test client connected server")
 
-	n := 100
 	ran := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for {
 		err = client.Update()
@@ -172,8 +241,8 @@ func TestWorkerClient(t *testing.T) {
 			t.Logf("test client update err %v", err)
 			break
 		}
-		if client.IsConnected() && n > 0 {
-			rn := ran.Intn(100000) + 1
+		if client.IsConnected() {
+			rn := ran.Intn(128*1024) + 1
 			d := randBytes(rn, ran)
 			err = client.Send(d, false)
 			if err != nil {
@@ -181,7 +250,6 @@ func TestWorkerClient(t *testing.T) {
 				break
 			}
 			sd.appendSendData(d)
-			n -= 1
 		}
 		time.Sleep(time.Millisecond)
 	}
