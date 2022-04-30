@@ -14,7 +14,7 @@ type IPacketPool interface {
 	Put(IPacket)
 }
 
-type IPacketHeader interface {
+type IPacketBaseHeader interface {
 	SetType(PacketType)
 	GetType() PacketType
 	SetMagicNumber(int32)
@@ -27,6 +27,10 @@ type IPacketHeader interface {
 	GetEncryptionType() EncryptionType
 	SetDataLength(uint32)
 	GetDataLength() uint32
+}
+
+type IPacketHeader interface {
+	IPacketBaseHeader
 	GetValue(string) any
 	SetValue(string, any)
 	FormatTo(buf []byte) error

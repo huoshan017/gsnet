@@ -14,8 +14,6 @@ type clientHandler struct {
 	commonHandler
 	owner    *Client
 	idPacket common.IdWithPacket
-	pcount   int32
-	count    int32
 }
 
 func newClientHandler(c *Client) *clientHandler {
@@ -45,11 +43,7 @@ func (h *clientHandler) OnPacket(sess common.ISession, pak packet.IPacket) error
 			}
 		}
 	}
-	h.pcount += 1
-	log.Infof("!!!!!!!!!!!! pcount %v, pak %+v", h.pcount, h.idPacket.GetPak())
 	chPak <- h.idPacket
-	h.count += 1
-	log.Infof("!!!!!!!!!!!! count %v, pak %+v", h.count, h.idPacket.GetPak())
 	return nil
 }
 

@@ -181,13 +181,14 @@ func TestWorkerServer(t *testing.T) {
 			t.Logf("test client %v connected server", no)
 
 			ran := rand.New(rand.NewSource(time.Now().UnixNano()))
+			var cn int32
 			for {
 				err = client.Update()
 				if err != nil {
 					t.Logf("test client update err %v", err)
 					break
 				}
-				if client.IsConnected() {
+				if client.IsConnected() && cn < compareNum {
 					rn := ran.Intn(128) + 1
 					d := randBytes(rn, ran)
 					err = client.Send(d, false)
