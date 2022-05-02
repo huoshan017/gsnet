@@ -20,6 +20,7 @@ var (
 	ErrNotImplement = func(funcName string) error {
 		return fmt.Errorf("not implement %v", funcName)
 	}
+	ErrPacketTypeNotSupported = errors.New("gsnet: packet data type not supported")
 )
 
 var noDisconnectErrMap = make(map[error]struct{})

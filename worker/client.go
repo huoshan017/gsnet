@@ -51,14 +51,11 @@ type Client struct {
 	c        *client.Client
 	handler  *clientHandler
 	id       int32
-	name     string
 	pakChans sync.Map
 }
 
-func newClient(name string, options ...common.Option) *Client {
-	c := &Client{
-		name: name,
-	}
+func newClient(options ...common.Option) *Client {
+	c := &Client{}
 	c.handler = newClientHandler(c)
 	c.c = client.NewClient(c.handler, options...)
 	return c
@@ -153,7 +150,7 @@ func (cm *clientManager) getClient(name string) *Client {
 }
 
 func NewClient(name string, options ...common.Option) *Client {
-	c := newClient(name, options...)
+	c := newClient(options...)
 	cmInstance.addClient(name, c)
 	return c
 }

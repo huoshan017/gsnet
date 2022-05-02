@@ -13,30 +13,28 @@ type NewMsgSessionHandlerFunc func(args ...any) IMsgSessionEventHandler
 type MsgServer struct {
 	*server.Server
 	options MsgServerOptions
-	newFunc NewMsgSessionHandlerFunc
-	codec   IMsgCodec
-	mapper  *IdMsgMapper
+}
+
+func prepareMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCodec, mapper *IdMsgMapper, msgServerOptions *MsgServerOptions, options ...common.Option) func(args ...any) common.ISessionEventHandler {
+	for i := 0; i < len(options); i++ {
+		options[i](&msgServerOptions.Options)
+	}
+	if len(funcArgs) > 0 {
+		msgServerOptions.SetNewSessionHandlerFuncArgs(funcArgs...)
+	}
+	var newSessionHandlerFunc server.NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
+		msgSessionHandler := newFunc(args...)
+		ms := newMsgHandlerServer(msgSessionHandler, codec, mapper, &msgServerOptions.MsgOptions)
+		return common.ISessionEventHandler(ms)
+	}
+	return newSessionHandlerFunc
 }
 
 // NewMsgServer create new message server
 func NewMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCodec, mapper *IdMsgMapper, options ...common.Option) *MsgServer {
-	s := &MsgServer{
-		newFunc: newFunc,
-		codec:   codec,
-		mapper:  mapper,
-	}
-	for i := 0; i < len(options); i++ {
-		options[i](&s.options.Options)
-	}
-	if len(funcArgs) > 0 {
-		s.options.SetNewSessionHandlerFuncArgs(funcArgs...)
-	}
-	var newSessionHandler server.NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
-		msgSessionHandler := s.newFunc(args...)
-		ms := newMsgHandlerServer(msgSessionHandler, s.codec, s.mapper, &s.options.MsgOptions)
-		return common.ISessionEventHandler(ms)
-	}
-	s.Server = server.NewServerWithOptions(newSessionHandler, &s.options.ServerOptions)
+	s := &MsgServer{}
+	newSessionHandlerFunc := prepareMsgServer(newFunc, funcArgs, codec, mapper, &s.options, options...)
+	s.Server = server.NewServerWithOptions(newSessionHandlerFunc, &s.options.ServerOptions)
 	return s
 }
 

@@ -39,29 +39,45 @@ func (s *MsgSession) GetData(key string) any {
 	return s.sess.GetUserData(key)
 }
 
-func (s *MsgSession) SendMsgOnCopy(msgid MsgIdType, msg any) error {
+func (s *MsgSession) serializeMsgOnCopy(msgid MsgIdType, msg any) (*[]byte, error) {
 	msgdata, err := s.codec.Encode(msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	pData := pool.GetBuffPool().Alloc(int32(int(s.getHeaderLength()) + len(msgdata)))
 	if err = s.formatHeaderTo(*pData, msgid); err != nil {
-		return err
+		return nil, err
 	}
 	copy((*pData)[s.getHeaderLength():], msgdata[:])
-	return s.sess.SendPoolBuffer(pData)
+	return pData, nil
 }
 
-func (s *MsgSession) SendMsg(msgid MsgIdType, msg any) error {
-	msgdata, err := s.codec.Encode(msg)
+func (s *MsgSession) SendMsgOnCopy(msgid MsgIdType, msg any) error {
+	pData, err := s.serializeMsgOnCopy(msgid, msg)
 	if err != nil {
 		return err
 	}
+	return s.sess.SendPoolBuffer(pData)
+}
+
+func (s *MsgSession) serializeMsg(msgid MsgIdType, msg any) ([][]byte, error) {
+	msgdata, err := s.codec.Encode(msg)
+	if err != nil {
+		return nil, err
+	}
 	idHeader := make([]byte, s.getHeaderLength())
 	if err = s.formatHeaderTo(idHeader, msgid); err != nil {
+		return nil, err
+	}
+	return [][]byte{idHeader, msgdata}, nil
+}
+
+func (s *MsgSession) SendMsg(msgid MsgIdType, msg any) error {
+	dataArray, err := s.serializeMsg(msgid, msg)
+	if err != nil {
 		return err
 	}
-	return s.sess.SendBytesArray([][]byte{idHeader, msgdata}, false)
+	return s.sess.SendBytesArray(dataArray, false)
 }
 
 func (s *MsgSession) Close() {

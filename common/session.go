@@ -1,6 +1,9 @@
 package common
 
-import "github.com/huoshan017/gsnet/packet"
+import (
+	"github.com/huoshan017/gsnet/packet"
+	"github.com/huoshan017/gsnet/pool"
+)
 
 const (
 	DefaultPacketChannelLength = 32
@@ -100,4 +103,89 @@ func (s *Session) SetResendData(resendData *ResendData) {
 
 func (s *Session) GetResendData() *ResendData {
 	return s.resendData
+}
+
+type AgentSession struct {
+	agentId uint32
+	sess    ISession
+}
+
+func NewAgentSession(agentId uint32, sess ISession) *AgentSession {
+	return &AgentSession{
+		agentId: agentId,
+		sess:    sess,
+	}
+}
+
+func (sc *AgentSession) GetId() uint64 {
+	return sc.sess.GetId()
+}
+
+func (as *AgentSession) send(data []byte) error {
+	temp := make([]byte, 4)
+	Uint32ToBuffer(as.agentId, temp)
+	return as.sess.SendBytesArray([][]byte{temp, data}, false)
+}
+
+func (as *AgentSession) sendOnCopy(data []byte) error {
+	buffer := pool.GetBuffPool().Alloc(4 + int32(len(data)))
+	Uint32ToBuffer(as.agentId, (*buffer)[:4])
+	copy((*buffer)[4:], data)
+	return as.sess.SendPoolBuffer(buffer)
+}
+
+func (as *AgentSession) Send(data []byte, isCopy bool) error {
+	if !isCopy {
+		return as.send(data)
+	} else {
+		return as.sendOnCopy(data)
+	}
+}
+
+func (as *AgentSession) SendBytesArray(datas [][]byte, isCopy bool) error {
+	temp := make([]byte, 4)
+	Uint32ToBuffer(as.agentId, temp)
+	datas = append([][]byte{temp}, datas...)
+	return as.sess.SendBytesArray(datas, isCopy)
+}
+
+func (as *AgentSession) SendPoolBuffer(buffer *[]byte) error {
+	buf := pool.GetBuffPool().Alloc(4)
+	Uint32ToBuffer(as.agentId, (*buf)[:])
+	return as.sess.SendPoolBufferArray([]*[]byte{buf, buffer})
+}
+
+func (as *AgentSession) SendPoolBufferArray(bufferArray []*[]byte) error {
+	buf := pool.GetBuffPool().Alloc(4)
+	Uint32ToBuffer(as.agentId, (*buf)[:])
+	bufferArray = append([]*[]byte{buf}, bufferArray...)
+	return as.sess.SendPoolBufferArray(bufferArray)
+}
+
+func (as *AgentSession) Close() {
+	as.sess.Close()
+}
+
+func (sc *AgentSession) CloseWaitSecs(secs int) {
+	sc.sess.CloseWaitSecs(secs)
+}
+
+func (sc *AgentSession) AddInboundHandle(id int32, handle func(ISession, packet.IPacket) error) {
+	sc.sess.AddInboundHandle(id, handle)
+}
+
+func (sc *AgentSession) GetInboundHandles() map[int32]func(ISession, packet.IPacket) error {
+	return sc.sess.GetInboundHandles()
+}
+
+func (sc *AgentSession) GetPacketChannel() chan IdWithPacket {
+	return sc.sess.GetPacketChannel()
+}
+
+func (sc *AgentSession) SetUserData(key string, data any) {
+	sc.sess.SetUserData(key, data)
+}
+
+func (sc *AgentSession) GetUserData(key string) any {
+	return sc.sess.GetUserData(key)
 }
