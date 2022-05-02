@@ -99,6 +99,31 @@ func (c *AgentMsgSession) SendOnCopy(msgId MsgIdType, msgObj any) error {
 	return c.AgentSession.SendPoolBuffer(pData)
 }
 
+// NewProtoBufAgentMsgClient create protobuf agent message client
+func NewProtoBufAgentMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *AgentMsgClient {
+	return NewAgentMsgClient(&codec.ProtobufCodec{}, idMsgMapper, options...)
+}
+
+// NewJsonMsgClient create json agent message client
+func NewJsonAgentMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *AgentMsgClient {
+	return NewAgentMsgClient(&codec.JsonCodec{}, idMsgMapper, options...)
+}
+
+// NewGobMsgClient create gob agent message client
+func NewGobAgentMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *AgentMsgClient {
+	return NewAgentMsgClient(&codec.GobCodec{}, idMsgMapper, options...)
+}
+
+// NewThriftMsgClient create thrift agent message client
+func NewThriftAgentMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *AgentMsgClient {
+	return NewAgentMsgClient(&codec.ThriftCodec{}, idMsgMapper, options...)
+}
+
+// NewMsgpackMsgClient create msgpack agent message client
+func NewMsgpackAgentMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *AgentMsgClient {
+	return NewAgentMsgClient(&codec.MsgpackCodec{}, idMsgMapper, options...)
+}
+
 // struct AgentMsgServer
 type AgentMsgServer struct {
 	server  *server.AgentServer
