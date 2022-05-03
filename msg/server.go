@@ -38,8 +38,8 @@ func NewMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCo
 	return s
 }
 
-// NewProtoBufMsgServer create a protobuf message server
-func NewProtoBufMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
+// NewProtobufMsgServer create a protobuf message server
+func NewProtobufMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgServer {
 	return NewMsgServer(newFunc, funcArgs, &codec.ProtobufCodec{}, idMsgMapper, options...)
 }
 

@@ -56,8 +56,8 @@ func (c *MsgClient) Send(msgid MsgIdType, msg any) error {
 	return c.handler.SendMsg(c.GetSession(), msgid, msg)
 }
 
-// NewProtoBufMsgClient create protobuf message client
-func NewProtoBufMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+// NewProtobufMsgClient create protobuf message client
+func NewProtobufMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
 	return NewMsgClient(&codec.ProtobufCodec{}, idMsgMapper, options...)
 }
 

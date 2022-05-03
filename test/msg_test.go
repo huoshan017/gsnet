@@ -55,7 +55,7 @@ func newPBMsgClient(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error)
 		options = append(options, common.WithUseHeartbeat(true))
 	}
 
-	c = msg.NewProtoBufMsgClient(idMsgMapper, options...)
+	c = msg.NewProtobufMsgClient(idMsgMapper, options...)
 
 	c.SetConnectHandle(func(sess *msg.MsgSession) {
 		t.Logf("connected")
@@ -158,7 +158,7 @@ func newPBMsgServer(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error)
 	if config.useHeartbeat {
 		options = append(options, common.WithUseHeartbeat(true))
 	}
-	s = msg.NewProtoBufMsgServer(newTestPBMsgHandler, []any{t}, idMsgMapper, options...)
+	s = msg.NewProtobufMsgServer(newTestPBMsgHandler, []any{t}, idMsgMapper, options...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
@@ -232,7 +232,7 @@ func newPBMsgClient2(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error
 	if config.useHeartbeat {
 		options = append(options, common.WithUseHeartbeat(true))
 	}
-	c = msg.NewProtoBufMsgClient(idMsgMapper, options...)
+	c = msg.NewProtobufMsgClient(idMsgMapper, options...)
 
 	handler := newTestPBMsgClientHandler(t, c)
 	c.SetConnectHandle(handler.OnConnect)
@@ -307,7 +307,7 @@ func newPBMsgServer2(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error
 		options = append(options, common.WithUseHeartbeat(true))
 	}
 	options = append(options, msg.WithHeaderFormatFunc(msg.DefaultMsgHeaderFormat), msg.WithHeaderUnformatFunc(msg.DefaultMsgHeaderUnformat))
-	s = msg.NewProtoBufMsgServer(newTestPBMsgHandler2, []any{t}, idMsgMapper, options...)
+	s = msg.NewProtobufMsgServer(newTestPBMsgHandler2, []any{t}, idMsgMapper, options...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
