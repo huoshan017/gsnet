@@ -23,6 +23,10 @@ func (h *testServerHandler) OnConnect(sess common.ISession) {
 	log.Infof("new client(session_id: %v) connected", sess.GetId())
 }
 
+func (h *testServerHandler) OnReady(sess common.ISession) {
+	log.Infof("client(session_id: %v) ready", sess.GetId())
+}
+
 func (h *testServerHandler) OnDisconnect(sess common.ISession, err error) {
 	log.Infof("client(session_id: %v) disconnected, err: %v", sess.GetId(), err)
 }

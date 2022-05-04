@@ -32,10 +32,8 @@ func createMsgAgentClient() (*msg.MsgAgentClient, error) {
 }
 
 type serverHandlerUseMsgAgentClient struct {
-	msgAgentClient           *msg.MsgAgentClient
-	agentSess                *msg.MsgAgentSession
-	recvCountFromClient      int32
-	recvCountFromAgentServer int32
+	msgAgentClient *msg.MsgAgentClient
+	agentSess      *msg.MsgAgentSession
 }
 
 func newServerHandlerUseMsgAgentClient(args ...any) msg.IMsgSessionEventHandler {
@@ -47,7 +45,13 @@ func (h *serverHandlerUseMsgAgentClient) OnConnected(sess *msg.MsgSession) {
 	log.Infof("session %v connected to server", sess.GetId())
 }
 
+func (h *serverHandlerUseMsgAgentClient) OnReady(sess *msg.MsgSession) {
+	h.agentSess = h.msgAgentClient.BoundSession(sess, h.OnMsgFromAgentServer)
+	log.Infof("session %v ready", sess.GetId())
+}
+
 func (h *serverHandlerUseMsgAgentClient) OnDisconnected(sess *msg.MsgSession, err error) {
+	h.msgAgentClient.UnboundSession(sess, h.agentSess)
 	log.Infof("session %v disconnected from server", sess.GetId())
 }
 
@@ -60,7 +64,6 @@ func (h *serverHandlerUseMsgAgentClient) OnMsgHandle(sess *msg.MsgSession, msgid
 
 	var err error
 	if msgid == acommon.MsgIdPing {
-		h.recvCountFromClient += 1
 		m := msgobj.(*tproto.MsgPing)
 		var response tproto.MsgPong
 		response.Content = m.Content
@@ -80,14 +83,12 @@ func (h *serverHandlerUseMsgAgentClient) OnError(err error) {
 
 func (h *serverHandlerUseMsgAgentClient) getAgentSess(sess *msg.MsgSession) *msg.MsgAgentSession {
 	if h.agentSess == nil {
-		h.agentSess = h.msgAgentClient.BoundHandleAndGetAgentSession(sess, h.OnMsgFromAgentServer)
+		h.agentSess = h.msgAgentClient.BoundSession(sess, h.OnMsgFromAgentServer)
 	}
 	return h.agentSess
 }
 
 func (h *serverHandlerUseMsgAgentClient) OnMsgFromAgentServer(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
-	h.recvCountFromAgentServer += 1
-	//log.Infof("recvCountFromClient %v,  recvCountFromAgentServer %v", h.recvCountFromClient, h.recvCountFromAgentServer)
 	return sess.SendMsg(msgid, msgobj)
 }
 
@@ -97,7 +98,7 @@ func createServerUseMsgAgentClient(address string) *msg.MsgServer {
 		log.Fatalf("create agent client err %v", err)
 		return nil
 	}
-	s := msg.NewProtobufMsgServer(newServerHandlerUseMsgAgentClient, []any{msgAgentClient}, acommon.IdMsgMapper)
+	s := msg.NewProtobufMsgServer(newServerHandlerUseMsgAgentClient, []any{msgAgentClient}, acommon.IdMsgMapper, common.WithSendListMode(acommon.SendListMode))
 	if err = s.Listen(address); err != nil {
 		log.Infof("test server listen err %v", err)
 		return nil

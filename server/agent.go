@@ -9,6 +9,7 @@ import (
 
 type commonHandler struct {
 	connectHandle    func(common.ISession)
+	readyHandle      func(common.ISession)
 	disconnectHandle func(common.ISession, error)
 	tickHandle       func(common.ISession, time.Duration)
 	errorHandle      func(error)
@@ -16,6 +17,10 @@ type commonHandler struct {
 
 func (h *commonHandler) setConnectHandle(handle func(common.ISession)) {
 	h.connectHandle = handle
+}
+
+func (h *commonHandler) setReadyHandle(handle func(common.ISession)) {
+	h.readyHandle = handle
 }
 
 func (h *commonHandler) setDisconnectHandle(handle func(common.ISession, error)) {
@@ -33,6 +38,12 @@ func (h *commonHandler) setErrorHandle(handle func(error)) {
 func (h *commonHandler) OnConnect(sess common.ISession) {
 	if h.connectHandle != nil {
 		h.connectHandle(sess)
+	}
+}
+
+func (h *commonHandler) OnReady(sess common.ISession) {
+	if h.readyHandle != nil {
+		h.readyHandle(sess)
 	}
 }
 
@@ -65,23 +76,25 @@ func (h *serverHandler) setPacketHandle(handle func(common.ISession, packet.IPac
 
 func (h *serverHandler) OnPacket(sess common.ISession, pak packet.IPacket) error {
 	agentId := common.BufferToUint32(pak.Data()[:4])
-	agentSess := common.NewAgentSession(agentId, sess)
-	if pak.MMType() == packet.MemoryManagementSystemGC {
-		p := packet.BytesPacket(pak.Data()[4:])
-		pak = &p
+	ppak, o := pak.(*packet.Packet)
+	if o {
+		ppak.Offset(4)
 	} else {
-		ppak, o := pak.(*packet.Packet)
+		bpak, o := pak.(*packet.BytesPacket)
 		if !o {
 			return common.ErrPacketTypeNotSupported
 		}
-		ppak.Offset(4)
+		p := packet.BytesPacket(bpak.Data()[4:])
+		pak = &p
 	}
+	agentSess := common.NewAgentSession(agentId, sess)
 	return h.packetHandle(agentSess, pak)
 }
 
 func newServerHandler(handler common.ISessionEventHandler) *serverHandler {
 	sh := &serverHandler{}
 	sh.setConnectHandle(handler.OnConnect)
+	sh.setReadyHandle(handler.OnReady)
 	sh.setDisconnectHandle(handler.OnDisconnect)
 	sh.setTickHandle(handler.OnTick)
 	sh.setErrorHandle(handler.OnError)

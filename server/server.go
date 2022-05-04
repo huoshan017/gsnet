@@ -274,6 +274,8 @@ func (s *Server) handleConn(c net.Conn) {
 			}
 		}()
 
+		handler.OnConnect(sess)
+
 		var (
 			err error
 			run = true
@@ -290,7 +292,8 @@ func (s *Server) handleConn(c net.Conn) {
 
 		// handle packet
 		if err == nil {
-			handler.OnConnect(sess)
+
+			handler.OnReady(sess)
 
 			var (
 				lastTime time.Time = time.Now()

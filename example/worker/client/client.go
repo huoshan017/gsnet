@@ -82,6 +82,10 @@ func (h *testClientUseUpdateHandler) OnConnect(sess common.ISession) {
 	log.Infof("connected")
 }
 
+func (h *testClientUseUpdateHandler) OnReady(sess common.ISession) {
+	log.Infof("ready")
+}
+
 func (h *testClientUseUpdateHandler) OnDisconnect(sess common.ISession, err error) {
 	log.Infof("disconnected, err: %v", err)
 }

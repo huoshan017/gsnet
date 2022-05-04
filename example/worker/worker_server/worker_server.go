@@ -22,6 +22,10 @@ func (h *workerServerHandler) OnConnect(sess common.ISession) {
 	log.Infof("session %v connected to worker server", sess.GetId())
 }
 
+func (h *workerServerHandler) OnReady(sess common.ISession) {
+	log.Infof("sesion %v ready", sess.GetId())
+}
+
 func (h *workerServerHandler) OnDisconnect(sess common.ISession, err error) {
 	log.Infof("session %v disconnected from worker server", sess.GetId())
 }

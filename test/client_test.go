@@ -45,6 +45,16 @@ func (h *testClientUseRunHandler) OnConnect(sess common.ISession) {
 	}
 }
 
+func (h *testClientUseRunHandler) OnReady(sess common.ISession) {
+	if h.state == 2 {
+		if h.t != nil {
+			h.t.Logf("TestClientUseRun ready")
+		} else if h.b != nil {
+			h.b.Logf("TestClientUseRun ready")
+		}
+	}
+}
+
 func (h *testClientUseRunHandler) OnDisconnect(sess common.ISession, err error) {
 	if h.state == 2 {
 		if h.t != nil {
@@ -163,6 +173,14 @@ func (h *testClientUseUpdateHandler) OnConnect(sess common.ISession) {
 	if h.state == 2 {
 		if h.t != nil {
 			h.t.Logf("connected")
+		}
+	}
+}
+
+func (h *testClientUseUpdateHandler) OnReady(sess common.ISession) {
+	if h.state == 2 {
+		if h.t != nil {
+			h.t.Logf("ready")
 		}
 	}
 }

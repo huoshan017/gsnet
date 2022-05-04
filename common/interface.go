@@ -52,6 +52,7 @@ type ISession interface {
 	Close()
 	CloseWaitSecs(int)
 	AddInboundHandle(int32, func(ISession, packet.IPacket) error)
+	RemoveInboundHandle(int32)
 	GetInboundHandles() map[int32]func(ISession, packet.IPacket) error
 	GetPacketChannel() chan IdWithPacket
 	SetUserData(string, any)
@@ -61,6 +62,7 @@ type ISession interface {
 // 会话处理器接口
 type ISessionEventHandler interface {
 	OnConnect(ISession)
+	OnReady(ISession)
 	OnPacket(ISession, packet.IPacket) error
 	OnTick(ISession, time.Duration)
 	OnDisconnect(ISession, error)

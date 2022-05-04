@@ -34,7 +34,7 @@ func createAgentClient() (*client.AgentClient, error) {
 
 type serverHandlerUseAgentClient struct {
 	agentClient *client.AgentClient
-	agentSess   common.ISession
+	agentSess   *common.AgentSession
 }
 
 func newServerHandlerUseAgentClient(args ...any) common.ISessionEventHandler {
@@ -46,7 +46,12 @@ func (h *serverHandlerUseAgentClient) OnConnect(sess common.ISession) {
 	log.Infof("session %v connected to server", sess.GetId())
 }
 
+func (h *serverHandlerUseAgentClient) OnReady(sess common.ISession) {
+	log.Infof("session %v ready", sess.GetId())
+}
+
 func (h *serverHandlerUseAgentClient) OnDisconnect(sess common.ISession, err error) {
+	h.agentClient.UnboundSession(sess, h.agentSess)
 	log.Infof("session %v disconnected from server", sess.GetId())
 }
 
@@ -62,9 +67,9 @@ func (h *serverHandlerUseAgentClient) OnError(err error) {
 	log.Infof("occur err %v on server", err)
 }
 
-func (h *serverHandlerUseAgentClient) getWorkerSess(sess common.ISession) common.ISession {
+func (h *serverHandlerUseAgentClient) getWorkerSess(sess common.ISession) *common.AgentSession {
 	if h.agentSess == nil {
-		h.agentSess = h.agentClient.BoundHandleAndGetAgentSession(sess, h.OnPacketFromWorkerServer)
+		h.agentSess = h.agentClient.BoundSession(sess, h.OnPacketFromWorkerServer)
 	}
 	return h.agentSess
 }

@@ -53,6 +53,10 @@ func (h *serverHandlerUseWorkerClient) OnConnect(sess common.ISession) {
 	h.t.Logf("session %v connected to server", sess.GetId())
 }
 
+func (h *serverHandlerUseWorkerClient) OnReady(sess common.ISession) {
+	h.t.Logf("session %v ready", sess.GetId())
+}
+
 func (h *serverHandlerUseWorkerClient) OnDisconnect(sess common.ISession, err error) {
 	h.t.Logf("session %v disconnected from server", sess.GetId())
 }
@@ -111,6 +115,10 @@ func newWorkerServerHandler(args ...any) common.ISessionEventHandler {
 
 func (h *workerServerHandler) OnConnect(sess common.ISession) {
 	h.t.Logf("session %v connected to worker server", sess.GetId())
+}
+
+func (h *workerServerHandler) OnReady(sess common.ISession) {
+	h.t.Logf("session %v ready", sess.GetId())
 }
 
 func (h *workerServerHandler) OnDisconnect(sess common.ISession, err error) {

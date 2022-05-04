@@ -90,6 +90,10 @@ func (c *Client) SetConnectHandle(handle func(common.ISession)) {
 	c.handler.setConnectHandle(handle)
 }
 
+func (c *Client) SetReadyHandle(handle func(common.ISession)) {
+	c.handler.setReadyHandle(handle)
+}
+
 func (c *Client) SetDisconnectHandle(handle func(common.ISession, error)) {
 	c.handler.setDisconnectHandle(handle)
 }

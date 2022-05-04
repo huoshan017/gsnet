@@ -45,6 +45,7 @@ func (ma *IdMsgMapper) GetReflectNewObject(id MsgIdType) any {
 
 type msgHandlerCommon struct {
 	connectHandle    func(*MsgSession)
+	readyHandle      func(*MsgSession)
 	disconnectHandle func(*MsgSession, error)
 	tickHandle       func(*MsgSession, time.Duration)
 	errHandle        func(error)
@@ -65,6 +66,10 @@ func (d *msgHandlerCommon) SetConnectHandle(handle func(*MsgSession)) {
 	d.connectHandle = handle
 }
 
+func (d *msgHandlerCommon) SetReadyHandle(handle func(*MsgSession)) {
+	d.readyHandle = handle
+}
+
 func (d *msgHandlerCommon) SetDisconnectHandle(handle func(*MsgSession, error)) {
 	d.disconnectHandle = handle
 }
@@ -81,6 +86,13 @@ func (d *msgHandlerCommon) OnConnect(s common.ISession) {
 	if d.connectHandle != nil {
 		d.sess.sess = s
 		d.connectHandle(d.sess)
+	}
+}
+
+func (d *msgHandlerCommon) OnReady(s common.ISession) {
+	if d.readyHandle != nil {
+		d.sess.sess = s
+		d.readyHandle(d.sess)
 	}
 }
 

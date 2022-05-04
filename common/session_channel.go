@@ -74,6 +74,10 @@ func (sc *SessionChannel) AddInboundHandle(id int32, handle func(ISession, packe
 	sc.sess.AddInboundHandle(id, handle)
 }
 
+func (sc *SessionChannel) RemoveInboundHandle(id int32) {
+	sc.sess.RemoveInboundHandle(id)
+}
+
 func (sc *SessionChannel) GetInboundHandles() map[int32]func(ISession, packet.IPacket) error {
 	return sc.sess.GetInboundHandles()
 }

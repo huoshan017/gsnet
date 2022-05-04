@@ -82,6 +82,10 @@ func (h *SessionHandler) OnConnected(sess *msg.MsgSession) {
 	log.Printf("session %v connected", sess.GetId())
 }
 
+func (h *SessionHandler) OnReady(sess *msg.MsgSession) {
+	log.Printf("session %v ready", sess.GetId())
+}
+
 func (h *SessionHandler) OnDisconnected(sess *msg.MsgSession, err error) {
 	log.Printf("session %v disconnected", sess.GetId())
 }

@@ -104,6 +104,16 @@ func (h *testClientHandler) OnConnect(sess common.ISession) {
 	}
 }
 
+func (h *testClientHandler) OnReady(sess common.ISession) {
+	if h.state == 2 {
+		if h.t != nil {
+			h.t.Logf("ready")
+		} else if h.b != nil {
+			h.b.Logf("ready")
+		}
+	}
+}
+
 func (h *testClientHandler) OnDisconnect(sess common.ISession, err error) {
 	if h.state == 2 {
 		if h.t != nil {
@@ -193,6 +203,16 @@ func (h *testServerHandler) OnConnect(sess common.ISession) {
 			h.t.Logf("new client(session_id: %v) connected", sess.GetId())
 		} else if h.b != nil {
 			h.b.Logf("new client(session_id: %v) connected", sess.GetId())
+		}
+	}
+}
+
+func (h *testServerHandler) OnReady(sess common.ISession) {
+	if h.state == 1 {
+		if h.t != nil {
+			h.t.Logf("client(session_id %v) ready", sess.GetId())
+		} else if h.b != nil {
+			h.b.Logf("client(session_id %v) ready", sess.GetId())
 		}
 	}
 }

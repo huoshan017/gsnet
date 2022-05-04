@@ -72,6 +72,12 @@ func (s *Session) AddInboundHandle(id int32, handle func(ISession, packet.IPacke
 	s.inboundHandles[id] = handle
 }
 
+func (s *Session) RemoveInboundHandle(id int32) {
+	if s.inboundHandles != nil {
+		delete(s.inboundHandles, id)
+	}
+}
+
 func (s *Session) GetInboundHandles() map[int32]func(ISession, packet.IPacket) error {
 	return s.inboundHandles
 }
@@ -119,6 +125,10 @@ func NewAgentSession(agentId uint32, sess ISession) *AgentSession {
 
 func (sc *AgentSession) GetId() uint64 {
 	return sc.sess.GetId()
+}
+
+func (sc *AgentSession) GetAgentId() uint32 {
+	return sc.agentId
 }
 
 func (as *AgentSession) send(data []byte) error {
@@ -172,6 +182,10 @@ func (sc *AgentSession) CloseWaitSecs(secs int) {
 
 func (sc *AgentSession) AddInboundHandle(id int32, handle func(ISession, packet.IPacket) error) {
 	sc.sess.AddInboundHandle(id, handle)
+}
+
+func (sc *AgentSession) RemoveInboundHandle(id int32) {
+	sc.sess.RemoveInboundHandle(id)
 }
 
 func (sc *AgentSession) GetInboundHandles() map[int32]func(ISession, packet.IPacket) error {

@@ -9,6 +9,7 @@ import (
 
 type commonHandler struct {
 	connectHandle    func(common.ISession)
+	readyHandle      func(common.ISession)
 	disconnectHandle func(common.ISession, error)
 	tickHandle       func(common.ISession, time.Duration)
 	errorHandle      func(error)
@@ -16,6 +17,10 @@ type commonHandler struct {
 
 func (h *commonHandler) setConnectHandle(handle func(common.ISession)) {
 	h.connectHandle = handle
+}
+
+func (h *commonHandler) setReadyHandle(handle func(common.ISession)) {
+	h.readyHandle = handle
 }
 
 func (h *commonHandler) setDisconnectHandle(handle func(common.ISession, error)) {
@@ -31,9 +36,14 @@ func (h *commonHandler) setErrorHandle(handle func(error)) {
 }
 
 func (h *commonHandler) OnConnect(sess common.ISession) {
-	//log.Infof("gsnet: worker client %v connected server", h.owner.id)
 	if h.connectHandle != nil {
 		h.connectHandle(sess)
+	}
+}
+
+func (h *commonHandler) OnReady(sess common.ISession) {
+	if h.readyHandle != nil {
+		h.readyHandle(sess)
 	}
 }
 
@@ -44,7 +54,6 @@ func (h *commonHandler) OnTick(sess common.ISession, tick time.Duration) {
 }
 
 func (h *commonHandler) OnDisconnect(sess common.ISession, err error) {
-	//log.Infof("gsnet: worker client %v disconnect from server, err %v", h.owner.id, err)
 	if h.disconnectHandle != nil {
 		h.disconnectHandle(sess, err)
 	}

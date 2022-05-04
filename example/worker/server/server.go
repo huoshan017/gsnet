@@ -43,6 +43,10 @@ func (h *serverHandlerUseWorkerClient) OnConnect(sess common.ISession) {
 	log.Infof("session %v connected to server", sess.GetId())
 }
 
+func (h *serverHandlerUseWorkerClient) OnReady(sess common.ISession) {
+	log.Infof("session %v ready", sess.GetId())
+}
+
 func (h *serverHandlerUseWorkerClient) OnDisconnect(sess common.ISession, err error) {
 	log.Infof("session %v disconnected from server", sess.GetId())
 }

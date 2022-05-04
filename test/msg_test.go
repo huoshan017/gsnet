@@ -61,6 +61,10 @@ func newPBMsgClient(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error)
 		t.Logf("connected")
 	})
 
+	c.SetReadyHandle(func(sess *msg.MsgSession) {
+		t.Logf("ready")
+	})
+
 	c.SetDisconnectHandle(func(sess *msg.MsgSession, err error) {
 		t.Logf("disconnected, err %v", err)
 	})
@@ -115,6 +119,10 @@ type testPBMsgHandler struct {
 
 func (h *testPBMsgHandler) OnConnected(sess *msg.MsgSession) {
 	h.t.Logf("session %v connected", sess.GetId())
+}
+
+func (h *testPBMsgHandler) OnReady(sess *msg.MsgSession) {
+	h.t.Logf("session %v ready", sess.GetId())
 }
 
 func (h *testPBMsgHandler) OnDisconnected(sess *msg.MsgSession, err error) {
@@ -255,6 +263,10 @@ type testPBMsgHandler2 struct {
 
 func (h *testPBMsgHandler2) OnConnected(sess *msg.MsgSession) {
 	h.t.Logf("session %v connected", sess.GetId())
+}
+
+func (h *testPBMsgHandler2) OnReady(sess *msg.MsgSession) {
+	h.t.Logf("session %v ready", sess.GetId())
 }
 
 func (h *testPBMsgHandler2) OnDisconnected(sess *msg.MsgSession, err error) {

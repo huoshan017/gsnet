@@ -18,6 +18,10 @@ func (h *PlayerHandler) OnConnect(s common.ISession) {
 
 }
 
+func (h *PlayerHandler) OnReady(s common.ISession) {
+
+}
+
 func (h *PlayerHandler) OnDisconnect(s common.ISession, err error) {
 
 }

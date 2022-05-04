@@ -26,17 +26,22 @@ func NewMsgClient(msgCodec IMsgCodec, idMsgMapper *IdMsgMapper, options ...commo
 	return c
 }
 
-// MsgClient.SetConnectHandle set connected handle with session
+// MsgClient.SetConnectHandle set connected handle with message session
 func (c *MsgClient) SetConnectHandle(handle func(*MsgSession)) {
 	c.handler.SetConnectHandle(handle)
 }
 
-// MsgClient.SetDisconnectHandle set disconnected handle with session
+// MsgClient.SetReadyHandle set ready handle with message session
+func (c *MsgClient) SetReadyHandle(handle func(*MsgSession)) {
+	c.handler.SetReadyHandle(handle)
+}
+
+// MsgClient.SetDisconnectHandle set disconnected handle with message session
 func (c *MsgClient) SetDisconnectHandle(handle func(*MsgSession, error)) {
 	c.handler.SetDisconnectHandle(handle)
 }
 
-// MsgClient.SetTickHandle set tick timer handle with session
+// MsgClient.SetTickHandle set tick timer handle with message session
 func (c *MsgClient) SetTickHandle(handle func(*MsgSession, time.Duration)) {
 	c.handler.SetTickHandle(handle)
 }

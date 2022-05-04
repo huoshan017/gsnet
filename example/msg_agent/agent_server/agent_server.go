@@ -21,6 +21,10 @@ func (h *msgAgentServerHandler) OnConnected(sess *msg.MsgSession) {
 	log.Infof("session %v connected to message agent server", sess.GetId())
 }
 
+func (h *msgAgentServerHandler) OnReady(sess *msg.MsgSession) {
+	log.Infof("session %v ready", sess.GetId())
+}
+
 func (h *msgAgentServerHandler) OnDisconnected(sess *msg.MsgSession, err error) {
 	log.Infof("session %v disconnected from message agent server", sess.GetId())
 }

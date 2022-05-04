@@ -13,6 +13,7 @@ import (
 
 type commonHandler struct {
 	connectHandle    func(common.ISession)
+	readyHandle      func(common.ISession)
 	disconnectHandle func(common.ISession, error)
 	tickHandle       func(common.ISession, time.Duration)
 	errorHandle      func(error)
@@ -20,6 +21,10 @@ type commonHandler struct {
 
 func (h *commonHandler) setConnectHandle(handle func(common.ISession)) {
 	h.connectHandle = handle
+}
+
+func (h *commonHandler) setReadyHandle(handle func(common.ISession)) {
+	h.readyHandle = handle
 }
 
 func (h *commonHandler) setDisconnectHandle(handle func(common.ISession, error)) {
@@ -37,6 +42,12 @@ func (h *commonHandler) setErrorHandle(handle func(error)) {
 func (h *commonHandler) OnConnect(sess common.ISession) {
 	if h.connectHandle != nil {
 		h.connectHandle(sess)
+	}
+}
+
+func (h *commonHandler) OnReady(sess common.ISession) {
+	if h.readyHandle != nil {
+		h.readyHandle(sess)
 	}
 }
 
@@ -138,11 +149,25 @@ func (c *AgentClient) DialTimeout(address string, timeout time.Duration) error {
 	return nil
 }
 
-func (c *AgentClient) BoundHandleAndGetAgentSession(sess common.ISession, handle func(common.ISession, packet.IPacket) error) *common.AgentSession {
+func (c *AgentClient) BoundSession(sess common.ISession, handle func(common.ISession, packet.IPacket) error) *common.AgentSession {
 	sess.AddInboundHandle(c.id, handle)
 	agentSessionId := getNextAgentSessionId()
 	c.pakChans.Store(agentSessionId, sess.GetPacketChannel())
 	return common.NewAgentSession(agentSessionId, c.c.GetSession())
+}
+
+func (c *AgentClient) UnboundSession(sess common.ISession, asess *common.AgentSession) {
+	sess.RemoveInboundHandle(c.id)
+	v, o := c.pakChans.Load(asess.GetAgentId())
+	if !o {
+		log.Infof("gsnet: cant get packet channel with id %v for agent client", asess.GetAgentId())
+		return
+	}
+	if v != sess.GetPacketChannel() {
+		log.Infof("gsnet: to delete packet channel with id %v dismatch to specified", asess.GetAgentId())
+		return
+	}
+	c.pakChans.Delete(asess.GetAgentId())
 }
 
 func (c *AgentClient) SetConnectHandle(handle func(common.ISession)) {

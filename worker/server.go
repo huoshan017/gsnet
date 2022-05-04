@@ -34,6 +34,7 @@ func (h *serverHandler) OnPacket(sess common.ISession, pak packet.IPacket) error
 func newServerHandler(handler common.ISessionEventHandler) *serverHandler {
 	sh := &serverHandler{}
 	sh.setConnectHandle(handler.OnConnect)
+	sh.setReadyHandle(handler.OnReady)
 	sh.setDisconnectHandle(handler.OnDisconnect)
 	sh.setTickHandle(handler.OnTick)
 	sh.setErrorHandle(handler.OnError)

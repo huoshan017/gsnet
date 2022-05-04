@@ -14,6 +14,7 @@ type IMsgCodec interface {
 // IMsgSessionHandler interface for message event handler
 type IMsgSessionEventHandler interface {
 	OnConnected(*MsgSession)
+	OnReady(*MsgSession)
 	OnDisconnected(*MsgSession, error)
 	OnTick(*MsgSession, time.Duration)
 	OnError(error)

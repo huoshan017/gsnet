@@ -9,6 +9,7 @@ import (
 var (
 	nullWrapperSendData = wrapperSendData{}
 	snodePool           *sync.Pool
+	snodeMemMode        = 0
 )
 
 func init() {
@@ -20,13 +21,20 @@ func init() {
 }
 
 func snodeGet() *snode {
-	n := snodePool.Get().(*snode)
-	n.next = nil
+	var n *snode
+	if snodeMemMode == 0 {
+		n = &snode{}
+	} else {
+		n = snodePool.Get().(*snode)
+		n.next = nil
+	}
 	return n
 }
 
 func snodePut(n *snode) {
-	snodePool.Put(n)
+	if snodeMemMode != 0 {
+		snodePool.Put(n)
+	}
 }
 
 // wrapperSendData send data wrapper
@@ -113,6 +121,7 @@ func (s *slist) recycle() {
 	n := s.head
 	for n != nil {
 		n.value.recycle()
+		snodePut(n)
 		n = n.next
 	}
 }
@@ -131,8 +140,8 @@ func newCondSendList() *condSendList {
 
 func (l *condSendList) pushBack(wd wrapperSendData) {
 	l.cond.L.Lock()
+	defer l.cond.L.Unlock()
 	l.sendList.pushBack(wd)
-	l.cond.L.Unlock()
 	l.cond.Signal()
 }
 
