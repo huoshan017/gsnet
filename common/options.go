@@ -12,17 +12,17 @@ type GenCryptoKeyFunc func(*rand.Rand) []byte
 
 // 选项结构
 type Options struct {
-	noDelay          bool
-	keepAlived       bool
-	keepAlivedPeriod time.Duration
-	readTimeout      time.Duration
-	writeTimeout     time.Duration
-	tickSpan         time.Duration
-	//dataProto                  IDataProto
+	noDelay                    bool
+	keepAlived                 bool
+	keepAlivedPeriod           time.Duration
+	readTimeout                time.Duration
+	writeTimeout               time.Duration
+	tickSpan                   time.Duration
 	sendChanLen                int
 	recvChanLen                int
-	writeBuffSize              int
-	readBuffSize               int
+	sendListMode               int32                  // 发送队列模式
+	writeBuffSize              int                    // 写缓冲大小
+	readBuffSize               int                    // 都缓冲大小
 	connCloseWaitSecs          int                    // 連接關閉等待時間(秒)
 	packetPool                 packet.IPacketPool     // 包池
 	packetCompressType         packet.CompressType    // 包解压缩类型
@@ -123,6 +123,14 @@ func (options *Options) GetRecvChanLen() int {
 
 func (options *Options) SetRecvChanLen(chanLen int) {
 	options.recvChanLen = chanLen
+}
+
+func (options *Options) GetSendListMode() int32 {
+	return options.sendListMode
+}
+
+func (options *Options) SetSendListMode(mode int32) {
+	options.sendListMode = mode
 }
 
 func (options *Options) GetWriteBuffSize() int {
@@ -309,6 +317,12 @@ func WithSendChanLen(chanLen int) Option {
 func WithRecvChanLen(chanLen int) Option {
 	return func(options *Options) {
 		options.SetRecvChanLen(chanLen)
+	}
+}
+
+func WithSendListMode(mode int32) Option {
+	return func(options *Options) {
+		options.SetSendListMode(mode)
 	}
 }
 

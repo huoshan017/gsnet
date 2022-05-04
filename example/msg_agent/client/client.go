@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/client"
+	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/msg"
 	"github.com/huoshan017/gsnet/test/tproto"
@@ -115,7 +116,7 @@ func (h *testMsgClientUseUpdateHandler) OnError(err error) {
 func createMsgClientUseUpdate(userData any, count int32) *msg.MsgClient {
 	// 启用tick处理
 	handler := newTestMsgClientUseUpdateHandler(userData, count)
-	c := msg.NewProtobufMsgClient(acommon.IdMsgMapper, client.WithRunMode(client.RunModeOnlyUpdate))
+	c := msg.NewProtobufMsgClient(acommon.IdMsgMapper, client.WithRunMode(client.RunModeOnlyUpdate), common.WithSendListMode(acommon.SendListMode))
 	c.SetConnectHandle(handler.OnConnected)
 	c.SetDisconnectHandle(handler.OnDisconnected)
 	c.SetTickHandle(handler.OnTick)
@@ -138,7 +139,7 @@ func randBytes(n int, ran *rand.Rand) []byte {
 
 func main() {
 	var (
-		clientNum        = 2
+		clientNum        = 8000
 		compareNum int32 = 200
 		wg         sync.WaitGroup
 		count      int32

@@ -28,9 +28,10 @@ const (
 type MemoryManagementType int8
 
 const (
-	MemoryManagementSystemGC           = iota // 系统GC，默认管理方式
-	MemoryManagementPoolFrameworkFree  = 1    // 内存池分配由框架释放
-	MemoryManagementPoolUserManualFree = 2    // 内存池分配使用者手动释放
+	MemoryManagementSystemGC           MemoryManagementType = iota // 系统GC，默认管理方式
+	MemoryManagementPoolFrameworkFree  MemoryManagementType = 1    // 内存池分配由框架释放
+	MemoryManagementPoolUserManualFree MemoryManagementType = 2    // 内存池分配使用者手动释放
+	MemoryManagementNone               MemoryManagementType = 127
 )
 
 const (

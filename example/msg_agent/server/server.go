@@ -12,7 +12,7 @@ import (
 )
 
 func createMsgAgentClient() (*msg.MsgAgentClient, error) {
-	c := msg.NewProtobufMsgAgentClient(acommon.IdMsgMapper)
+	c := msg.NewProtobufMsgAgentClient(acommon.IdMsgMapper, common.WithSendListMode(acommon.SendListMode))
 	if err := c.Dial(acommon.MsgAgentServerAddress); err != nil {
 		return nil, err
 	}
@@ -32,8 +32,10 @@ func createMsgAgentClient() (*msg.MsgAgentClient, error) {
 }
 
 type serverHandlerUseMsgAgentClient struct {
-	msgAgentClient *msg.MsgAgentClient
-	agentSess      *msg.MsgAgentSession
+	msgAgentClient           *msg.MsgAgentClient
+	agentSess                *msg.MsgAgentSession
+	recvCountFromClient      int32
+	recvCountFromAgentServer int32
 }
 
 func newServerHandlerUseMsgAgentClient(args ...any) msg.IMsgSessionEventHandler {
@@ -55,15 +57,18 @@ func (h *serverHandlerUseMsgAgentClient) OnMsgHandle(sess *msg.MsgSession, msgid
 		log.Fatalf("why dont get message agent session")
 		return nil
 	}
+
+	var err error
 	if msgid == acommon.MsgIdPing {
+		h.recvCountFromClient += 1
 		m := msgobj.(*tproto.MsgPing)
 		var response tproto.MsgPong
 		response.Content = m.Content
-		return h.agentSess.Send(acommon.MsgIdPong, &response)
+		err = h.agentSess.Send(acommon.MsgIdPong, &response)
 	} else {
 		log.Fatalf("unsupported message id %v", msgid)
 	}
-	return nil
+	return err
 }
 
 func (h *serverHandlerUseMsgAgentClient) OnTick(sess *msg.MsgSession, tick time.Duration) {
@@ -81,6 +86,8 @@ func (h *serverHandlerUseMsgAgentClient) getAgentSess(sess *msg.MsgSession) *msg
 }
 
 func (h *serverHandlerUseMsgAgentClient) OnMsgFromAgentServer(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
+	h.recvCountFromAgentServer += 1
+	//log.Infof("recvCountFromClient %v,  recvCountFromAgentServer %v", h.recvCountFromClient, h.recvCountFromAgentServer)
 	return sess.SendMsg(msgid, msgobj)
 }
 
@@ -90,7 +97,7 @@ func createServerUseMsgAgentClient(address string) *msg.MsgServer {
 		log.Fatalf("create agent client err %v", err)
 		return nil
 	}
-	s := msg.NewProtobufMsgServer(newServerHandlerUseMsgAgentClient, []any{msgAgentClient}, acommon.IdMsgMapper, common.WithTickSpan(100*time.Millisecond))
+	s := msg.NewProtobufMsgServer(newServerHandlerUseMsgAgentClient, []any{msgAgentClient}, acommon.IdMsgMapper)
 	if err = s.Listen(address); err != nil {
 		log.Infof("test server listen err %v", err)
 		return nil

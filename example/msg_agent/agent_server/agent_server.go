@@ -3,6 +3,7 @@ package main
 import (
 	"time"
 
+	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/msg"
 
@@ -36,7 +37,7 @@ func (h *msgAgentServerHandler) OnError(err error) {
 }
 
 func createMsgAgentServer(address string) *msg.MsgAgentServer {
-	s := msg.NewProtobufMsgAgentServer(newMsgAgentServerHandler, nil, acommon.IdMsgMapper)
+	s := msg.NewProtobufMsgAgentServer(newMsgAgentServerHandler, nil, acommon.IdMsgMapper, common.WithTickSpan(time.Millisecond*10), common.WithSendListMode(acommon.SendListMode))
 	if err := s.Listen(address); err != nil {
 		log.Infof("agent server listen and serve err %v", err)
 		return nil

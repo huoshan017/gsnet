@@ -16,7 +16,7 @@ const (
 )
 
 type IResendEventHandler interface {
-	OnSent(data any, mmt packet.MemoryManagementType) bool
+	OnSent(data any, pt_mmt int32) bool
 	OnAck(pak packet.IPacket) int32
 	OnProcessed(n int16)
 	OnUpdate(IConn) error
@@ -30,60 +30,28 @@ type IResender interface {
 	Resend(sess ISession) error
 }
 
-type ResendConfig struct {
-	SentListLength int16
-	AckSentSpan    time.Duration
-	AckSentNum     int16
-	UseLockFree    bool
+type sendNode struct {
+	value *wrapperSendData
+	next  unsafe.Pointer
 }
 
-type ResendData struct {
-	config   ResendConfig
-	sentList []struct {
-		data any
-		mmt  packet.MemoryManagementType
-	}
-	locker           sync.Mutex
-	sentList2        *resendList
-	nextSentIndex    int16
-	nextAckSentIndex int16
-	nProcessed       int16
-	nextRecvIndex    int16
-	ackTime          time.Time
-	disposed         bool
-}
-
-type resendNode struct {
-	value *struct {
-		data any
-		mmt  packet.MemoryManagementType
-	}
-	next unsafe.Pointer
-}
-
-type resendList struct {
+type SendList struct {
 	head unsafe.Pointer
 	tail unsafe.Pointer
 	num  int32
 }
 
-func newResendList() *resendList {
-	n := unsafe.Pointer(&struct {
-		data any
-		mmt  packet.MemoryManagementType
-	}{})
-	return &resendList{head: n, tail: n}
+func newSendList() *SendList {
+	n := unsafe.Pointer(&wrapperSendData{})
+	return &SendList{head: n, tail: n}
 }
 
-func (l *resendList) getNum() int32 {
+func (l *SendList) getNum() int32 {
 	return atomic.LoadInt32(&l.num)
 }
 
-func (l *resendList) pushBack(v *struct {
-	data any
-	mmt  packet.MemoryManagementType
-}) {
-	n := &resendNode{value: v}
+func (l *SendList) pushBack(v *wrapperSendData) {
+	n := &sendNode{value: v}
 	for {
 		tail := load(&l.tail)
 		next := load(&tail.next)
@@ -101,10 +69,7 @@ func (l *resendList) pushBack(v *struct {
 	}
 }
 
-func (l *resendList) popFront() *struct {
-	data any
-	mmt  packet.MemoryManagementType
-} {
+func (l *SendList) popFront() *wrapperSendData {
 	for {
 		head := load(&l.head)
 		tail := load(&l.tail)
@@ -126,21 +91,38 @@ func (l *resendList) popFront() *struct {
 	}
 }
 
-func load(p *unsafe.Pointer) (n *resendNode) {
-	return (*resendNode)(atomic.LoadPointer(p))
+func load(p *unsafe.Pointer) (n *sendNode) {
+	return (*sendNode)(atomic.LoadPointer(p))
 }
 
-func cas(p *unsafe.Pointer, old, new *resendNode) (ok bool) {
+func cas(p *unsafe.Pointer, old, new *sendNode) (ok bool) {
 	return atomic.CompareAndSwapPointer(p, unsafe.Pointer(old), unsafe.Pointer(new))
+}
+
+type ResendConfig struct {
+	SentListLength int16
+	AckSentSpan    time.Duration
+	AckSentNum     int16
+	UseLockFree    bool
+}
+
+type ResendData struct {
+	config           ResendConfig
+	sentList         []wrapperSendData
+	locker           sync.Mutex
+	sentList2        *SendList
+	nextSentIndex    int16
+	nextAckSentIndex int16
+	nProcessed       int16
+	nextRecvIndex    int16
+	ackTime          time.Time
+	disposed         bool
 }
 
 func NewResendData(config *ResendConfig) *ResendData {
 	return &ResendData{
-		sentList: make([]struct {
-			data any
-			mmt  packet.MemoryManagementType
-		}, 0),
-		sentList2: newResendList(),
+		sentList:  make([]wrapperSendData, 0),
+		sentList2: newSendList(),
 		config:    *config,
 	}
 }
@@ -160,23 +142,17 @@ func (rd *ResendData) CanSend() bool {
 }
 
 // ResendData.OnSent call in different goroutine to OnAck
-func (rd *ResendData) OnSent(data any, mmt packet.MemoryManagementType) bool {
+func (rd *ResendData) OnSent(data any, pt_mmt int32) bool {
 	var sent bool
 	if rd.config.UseLockFree {
 		if rd.sentList2.getNum() < int32(MaxCacheSentPacket) {
-			rd.sentList2.pushBack(&struct {
-				data any
-				mmt  packet.MemoryManagementType
-			}{data, mmt})
+			rd.sentList2.pushBack(&wrapperSendData{data, pt_mmt})
 			sent = true
 		}
 	} else {
 		rd.locker.Lock()
 		if len(rd.sentList) < int(MaxCacheSentPacket) {
-			rd.sentList = append(rd.sentList, struct {
-				data any
-				mmt  packet.MemoryManagementType
-			}{data, mmt})
+			rd.sentList = append(rd.sentList, wrapperSendData{data, pt_mmt})
 			sent = true
 		}
 		rd.locker.Unlock()
@@ -215,7 +191,7 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 
 		for i := int16(0); i < n; i++ {
 			node := rd.sentList2.popFront()
-			FreeSendData(node.mmt, node.data)
+			FreeSendData(node.getMMT(), node.data)
 		}
 	} else {
 		if int(n) > len(rd.sentList) {
@@ -231,7 +207,7 @@ func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
 		rd.locker.Lock()
 		for i := int16(0); i < n; i++ {
 			sd := rd.sentList[i]
-			FreeSendData(sd.mmt, sd.data)
+			FreeSendData(sd.getMMT(), sd.data)
 		}
 		rd.sentList = rd.sentList[n:]
 		rd.locker.Unlock()
@@ -259,13 +235,13 @@ func (rd *ResendData) Dispose() {
 		n := rd.sentList2.getNum()
 		for i := int32(0); i < n; i++ {
 			sd := rd.sentList2.popFront()
-			FreeSendData(sd.mmt, sd.data)
+			FreeSendData(sd.getMMT(), sd.data)
 		}
 	} else {
 		n := len(rd.sentList)
 		for i := int16(0); i < int16(n); i++ {
 			sd := rd.sentList[i]
-			FreeSendData(sd.mmt, sd.data)
+			FreeSendData(sd.getMMT(), sd.data)
 		}
 		rd.sentList = rd.sentList[:0]
 	}
