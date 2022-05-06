@@ -273,14 +273,11 @@ func (s *Server) handleConn(c net.Conn) {
 				log.WithStack(err)
 			}
 		}()
-
 		handler.OnConnect(sess)
-
 		var (
 			err error
 			run = true
 		)
-
 		// handle handshake
 		var complete bool
 		for !complete {
@@ -289,7 +286,6 @@ func (s *Server) handleConn(c net.Conn) {
 				break
 			}
 		}
-
 		// handle packet
 		if err == nil {
 			handler.OnReady(sess)
@@ -327,7 +323,6 @@ func (s *Server) handleConn(c net.Conn) {
 						err = basePacketHandler.OnUpdateHandle()
 					}
 				}
-
 				// process error
 				if err != nil {
 					if !common.IsNoDisconnectError(err) {

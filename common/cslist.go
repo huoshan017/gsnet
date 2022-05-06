@@ -2,6 +2,7 @@ package common
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/huoshan017/gsnet/packet"
 )
@@ -124,11 +125,13 @@ func (s *slist) recycle() {
 		snodePut(n)
 		n = n.next
 	}
+	s.length = 0
 }
 
 type condSendList struct {
 	cond     *sync.Cond
 	sendList *slist
+	quit     int32
 }
 
 func newCondSendList() *condSendList {
@@ -138,11 +141,15 @@ func newCondSendList() *condSendList {
 	}
 }
 
-func (l *condSendList) pushBack(wd wrapperSendData) {
+func (l *condSendList) pushBack(wd wrapperSendData) bool {
+	if atomic.LoadInt32(&l.quit) == 1 {
+		return false
+	}
 	l.cond.L.Lock()
 	defer l.cond.L.Unlock()
 	l.sendList.pushBack(wd)
 	l.cond.Signal()
+	return true
 }
 
 func (l *condSendList) popFront() (wrapperSendData, bool) {
@@ -150,6 +157,20 @@ func (l *condSendList) popFront() (wrapperSendData, bool) {
 	defer l.cond.L.Unlock()
 	for l.sendList.getLength() == 0 {
 		l.cond.Wait()
+		if atomic.LoadInt32(&l.quit) == 1 {
+			return nullWrapperSendData, false
+		}
 	}
 	return l.sendList.popFront()
+}
+
+func (l *condSendList) recycle() {
+	l.cond.L.Lock()
+	defer l.cond.L.Unlock()
+	l.sendList.recycle()
+}
+
+func (l *condSendList) close() {
+	atomic.StoreInt32(&l.quit, 1)
+	l.cond.Signal()
 }

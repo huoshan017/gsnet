@@ -213,7 +213,7 @@ func (c *Conn) realSend(d *wrapperSendData) error {
 // Conn.newWriteLoop new write loop goroutine
 func (c *Conn) newWriteLoop() {
 	defer func() {
-		c.csendList.sendList.recycle()
+		c.csendList.recycle()
 		if err := recover(); err != nil {
 			log.WithStack(err)
 		}
@@ -221,10 +221,11 @@ func (c *Conn) newWriteLoop() {
 	var err error
 	for {
 		sd, o := c.csendList.popFront()
-		if o {
-			if err = c.realSend(&sd); err != nil {
-				break
-			}
+		if !o {
+			break
+		}
+		if err = c.realSend(&sd); err != nil {
+			break
 		}
 	}
 	if err != nil {
@@ -293,8 +294,12 @@ func (c *Conn) closeWait(secs int) {
 	}
 	c.packetBuilder.Close()
 	close(c.closeCh)
-	if c.sendCh != nil {
-		close(c.sendCh)
+	if c.options.GetSendListMode() == 0 {
+		c.csendList.close()
+	} else {
+		if c.sendCh != nil {
+			close(c.sendCh)
+		}
 	}
 }
 
