@@ -98,7 +98,7 @@ func createServerUseWorkerClient(address string, t *testing.T) *server.Server {
 		t.Logf("test server listen err %v", err)
 		return nil
 	}
-	go s.Start()
+	go s.Serve()
 	return s
 }
 
@@ -145,7 +145,7 @@ func createWorkerServer(address string, t *testing.T) *worker.Server {
 		t.Logf("worker server listen and serve err %v", err)
 		return nil
 	}
-	go s.Start()
+	go s.Serve()
 	return s
 }
 

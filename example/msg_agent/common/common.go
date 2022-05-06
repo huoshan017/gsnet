@@ -16,7 +16,7 @@ const (
 const (
 	MsgIdPing    = msg.MsgIdType(1)
 	MsgIdPong    = msg.MsgIdType(2)
-	SendListMode = 1
+	SendListMode = 0
 	SendCount    = 5000
 	ClientNum    = 5000
 )

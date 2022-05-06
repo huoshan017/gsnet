@@ -83,6 +83,10 @@ func (h *testMsgClientUseUpdateHandler) OnConnected(sess *msg.MsgSession) {
 	log.Infof("connected")
 }
 
+func (h *testMsgClientUseUpdateHandler) OnReady(sess *msg.MsgSession) {
+	log.Infof("ready")
+}
+
 func (h *testMsgClientUseUpdateHandler) OnDisconnected(sess *msg.MsgSession, err error) {
 	log.Infof("disconnected, err: %v", err)
 }
@@ -118,6 +122,7 @@ func createMsgClientUseUpdate(userData any, count int32) *msg.MsgClient {
 	handler := newTestMsgClientUseUpdateHandler(userData, count)
 	c := msg.NewProtobufMsgClient(acommon.IdMsgMapper, client.WithRunMode(client.RunModeOnlyUpdate), common.WithSendListMode(acommon.SendListMode))
 	c.SetConnectHandle(handler.OnConnected)
+	c.SetReadyHandle(handler.OnReady)
 	c.SetDisconnectHandle(handler.OnDisconnected)
 	c.SetTickHandle(handler.OnTick)
 	c.SetErrorHandle(handler.OnError)
@@ -139,7 +144,7 @@ func randBytes(n int, ran *rand.Rand) []byte {
 
 func main() {
 	var (
-		clientNum        = 8000
+		clientNum        = 10000
 		compareNum int32 = 200
 		wg         sync.WaitGroup
 		count      int32

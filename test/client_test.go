@@ -122,7 +122,7 @@ func TestClientUseRun(t *testing.T) {
 	}
 	defer ts.End()
 
-	go ts.Start()
+	go ts.Serve()
 
 	t.Logf("server for TestClientUseRun running")
 
@@ -238,7 +238,7 @@ func TestClientUseUpdate(t *testing.T) {
 	}
 	defer ts.End()
 
-	go ts.Start()
+	go ts.Serve()
 
 	t.Logf("server for test client running")
 
@@ -283,7 +283,7 @@ func TestClientAsyncConnect(t *testing.T) {
 	}
 	defer ts.End()
 
-	go ts.Start()
+	go ts.Serve()
 
 	t.Logf("server for test client running")
 
@@ -330,7 +330,7 @@ func BenchmarkClient(b *testing.B) {
 	}
 	defer bs.End()
 
-	go bs.Start()
+	go bs.Serve()
 
 	b.Logf("server for benchmark client running")
 

@@ -62,7 +62,7 @@ func (c *Client) Connect(addr string) error {
 	connector := c.newConnector()
 	conn, err := connector.Connect(addr)
 	if err == nil {
-		c.doConnectResult(conn)
+		err = c.doConnectResult(conn)
 	}
 	return err
 }
@@ -71,7 +71,7 @@ func (c *Client) ConnectWithTimeout(addr string, timeout time.Duration) error {
 	connector := c.newConnector()
 	conn, err := connector.ConnectWithTimeout(addr, timeout)
 	if err == nil {
-		c.doConnectResult(conn)
+		err = c.doConnectResult(conn)
 	}
 	return err
 }
@@ -83,7 +83,7 @@ func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(
 	connector := c.newConnector()
 	connector.ConnectAsync(addr, timeout, func(err error) {
 		if err == nil {
-			c.doConnectResult(connector.GetConn())
+			err = c.doConnectResult(connector.GetConn())
 		}
 		callback(err)
 	})
@@ -94,7 +94,7 @@ func (c *Client) newConnector() *Connector {
 	return c.connector
 }
 
-func (c *Client) doConnectResult(con net.Conn) {
+func (c *Client) doConnectResult(con net.Conn) error {
 	var (
 		packetBuilder *common.PacketBuilder
 		resend        *common.ResendData
@@ -142,6 +142,9 @@ func (c *Client) doConnectResult(con net.Conn) {
 			res bool
 			err error
 		)
+		if err == nil {
+			c.handler.OnConnect(c.sess)
+		}
 		for {
 			res, err = c.handleHandshake(0)
 			if err != nil || res {
@@ -149,9 +152,11 @@ func (c *Client) doConnectResult(con net.Conn) {
 			}
 		}
 		if err == nil {
-			c.handler.OnConnect(c.sess)
+			c.handler.OnReady(c.sess)
 		}
+		return err
 	}
+	return nil
 }
 
 func (c *Client) Send(data []byte, copyData bool) error {
@@ -215,6 +220,8 @@ func (c *Client) Run() {
 		err error
 	)
 
+	c.handler.OnConnect(c.sess)
+
 	for {
 		res, err = c.handleHandshake(0)
 		if err != nil || res {
@@ -223,7 +230,7 @@ func (c *Client) Run() {
 	}
 
 	if err == nil {
-		c.handler.OnConnect(c.sess)
+		c.handler.OnReady(c.sess)
 	}
 
 	for err == nil {

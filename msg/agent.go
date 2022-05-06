@@ -46,6 +46,14 @@ func (c *MsgAgentClient) SetConnectHandle(handle func(*MsgSession)) {
 	c.c.SetConnectHandle(h)
 }
 
+func (c *MsgAgentClient) SetReadyHandle(handle func(*MsgSession)) {
+	var h func(common.ISession) = func(sess common.ISession) {
+		ms := MsgSession{sess, c.codec, c.mapper, &c.options.MsgOptions}
+		handle(&ms)
+	}
+	c.c.SetReadyHandle(h)
+}
+
 // MsgAgentClient.SetDisconnectHandle  set disconnect handle
 func (c *MsgAgentClient) SetDisconnectHandle(handle func(*MsgSession, error)) {
 	var h func(common.ISession, error) = func(sess common.ISession, err error) {
@@ -159,8 +167,8 @@ func (s *MsgAgentServer) Listen(address string) error {
 }
 
 // MsgAgentServer.Start
-func (s *MsgAgentServer) Start() {
-	s.server.Start()
+func (s *MsgAgentServer) Serve() {
+	s.server.Serve()
 }
 
 // MsgAgentServer.ListenAndServe

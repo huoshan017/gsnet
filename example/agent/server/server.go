@@ -19,15 +19,18 @@ func createAgentClient() (*client.AgentClient, error) {
 	}
 	log.Infof("agent client connected")
 	c.SetConnectHandle(func(sess common.ISession) {
-		log.Infof("worker client (sess %v) connected to server", sess.GetId())
+		log.Infof("agent client (sess %v) connected to server", sess.GetId())
+	})
+	c.SetReadyHandle(func(sess common.ISession) {
+		log.Infof("agent cleint (sess %v) ready", sess.GetId())
 	})
 	c.SetDisconnectHandle(func(sess common.ISession, err error) {
-		log.Infof("worker client (sess %v) disconnected from server", sess.GetId())
+		log.Infof("agent client (sess %v) disconnected from server", sess.GetId())
 	})
 	c.SetTickHandle(func(sess common.ISession, tick time.Duration) {
 	})
 	c.SetErrorHandle(func(err error) {
-		log.Infof("worker client ocurr err %v", err)
+		log.Infof("agent client ocurr err %v", err)
 	})
 	return c, nil
 }
@@ -51,7 +54,9 @@ func (h *serverHandlerUseAgentClient) OnReady(sess common.ISession) {
 }
 
 func (h *serverHandlerUseAgentClient) OnDisconnect(sess common.ISession, err error) {
-	h.agentClient.UnboundSession(sess, h.agentSess)
+	if h.agentSess != nil {
+		h.agentClient.UnboundSession(sess, h.agentSess)
+	}
 	log.Infof("session %v disconnected from server", sess.GetId())
 }
 
@@ -98,5 +103,5 @@ func main() {
 		return
 	}
 	defer s.End()
-	s.Start()
+	s.Serve()
 }

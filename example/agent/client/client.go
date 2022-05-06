@@ -134,7 +134,7 @@ func randBytes(n int, ran *rand.Rand) []byte {
 
 func main() {
 	var (
-		clientNum        = 5000
+		clientNum        = 10000
 		compareNum int32 = 200
 		wg         sync.WaitGroup
 		count      int32

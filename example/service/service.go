@@ -59,5 +59,5 @@ func main() {
 		return
 	}
 	defer playerService.End()
-	playerService.Start()
+	playerService.Serve()
 }

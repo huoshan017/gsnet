@@ -127,7 +127,7 @@ func (sc *AgentSession) GetId() uint64 {
 	return sc.sess.GetId()
 }
 
-func (sc *AgentSession) GetAgentId() uint32 {
+func (sc *AgentSession) AgentSessionId() uint32 {
 	return sc.agentId
 }
 

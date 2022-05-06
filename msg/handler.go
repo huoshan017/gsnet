@@ -169,6 +169,7 @@ func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec
 		sessionHandler:   sessionHandler,
 	}
 	server.msgHandlerCommon.SetConnectHandle(sessionHandler.OnConnected)
+	server.msgHandlerCommon.SetReadyHandle(sessionHandler.OnReady)
 	server.msgHandlerCommon.SetDisconnectHandle(sessionHandler.OnDisconnected)
 	server.msgHandlerCommon.SetTickHandle(sessionHandler.OnTick)
 	server.msgHandlerCommon.SetErrorHandle(sessionHandler.OnError)

@@ -67,7 +67,7 @@ func main() {
 	}
 	defer s.End()
 
-	s.Start()
+	s.Serve()
 
 	log.Infof("server for test client running")
 }

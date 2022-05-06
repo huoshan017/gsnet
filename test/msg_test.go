@@ -338,7 +338,7 @@ func testPBMsgClient(useResend bool, t *testing.T) {
 		s.End()
 		t.Logf("server end")
 	}()
-	go s.Start()
+	go s.Serve()
 
 	t.Logf("server started")
 
@@ -367,7 +367,7 @@ func testPBMsgServer(useResend bool, useSnappyCompress bool, useAesCrypto bool, 
 		s.End()
 		t.Logf("server end")
 	}()
-	go s.Start()
+	go s.Serve()
 
 	t.Logf("server started")
 

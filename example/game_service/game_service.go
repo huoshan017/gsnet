@@ -182,7 +182,7 @@ func (s *GameService) Init(conf *config) bool {
 }
 
 func (s *GameService) Start() {
-	s.serv.Start()
+	s.serv.Serve()
 }
 
 func main() {

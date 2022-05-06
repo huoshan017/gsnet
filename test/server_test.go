@@ -35,7 +35,7 @@ func testServer(t *testing.T, state int32, typ int32) {
 			return
 		}
 		go func(s *server.Server) {
-			s.Start()
+			s.Serve()
 		}(s)
 	}
 
@@ -99,7 +99,7 @@ func TestServer2(t *testing.T) {
 	defer srv.End()
 
 	go func(s *server.Server) {
-		s.Start()
+		s.Serve()
 	}(srv)
 
 	t.Logf("test server is running")
@@ -167,7 +167,7 @@ func BenchmarkServer(b *testing.B) {
 		return
 	}
 	go func(s *server.Server) {
-		s.Start()
+		s.Serve()
 	}(bs)
 
 	b.Logf("benchmark server is running")

@@ -22,6 +22,10 @@ func (h *agentServerHandler) OnConnect(sess common.ISession) {
 	log.Infof("session %v connected to agent server", sess.GetId())
 }
 
+func (h *agentServerHandler) OnReady(sess common.ISession) {
+	log.Infof("session %v ready", sess.GetId())
+}
+
 func (h *agentServerHandler) OnDisconnect(sess common.ISession, err error) {
 	log.Infof("session %v disconnected from agent server", sess.GetId())
 }
@@ -57,5 +61,5 @@ func main() {
 	}
 	defer s.End()
 	log.Infof("agent server started")
-	s.Start()
+	s.Serve()
 }

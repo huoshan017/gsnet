@@ -97,5 +97,5 @@ func main() {
 		return
 	}
 	defer s.End()
-	s.Start()
+	s.Serve()
 }

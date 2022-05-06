@@ -108,7 +108,7 @@ func (s *Server) Listen(addr string) error {
 func (s *Server) ListenAndServe(addr string) error {
 	err := s.Listen(addr)
 	if err == nil {
-		s.Start()
+		s.Serve()
 	}
 	return err
 }
@@ -117,7 +117,7 @@ func (s *Server) SetMainTickHandle(handle func(time.Duration)) {
 	s.mainTickHandle = handle
 }
 
-func (s *Server) Start() {
+func (s *Server) Serve() {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -292,9 +292,7 @@ func (s *Server) handleConn(c net.Conn) {
 
 		// handle packet
 		if err == nil {
-
 			handler.OnReady(sess)
-
 			var (
 				lastTime time.Time = time.Now()
 				pak      packet.IPacket
@@ -340,14 +338,12 @@ func (s *Server) handleConn(c net.Conn) {
 				}
 			}
 		}
-
 		handler.OnDisconnect(sess, err)
 		if s.options.GetConnCloseWaitSecs() > 0 {
 			conn.CloseWait(s.options.GetConnCloseWaitSecs())
 		} else {
 			conn.Close()
 		}
-
 		s.getSessCloseInfoChan() <- &sessionCloseInfo{sessionId: sess.GetId(), err: err}
 	}(conn)
 }

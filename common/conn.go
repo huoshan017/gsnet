@@ -60,12 +60,12 @@ func NewConnUseResend(conn net.Conn, packetBuilder IPacketBuilder, resend IResen
 	c.recvCh = make(chan packet.IPacket, c.options.recvChanLen)
 
 	if c.options.GetSendListMode() == 0 {
+		c.csendList = newCondSendList()
+	} else {
 		if c.options.GetSendChanLen() <= 0 {
 			c.options.SetSendChanLen(DefaultConnSendChanLen)
 		}
 		c.sendCh = make(chan wrapperSendData, c.options.sendChanLen)
-	} else {
-		c.csendList = newCondSendList()
 	}
 
 	if tcpConn, ok := c.conn.(*net.TCPConn); ok {
@@ -116,9 +116,9 @@ func (c *Conn) RemoteAddr() net.Addr {
 func (c *Conn) Run() {
 	go c.readLoop()
 	if c.options.GetSendListMode() == 0 {
-		go c.writeLoop()
-	} else {
 		go c.newWriteLoop()
+	} else {
+		go c.writeLoop()
 	}
 }
 
@@ -342,7 +342,9 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 			}
 		case <-c.closeCh:
 			return c.genErrConnClosed()
-		case c.sendCh <- c.getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType):
+		default:
+			sd := c.getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType)
+			c.csendList.pushBack(sd)
 		}
 	} else {
 		select {
@@ -357,9 +359,7 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 			}
 		case <-c.closeCh:
 			return c.genErrConnClosed()
-		default:
-			sd := c.getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType)
-			c.csendList.pushBack(sd)
+		case c.sendCh <- c.getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType):
 		}
 	}
 	return nil

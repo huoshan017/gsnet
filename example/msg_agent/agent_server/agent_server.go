@@ -57,5 +57,5 @@ func main() {
 	}
 	defer s.End()
 	log.Infof("agent server started")
-	s.Start()
+	s.Serve()
 }

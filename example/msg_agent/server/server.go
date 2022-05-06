@@ -20,6 +20,9 @@ func createMsgAgentClient() (*msg.MsgAgentClient, error) {
 	c.SetConnectHandle(func(sess *msg.MsgSession) {
 		log.Infof("msg agent client (sess %v) connected to server", sess.GetId())
 	})
+	c.SetReadyHandle(func(sess *msg.MsgSession) {
+		log.Infof("msg agent client (sess %v) ready", sess.GetId())
+	})
 	c.SetDisconnectHandle(func(sess *msg.MsgSession, err error) {
 		log.Infof("msg agent client (sess %v) disconnected from server", sess.GetId())
 	})
@@ -51,12 +54,13 @@ func (h *serverHandlerUseMsgAgentClient) OnReady(sess *msg.MsgSession) {
 }
 
 func (h *serverHandlerUseMsgAgentClient) OnDisconnected(sess *msg.MsgSession, err error) {
-	h.msgAgentClient.UnboundSession(sess, h.agentSess)
+	if h.agentSess != nil {
+		h.msgAgentClient.UnboundSession(sess, h.agentSess)
+	}
 	log.Infof("session %v disconnected from server", sess.GetId())
 }
 
 func (h *serverHandlerUseMsgAgentClient) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
-	h.agentSess = h.getAgentSess(sess)
 	if h.agentSess == nil {
 		log.Fatalf("why dont get message agent session")
 		return nil
@@ -79,13 +83,6 @@ func (h *serverHandlerUseMsgAgentClient) OnTick(sess *msg.MsgSession, tick time.
 
 func (h *serverHandlerUseMsgAgentClient) OnError(err error) {
 	log.Infof("occur err %v on server", err)
-}
-
-func (h *serverHandlerUseMsgAgentClient) getAgentSess(sess *msg.MsgSession) *msg.MsgAgentSession {
-	if h.agentSess == nil {
-		h.agentSess = h.msgAgentClient.BoundSession(sess, h.OnMsgFromAgentServer)
-	}
-	return h.agentSess
 }
 
 func (h *serverHandlerUseMsgAgentClient) OnMsgFromAgentServer(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
@@ -112,5 +109,5 @@ func main() {
 		return
 	}
 	defer s.End()
-	s.Start()
+	s.Serve()
 }

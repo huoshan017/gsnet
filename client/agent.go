@@ -158,20 +158,15 @@ func (c *AgentClient) BoundSession(sess common.ISession, handle func(common.ISes
 
 func (c *AgentClient) UnboundSession(sess common.ISession, asess *common.AgentSession) {
 	sess.RemoveInboundHandle(c.id)
-	v, o := c.pakChans.Load(asess.GetAgentId())
-	if !o {
-		log.Infof("gsnet: cant get packet channel with id %v for agent client", asess.GetAgentId())
-		return
-	}
-	if v != sess.GetPacketChannel() {
-		log.Infof("gsnet: to delete packet channel with id %v dismatch to specified", asess.GetAgentId())
-		return
-	}
-	c.pakChans.Delete(asess.GetAgentId())
+	c.pakChans.Delete(asess.AgentSessionId())
 }
 
 func (c *AgentClient) SetConnectHandle(handle func(common.ISession)) {
 	c.handler.setConnectHandle(handle)
+}
+
+func (c *AgentClient) SetReadyHandle(handle func(common.ISession)) {
+	c.handler.setReadyHandle(handle)
 }
 
 func (c *AgentClient) SetDisconnectHandle(handle func(common.ISession, error)) {
