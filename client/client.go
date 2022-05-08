@@ -23,6 +23,7 @@ type Client struct {
 	sess              common.ISession
 	handler           common.ISessionEventHandler
 	basePacketHandler common.IBasePacketHandler
+	packetBuilder     *common.PacketBuilder
 	resend            *common.ResendData
 	options           ClientOptions
 	lastTime          time.Time
@@ -96,23 +97,22 @@ func (c *Client) newConnector() *Connector {
 
 func (c *Client) doConnectResult(con net.Conn) error {
 	var (
-		packetBuilder *common.PacketBuilder
-		resend        *common.ResendData
+		resend *common.ResendData
 	)
 
 	switch c.options.GetConnDataType() {
 	case 1:
 		c.conn = common.NewSimpleConn(con, c.options.Options)
 	default:
-		packetBuilder = common.NewPacketBuilder(&c.options.Options)
+		c.packetBuilder = common.NewPacketBuilder(&c.options.Options)
 		resendConfig := c.options.GetResendConfig()
 		if resendConfig != nil {
 			resend = common.NewResendData(resendConfig)
 		}
 		if resend != nil {
-			c.conn = common.NewConnUseResend(con, packetBuilder, resend, &c.options.Options)
+			c.conn = common.NewConnUseResend(con, c.packetBuilder, resend, &c.options.Options)
 		} else {
-			c.conn = common.NewConn(con, packetBuilder, &c.options.Options)
+			c.conn = common.NewConn(con, c.packetBuilder, &c.options.Options)
 		}
 	}
 
@@ -120,8 +120,8 @@ func (c *Client) doConnectResult(con net.Conn) error {
 
 	// 包事件处理器
 	var pakEvtHandler common.IPacketEventHandler
-	if packetBuilder != nil {
-		pakEvtHandler = &packetEventHandler{handler: packetBuilder}
+	if c.packetBuilder != nil {
+		pakEvtHandler = &packetEventHandler{handler: c.packetBuilder}
 	}
 
 	// 重传事件处理器
@@ -376,6 +376,9 @@ func (c *Client) handleErr(err error) error {
 		if common.IsNoDisconnectError(err) {
 			err = nil
 		} else {
+			if c.packetBuilder != nil {
+				c.packetBuilder.Close()
+			}
 			if c.handler != nil {
 				c.handler.OnDisconnect(c.sess, err)
 			}

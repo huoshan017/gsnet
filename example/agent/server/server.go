@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/huoshan017/gsnet/client"
@@ -9,11 +10,13 @@ import (
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/server"
 
+	_ "net/http/pprof"
+
 	ecommon "github.com/huoshan017/gsnet/example/agent/common"
 )
 
 func createAgentClient() (*client.AgentClient, error) {
-	c := client.NewAgentClient()
+	c := client.NewAgentClient(common.WithSendListMode(ecommon.SendListMode))
 	if err := c.Dial(ecommon.AgentServerAddress); err != nil {
 		return nil, err
 	}
@@ -89,7 +92,7 @@ func createServerUseAgentClient(address string) *server.Server {
 		log.Fatalf("create agent client err %v", err)
 		return nil
 	}
-	s := server.NewServer(newServerHandlerUseAgentClient, server.WithNewSessionHandlerFuncArgs(agentClient), common.WithTickSpan(100*time.Millisecond))
+	s := server.NewServer(newServerHandlerUseAgentClient, server.WithNewSessionHandlerFuncArgs(agentClient), common.WithTickSpan(100*time.Millisecond), common.WithSendListMode(ecommon.SendListMode))
 	if err = s.Listen(address); err != nil {
 		log.Infof("test server listen err %v", err)
 		return nil
@@ -103,5 +106,8 @@ func main() {
 		return
 	}
 	defer s.End()
+	go func() {
+		http.ListenAndServe("0.0.0.0:6060", nil)
+	}()
 	s.Serve()
 }

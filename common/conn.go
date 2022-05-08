@@ -20,7 +20,7 @@ type Conn struct {
 	reader             *bufio.Reader
 	recvCh             chan packet.IPacket  // 缓存从网络接收的数据，对应一个接收者一个发送者
 	sendCh             chan wrapperSendData // 缓存发往网络的数据，对应一个接收者一个发送者
-	csendList          *condSendList        // 缓存发送队列
+	csendList          ISendList            // 缓存发送队列
 	closeCh            chan struct{}        // 关闭通道
 	closed             int32                // 是否关闭
 	errCh              chan error           // 错误通道
@@ -59,8 +59,8 @@ func NewConnUseResend(conn net.Conn, packetBuilder IPacketBuilder, resend IResen
 	}
 	c.recvCh = make(chan packet.IPacket, c.options.recvChanLen)
 
-	if c.options.GetSendListMode() == 0 {
-		c.csendList = newCondSendList()
+	if c.options.GetSendListMode() >= 0 {
+		c.csendList = newSendListFuncArray[c.options.GetSendListMode()]() //newCondSendList()
 	} else {
 		if c.options.GetSendChanLen() <= 0 {
 			c.options.SetSendChanLen(DefaultConnSendChanLen)
@@ -115,7 +115,7 @@ func (c *Conn) RemoteAddr() net.Addr {
 // Conn.Run read loop and write loop runing in goroutine
 func (c *Conn) Run() {
 	go c.readLoop()
-	if c.options.GetSendListMode() == 0 {
+	if c.options.GetSendListMode() >= 0 {
 		go c.newWriteLoop()
 	} else {
 		go c.writeLoop()
@@ -213,14 +213,14 @@ func (c *Conn) realSend(d *wrapperSendData) error {
 // Conn.newWriteLoop new write loop goroutine
 func (c *Conn) newWriteLoop() {
 	defer func() {
-		c.csendList.recycle()
+		c.csendList.Finalize()
 		if err := recover(); err != nil {
 			log.WithStack(err)
 		}
 	}()
 	var err error
 	for {
-		sd, o := c.csendList.popFront()
+		sd, o := c.csendList.PopFront()
 		if !o {
 			break
 		}
@@ -249,8 +249,7 @@ func (c *Conn) writeLoop() {
 
 	var err error
 	for d := range c.sendCh {
-		err = c.realSend(&d)
-		if err != nil {
+		if err = c.realSend(&d); err != nil {
 			break
 		}
 	}
@@ -292,10 +291,10 @@ func (c *Conn) closeWait(secs int) {
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
-	c.packetBuilder.Close()
+	//c.packetBuilder.Close()
 	close(c.closeCh)
-	if c.options.GetSendListMode() == 0 {
-		c.csendList.close()
+	if c.options.GetSendListMode() >= 0 {
+		c.csendList.Close()
 	} else {
 		if c.sendCh != nil {
 			close(c.sendCh)
@@ -334,7 +333,7 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 		return c.genErrConnClosed()
 	}
 	var err error
-	if c.options.GetSendListMode() == 0 {
+	if c.options.GetSendListMode() >= 0 {
 		select {
 		case err = <-c.errCh:
 			if err == nil {
@@ -349,7 +348,9 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 			return c.genErrConnClosed()
 		default:
 			sd := c.getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType)
-			c.csendList.pushBack(sd)
+			if !c.csendList.PushBack(sd) {
+				return c.genErrConnClosed()
+			}
 		}
 	} else {
 		select {
@@ -536,7 +537,6 @@ func (c *Conn) RecvNonblock() (packet.IPacket, error) {
 
 // Conn.genErrConnClosed generate connection closed error
 func (c *Conn) genErrConnClosed() error {
-	//debug.PrintStack()
 	return ErrConnClosed
 }
 

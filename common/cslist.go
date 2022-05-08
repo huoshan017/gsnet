@@ -105,8 +105,23 @@ func (s *slist) pushBack(wd wrapperSendData) {
 }
 
 func (s *slist) popFront() (wrapperSendData, bool) {
+	wd, o := s.peekFront()
+	if o {
+		s.deleteFront()
+	}
+	return wd, o
+}
+
+func (s *slist) peekFront() (wrapperSendData, bool) {
 	if s.head == nil {
 		return nullWrapperSendData, false
+	}
+	return s.head.value, true
+}
+
+func (s *slist) deleteFront() {
+	if s.head == nil {
+		return
 	}
 	n := s.head
 	s.head = n.next
@@ -115,7 +130,6 @@ func (s *slist) popFront() (wrapperSendData, bool) {
 	if s.length == 0 {
 		s.tail = nil
 	}
-	return n.value, true
 }
 
 func (s *slist) recycle() {
@@ -126,6 +140,14 @@ func (s *slist) recycle() {
 		n = n.next
 	}
 	s.length = 0
+}
+
+// 发送队列接口
+type ISendList interface {
+	PushBack(wrapperSendData) bool
+	PopFront() (wrapperSendData, bool)
+	Close()
+	Finalize()
 }
 
 type condSendList struct {
@@ -141,7 +163,7 @@ func newCondSendList() *condSendList {
 	}
 }
 
-func (l *condSendList) pushBack(wd wrapperSendData) bool {
+func (l *condSendList) PushBack(wd wrapperSendData) bool {
 	if atomic.LoadInt32(&l.quit) == 1 {
 		return false
 	}
@@ -152,7 +174,7 @@ func (l *condSendList) pushBack(wd wrapperSendData) bool {
 	return true
 }
 
-func (l *condSendList) popFront() (wrapperSendData, bool) {
+func (l *condSendList) PopFront() (wrapperSendData, bool) {
 	l.cond.L.Lock()
 	defer l.cond.L.Unlock()
 	for l.sendList.getLength() == 0 {
@@ -164,13 +186,22 @@ func (l *condSendList) popFront() (wrapperSendData, bool) {
 	return l.sendList.popFront()
 }
 
-func (l *condSendList) recycle() {
+func (l *condSendList) Finalize() {
 	l.cond.L.Lock()
 	defer l.cond.L.Unlock()
 	l.sendList.recycle()
 }
 
-func (l *condSendList) close() {
+func (l *condSendList) Close() {
 	atomic.StoreInt32(&l.quit, 1)
 	l.cond.Signal()
 }
+
+type newSendListFunc func() ISendList
+
+var (
+	newSendListFuncArray []newSendListFunc = []newSendListFunc{
+		func() ISendList { return newCondSendList() },
+		func() ISendList { return newUnlimitedChan() },
+	}
+)

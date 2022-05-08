@@ -333,6 +333,9 @@ func (s *Server) handleConn(c net.Conn) {
 				}
 			}
 		}
+		if packetBuilder != nil {
+			packetBuilder.Close()
+		}
 		handler.OnDisconnect(sess, err)
 		if s.options.GetConnCloseWaitSecs() > 0 {
 			conn.CloseWait(s.options.GetConnCloseWaitSecs())

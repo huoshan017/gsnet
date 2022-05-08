@@ -101,7 +101,6 @@ func (bp *BufferPool) findPool(size int32) *sync.Pool {
 	if size <= layerStartSizeArray[0] {
 		return bp.pools[0][0]
 	}
-	// layerStartSizeArray[len(layerStartSizeArray)-1]+(OneLayerSize-1)*layerStepSizeArray[len(layerStepSizeArray)-1]
 	if size > bp.buffSizeArray[len(layerStartSizeArray)-1][oneLayerSize-1] {
 		return bp.maxSizePool
 	}

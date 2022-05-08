@@ -137,7 +137,14 @@ func (c *AgentClient) Dial(address string) error {
 	if err := c.c.Connect(address); err != nil {
 		return err
 	}
-	go c.c.Run()
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.WithStack(err)
+			}
+		}()
+		c.c.Run()
+	}()
 	return nil
 }
 
@@ -145,7 +152,14 @@ func (c *AgentClient) DialTimeout(address string, timeout time.Duration) error {
 	if err := c.c.ConnectWithTimeout(address, timeout); err != nil {
 		return err
 	}
-	go c.c.Run()
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.WithStack(err)
+			}
+		}()
+		c.c.Run()
+	}()
 	return nil
 }
 

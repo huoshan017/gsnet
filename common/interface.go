@@ -68,8 +68,3 @@ type ISessionEventHandler interface {
 	OnDisconnect(ISession, error)
 	OnError(error)
 }
-
-type ISessionEventHandlerEx interface {
-	ISessionEventHandler
-	OnChannel(any)
-}

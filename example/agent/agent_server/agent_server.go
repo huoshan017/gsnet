@@ -45,7 +45,7 @@ func (h *agentServerHandler) OnError(err error) {
 }
 
 func createAgentServer(address string) *server.AgentServer {
-	s := server.NewAgentServer(newAgentServerHandler)
+	s := server.NewAgentServer(newAgentServerHandler, common.WithSendListMode(ecommon.SendListMode))
 	if err := s.Listen(address); err != nil {
 		log.Infof("agent server listen and serve err %v", err)
 		return nil
