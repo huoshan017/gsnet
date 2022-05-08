@@ -60,7 +60,7 @@ func NewConnUseResend(conn net.Conn, packetBuilder IPacketBuilder, resend IResen
 	c.recvCh = make(chan packet.IPacket, c.options.recvChanLen)
 
 	if c.options.GetSendListMode() >= 0 {
-		c.csendList = newSendListFuncArray[c.options.GetSendListMode()]() //newCondSendList()
+		c.csendList = newSendListFuncMap[c.options.GetSendListMode()]()
 	} else {
 		if c.options.GetSendChanLen() <= 0 {
 			c.options.SetSendChanLen(DefaultConnSendChanLen)

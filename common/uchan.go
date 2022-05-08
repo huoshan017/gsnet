@@ -41,13 +41,16 @@ func (c *unlimitedChan) run() {
 		}()
 		var (
 			inData, outData wrapperSendData
-			ok              bool = true
+			ok, peeked      bool = true, false
 			outDataChan     chan wrapperSendData
 		)
 		sendList = newSlist()
 		for ok {
 			if sendList.getLength() > 0 {
-				outData, _ = sendList.peekFront()
+				if !peeked {
+					outData, _ = sendList.peekFront()
+					peeked = true
+				}
 				outDataChan = c.outChan
 			} else {
 				outDataChan = nil
@@ -68,6 +71,7 @@ func (c *unlimitedChan) run() {
 				}
 			case outDataChan <- outData:
 				sendList.deleteFront()
+				peeked = false
 			case <-c.closeChan:
 				ok = false
 			}

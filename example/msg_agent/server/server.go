@@ -1,12 +1,15 @@
 package main
 
 import (
+	"net/http"
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/msg"
 	"github.com/huoshan017/gsnet/test/tproto"
+
+	_ "net/http/pprof"
 
 	acommon "github.com/huoshan017/gsnet/example/msg_agent/common"
 )
@@ -109,5 +112,8 @@ func main() {
 		return
 	}
 	defer s.End()
+	go func() {
+		http.ListenAndServe("0.0.0.0:6060", nil)
+	}()
 	s.Serve()
 }

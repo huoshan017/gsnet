@@ -5,11 +5,24 @@ import (
 	"testing"
 )
 
-func testSendList(t *testing.T, sendList ISendList) {
+type ITest interface {
+	Logf(string, ...any)
+	Errorf(string, ...any)
+}
+
+func testSendList(t ITest, sendList ISendList) {
 	var (
 		num int = 100000000
 		wg  sync.WaitGroup
 	)
+
+	defer func() {
+		sendList.Finalize()
+	}()
+
+	if b, o := t.(*testing.B); o {
+		num = b.N
+	}
 
 	wg.Add(num)
 
@@ -45,4 +58,12 @@ func TestCSendList(t *testing.T) {
 
 func TestUChan(t *testing.T) {
 	testSendList(t, newUnlimitedChan())
+}
+
+func BenchmarkCSendList(b *testing.B) {
+	testSendList(b, newCondSendList())
+}
+
+func BenchmarkUChan(b *testing.B) {
+	testSendList(b, newUnlimitedChan())
 }

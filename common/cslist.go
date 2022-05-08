@@ -200,8 +200,8 @@ func (l *condSendList) Close() {
 type newSendListFunc func() ISendList
 
 var (
-	newSendListFuncArray []newSendListFunc = []newSendListFunc{
-		func() ISendList { return newCondSendList() },
-		func() ISendList { return newUnlimitedChan() },
+	newSendListFuncMap map[int32]newSendListFunc = map[int32]newSendListFunc{
+		0: func() ISendList { return newCondSendList() },
+		1: func() ISendList { return newUnlimitedChan() },
 	}
 )
