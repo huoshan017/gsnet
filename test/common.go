@@ -210,9 +210,9 @@ func (h *testServerHandler) OnConnect(sess common.ISession) {
 func (h *testServerHandler) OnReady(sess common.ISession) {
 	if h.state == 1 {
 		if h.t != nil {
-			h.t.Logf("client(session_id %v) ready", sess.GetId())
+			h.t.Logf("client(session_id: %v) ready", sess.GetId())
 		} else if h.b != nil {
-			h.b.Logf("client(session_id %v) ready", sess.GetId())
+			h.b.Logf("client(session_id: %v) ready", sess.GetId())
 		}
 	}
 }

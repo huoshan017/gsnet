@@ -78,8 +78,8 @@ func (c *MsgAgentClient) SetErrorHandle(handle func(error)) {
 }
 
 // MsgAgentClient.BoundSession  bound message handle and create message agent session
-func (c *MsgAgentClient) BoundSession(sess *MsgSession, handle func(*MsgSession, MsgIdType, any) error) *MsgAgentSession {
-	var h func(common.ISession, packet.IPacket) error = func(sess common.ISession, pak packet.IPacket) error {
+func (c *MsgAgentClient) BoundServerSession(sess *MsgSession, handle func(*MsgSession, MsgIdType, any) error) *MsgAgentSession {
+	var h = func(sess common.ISession, pak packet.IPacket) error {
 		var ms = MsgSession{sess: sess, codec: c.codec, mapper: c.mapper, options: &c.options.MsgOptions}
 		msgid, msgobj, err := ms.splitIdAndMsg(pak.Data())
 		if err != nil {
@@ -87,13 +87,13 @@ func (c *MsgAgentClient) BoundSession(sess *MsgSession, handle func(*MsgSession,
 		}
 		return handle(&ms, msgid, msgobj)
 	}
-	agentSess := c.c.BoundSession(sess.GetSess(), h)
+	agentSess := c.c.BoundServerSession(sess.GetSess(), h)
 	return &MsgAgentSession{AgentSession: agentSess, c: c}
 }
 
 // MsgAgentClient.UnboundSession
-func (c *MsgAgentClient) UnboundSession(sess *MsgSession, asess *MsgAgentSession) {
-	c.c.UnboundSession(sess.GetSess(), asess.AgentSession)
+func (c *MsgAgentClient) UnboundServerSession(sess *MsgSession, asess *MsgAgentSession) {
+	c.c.UnboundServerSession(sess.GetSess(), asess.AgentSession)
 }
 
 // struct AgentMsgSession

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
@@ -29,6 +30,7 @@ type Client struct {
 	lastTime          time.Time
 	ctx               context.Context
 	cancel            context.CancelFunc
+	isReady           int32
 }
 
 func NewClient(handler common.ISessionEventHandler, options ...common.Option) *Client {
@@ -78,9 +80,9 @@ func (c *Client) ConnectWithTimeout(addr string, timeout time.Duration) error {
 }
 
 func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(error)) {
-	if c.options.GetRunMode() != RunModeOnlyUpdate {
-		panic(ErrClientRunUpdateMode)
-	}
+	//if c.options.GetRunMode() != RunModeOnlyUpdate {
+	//	panic(ErrClientRunUpdateMode)
+	//}
 	connector := c.newConnector()
 	connector.ConnectAsync(addr, timeout, func(err error) {
 		if err == nil {
@@ -138,24 +140,9 @@ func (c *Client) doConnectResult(con net.Conn) error {
 
 	// update模式下先把握手处理掉
 	if c.options.GetRunMode() == RunModeOnlyUpdate {
-		var (
-			res bool
-			err error
-		)
-		if err == nil {
-			c.handler.OnConnect(c.sess)
-		}
-		for {
-			res, err = c.handleHandshake(0)
-			if err != nil || res {
-				break
-			}
-		}
-		if err == nil {
-			c.handler.OnReady(c.sess)
-		}
-		return err
+		return c.fromConnect2Ready()
 	}
+
 	return nil
 }
 
@@ -201,7 +188,7 @@ func (c *Client) Update() error {
 
 	// 连接状态
 	if c.IsConnecting() {
-		_, err = c.connector.WaitResult()
+		_, err = c.connector.WaitResult(false)
 		return err
 	}
 
@@ -210,31 +197,23 @@ func (c *Client) Update() error {
 }
 
 func (c *Client) Run() {
-	if c.options.GetRunMode() != RunModeAsMainLoop {
+	runMode := c.options.GetRunMode()
+	if runMode != RunModeAsMainLoop {
 		c.handler.OnError(ErrClientRunMainLoopMode)
 		return
 	}
 
-	var (
-		res bool
-		err error
-	)
+	var err error
 
-	c.handler.OnConnect(c.sess)
-
-	for {
-		res, err = c.handleHandshake(0)
-		if err != nil || res {
-			break
-		}
+	if c.IsConnecting() {
+		_, err = c.connector.WaitResult(true)
 	}
 
 	if err == nil {
-		c.handler.OnReady(c.sess)
-	}
-
-	for err == nil {
-		err = c.handle(0)
+		err = c.fromConnect2Ready()
+		for err == nil {
+			err = c.handle(0)
+		}
 	}
 
 	c.handleErr(err)
@@ -281,6 +260,10 @@ func (c *Client) IsConnected() bool {
 	return c.connector.IsConnected()
 }
 
+func (c *Client) IsReady() bool {
+	return atomic.LoadInt32(&c.isReady) > 0
+}
+
 func (c *Client) IsDisconnected() bool {
 	if c.connector == nil {
 		return false
@@ -293,6 +276,25 @@ func (c *Client) IsDisconnecting() bool {
 		return false
 	}
 	return c.connector.IsDisconnecting()
+}
+
+func (c *Client) fromConnect2Ready() error {
+	var (
+		res bool
+		err error
+	)
+	c.handler.OnConnect(c.sess)
+	for {
+		res, err = c.handleHandshake(0)
+		if err != nil || res {
+			break
+		}
+	}
+	if err == nil {
+		c.handler.OnReady(c.sess)
+		atomic.StoreInt32(&c.isReady, 1)
+	}
+	return err
 }
 
 func (c *Client) handleHandshake(mode int32) (bool, error) {

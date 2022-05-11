@@ -58,7 +58,7 @@ func (h *serverHandlerUseAgentClient) OnReady(sess common.ISession) {
 
 func (h *serverHandlerUseAgentClient) OnDisconnect(sess common.ISession, err error) {
 	if h.agentSess != nil {
-		h.agentClient.UnboundSession(sess, h.agentSess)
+		h.agentClient.UnboundServerSession(sess, h.agentSess)
 	}
 	log.Infof("session %v disconnected from server", sess.GetId())
 }
@@ -77,13 +77,15 @@ func (h *serverHandlerUseAgentClient) OnError(err error) {
 
 func (h *serverHandlerUseAgentClient) getWorkerSess(sess common.ISession) *common.AgentSession {
 	if h.agentSess == nil {
-		h.agentSess = h.agentClient.BoundSession(sess, h.OnPacketFromWorkerServer)
+		h.agentSess = h.agentClient.BoundServerSession(sess, h.OnPacketFromAgentServer)
 	}
 	return h.agentSess
 }
 
-func (h *serverHandlerUseAgentClient) OnPacketFromWorkerServer(sess common.ISession, pak packet.IPacket) error {
-	return sess.Send(pak.Data(), true)
+func (h *serverHandlerUseAgentClient) OnPacketFromAgentServer(sess common.ISession, pak packet.IPacket) error {
+	return sess.Send(pak.Data(), func() bool {
+		return pak.MMType() != packet.MemoryManagementSystemGC
+	}())
 }
 
 func createServerUseAgentClient(address string) *server.Server {

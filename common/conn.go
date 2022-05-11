@@ -161,52 +161,54 @@ func (c *Conn) readLoop() {
 }
 
 func (c *Conn) realSend(d *wrapperSendData) error {
+	if d.data == nil {
+		panic("gsnet: wrapper send data nil")
+	}
+
 	var err error
 	if c.options.writeTimeout != 0 {
-		err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+		if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout)); err != nil {
+			return err
+		}
 	}
+
+	// 多线程情况下，在发送数据之前调用重发的接口缓存数据，防止从发送完数据到对方收到再回确认包过来时还没来得及缓存造成确认失败
+	if c.resendEventHandler != nil {
+		if !c.resendEventHandler.OnSent(d.data, d.pt_mmt) {
+			return ErrSentPacketCacheFull
+		}
+	}
+
+	pt := d.getPacketType()
+	b, pb, ba, pba := d.getData()
+
+	if b != nil {
+		err = c.packetBuilder.EncodeWriteTo(pt, b, c.writer)
+	} else if pb != nil {
+		err = c.packetBuilder.EncodeWriteTo(pt, *pb, c.writer)
+	} else if ba != nil {
+		err = c.packetBuilder.EncodeBytesArrayWriteTo(pt, ba, c.writer)
+	} else if pba != nil {
+		err = c.packetBuilder.EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
+	}
+
 	if err == nil {
-		if d.data == nil {
-			panic("gsnet: wrapper send data nil")
-		}
-
-		// 多线程情况下，在发送数据之前调用重发的接口缓存数据，防止发送完对方收到再发确认包过来时还没来得及缓存造成确认失败
-		if c.resendEventHandler != nil {
-			if !c.resendEventHandler.OnSent(d.data, d.pt_mmt) {
-				err = ErrSentPacketCacheFull
-			}
-		}
-
-		if err == nil {
-			pt := d.getPacketType()
-			b, pb, ba, pba := d.getData()
-
-			if b != nil {
-				err = c.packetBuilder.EncodeWriteTo(pt, b, c.writer)
-			} else if pb != nil {
-				err = c.packetBuilder.EncodeWriteTo(pt, *pb, c.writer)
-			} else if ba != nil {
-				err = c.packetBuilder.EncodeBytesArrayWriteTo(pt, ba, c.writer)
-			} else if pba != nil {
-				err = c.packetBuilder.EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
+		// have data in buffer
+		if c.writer.Buffered() > 0 {
+			if c.options.writeTimeout != 0 {
+				err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
 			}
 			if err == nil {
-				// have data in buffer
-				if c.writer.Buffered() > 0 {
-					if c.options.writeTimeout != 0 {
-						err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
-					}
-					if err == nil {
-						err = c.writer.Flush()
-					}
-				}
-			}
-			// no use resend
-			if c.resendEventHandler == nil {
-				d.toFree(b, pb, ba, pba)
+				err = c.writer.Flush()
 			}
 		}
 	}
+
+	// no use resend
+	if c.resendEventHandler == nil {
+		d.toFree(b, pb, ba, pba)
+	}
+
 	return err
 }
 

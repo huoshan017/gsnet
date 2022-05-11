@@ -112,14 +112,14 @@ func (s *Session) GetResendData() *ResendData {
 }
 
 type AgentSession struct {
-	agentId uint32
-	sess    ISession
+	agentSessionId uint32
+	sess           ISession
 }
 
-func NewAgentSession(agentId uint32, sess ISession) *AgentSession {
+func NewAgentSession(agentSessionId uint32, sess ISession) *AgentSession {
 	return &AgentSession{
-		agentId: agentId,
-		sess:    sess,
+		agentSessionId: agentSessionId,
+		sess:           sess,
 	}
 }
 
@@ -128,18 +128,18 @@ func (sc *AgentSession) GetId() uint64 {
 }
 
 func (sc *AgentSession) AgentSessionId() uint32 {
-	return sc.agentId
+	return sc.agentSessionId
 }
 
 func (as *AgentSession) send(data []byte) error {
 	temp := make([]byte, 4)
-	Uint32ToBuffer(as.agentId, temp)
+	Uint32ToBuffer(as.agentSessionId, temp)
 	return as.sess.SendBytesArray([][]byte{temp, data}, false)
 }
 
 func (as *AgentSession) sendOnCopy(data []byte) error {
 	buffer := pool.GetBuffPool().Alloc(4 + int32(len(data)))
-	Uint32ToBuffer(as.agentId, (*buffer)[:4])
+	Uint32ToBuffer(as.agentSessionId, (*buffer)[:4])
 	copy((*buffer)[4:], data)
 	return as.sess.SendPoolBuffer(buffer)
 }
@@ -154,20 +154,20 @@ func (as *AgentSession) Send(data []byte, isCopy bool) error {
 
 func (as *AgentSession) SendBytesArray(datas [][]byte, isCopy bool) error {
 	temp := make([]byte, 4)
-	Uint32ToBuffer(as.agentId, temp)
+	Uint32ToBuffer(as.agentSessionId, temp)
 	datas = append([][]byte{temp}, datas...)
 	return as.sess.SendBytesArray(datas, isCopy)
 }
 
 func (as *AgentSession) SendPoolBuffer(buffer *[]byte) error {
 	buf := pool.GetBuffPool().Alloc(4)
-	Uint32ToBuffer(as.agentId, (*buf)[:])
+	Uint32ToBuffer(as.agentSessionId, (*buf)[:])
 	return as.sess.SendPoolBufferArray([]*[]byte{buf, buffer})
 }
 
 func (as *AgentSession) SendPoolBufferArray(bufferArray []*[]byte) error {
 	buf := pool.GetBuffPool().Alloc(4)
-	Uint32ToBuffer(as.agentId, (*buf)[:])
+	Uint32ToBuffer(as.agentSessionId, (*buf)[:])
 	bufferArray = append([]*[]byte{buf}, bufferArray...)
 	return as.sess.SendPoolBufferArray(bufferArray)
 }

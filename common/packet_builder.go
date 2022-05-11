@@ -15,7 +15,6 @@ type IPacketBuilder interface {
 	EncodeBytesArrayWriteTo(packet.PacketType, [][]byte, io.Writer) error
 	EncodeBytesPointerArrayWriteTo(pType packet.PacketType, pBytesArray []*[]byte, writer io.Writer) error
 	DecodeReadFrom(io.Reader) (packet.IPacket, error)
-	Close()
 }
 
 // builder for type `Packet`

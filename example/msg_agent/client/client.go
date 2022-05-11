@@ -144,7 +144,7 @@ func randBytes(n int, ran *rand.Rand) []byte {
 
 func main() {
 	var (
-		clientNum        = 10000
+		clientNum        = 14000
 		compareNum int32 = 200
 		wg         sync.WaitGroup
 		count      int32
@@ -186,7 +186,7 @@ func main() {
 					log.Infof("test client update err %v", err)
 					break
 				}
-				if client.IsConnected() && cn < compareNum {
+				if cn < compareNum {
 					rn := ran.Intn(128) + 1
 					d := randBytes(rn, ran)
 					request.Content = string(d)

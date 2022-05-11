@@ -2,6 +2,7 @@ package client
 
 import (
 	"net"
+	"sync/atomic"
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
@@ -46,25 +47,26 @@ func (c *Connector) Reset() {
 			err  error
 		})
 	}
+	atomic.StoreInt32(&c.state, ConnStateNotConnect)
 }
 
 // 同步连接
 func (c *Connector) Connect(address string) (net.Conn, error) {
 	conn, err := c.connect(address, 0)
-	c.state = ConnStateConnected
+	atomic.StoreInt32(&c.state, ConnStateConnected)
 	return conn, err
 }
 
 // 带超时的同步连接
 func (c *Connector) ConnectWithTimeout(address string, timeout time.Duration) (net.Conn, error) {
 	conn, err := c.connect(address, timeout)
-	c.state = ConnStateConnected
+	atomic.StoreInt32(&c.state, ConnStateConnected)
 	return conn, err
 }
 
 // 异步连接
 func (c *Connector) ConnectAsync(address string, timeout time.Duration, connectCB func(error)) {
-	c.state = ConnStateConnecting
+	atomic.StoreInt32(&c.state, ConnStateConnecting)
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -86,52 +88,53 @@ func (c *Connector) GetConn() net.Conn {
 }
 
 // 等待结果，wait参数为等待时间，如何这个时间内有了结果就提前返回
-func (c *Connector) WaitResult() (int32, error) {
+func (c *Connector) WaitResult(isBlock bool) (int32, error) {
 	var err error
-	select {
-	case d, o := <-c.asyncResultCh:
+	if isBlock {
+		d, o := <-c.asyncResultCh
 		if !o {
 			return ConnStateConnected, nil
 		}
-		if d.err == nil {
-			c.conn = d.conn
-			c.state = ConnStateConnected
-		} else {
-			c.state = ConnStateNotConnect
-			err = d.err
+		c.doAsyncResult(d.err, d.conn)
+	} else {
+		select {
+		case d, o := <-c.asyncResultCh:
+			if !o {
+				return ConnStateConnected, nil
+			}
+			c.doAsyncResult(d.err, d.conn)
+		default:
 		}
-		c.connectCallback(d.err)
-	default:
 	}
 	return c.state, err
 }
 
 func (c *Connector) IsNotConnect() bool {
-	return c.state == ConnStateNotConnect
+	return atomic.LoadInt32(&c.state) == ConnStateNotConnect
 }
 
 // 是否已连接
 func (c *Connector) IsConnected() bool {
-	return c.state == ConnStateConnected //atomic.LoadInt32(&c.state) == ConnStateConnected
+	return atomic.LoadInt32(&c.state) == ConnStateConnected //atomic.LoadInt32(&c.state) == ConnStateConnected
 }
 
 // 是否正在连接
 func (c *Connector) IsConnecting() bool {
-	return c.state == ConnStateConnecting //atomic.LoadInt32(&c.state) == ConnStateConnecting
+	return atomic.LoadInt32(&c.state) == ConnStateConnecting //atomic.LoadInt32(&c.state) == ConnStateConnecting
 }
 
 // 是否断连或未连接
 func (c *Connector) IsDisconnected() bool {
-	return c.state == ConnStateNotConnect //atomic.LoadInt32(&c.state) == ConnStateNotConnect
+	return atomic.LoadInt32(&c.state) == ConnStateNotConnect //atomic.LoadInt32(&c.state) == ConnStateNotConnect
 }
 
 // 是否正在断连
 func (c *Connector) IsDisconnecting() bool {
-	return c.state == ConnStateDisconnecting //atomic.LoadInt32(&c.state) == ConnStateDisconnecting
+	return atomic.LoadInt32(&c.state) == ConnStateDisconnecting //atomic.LoadInt32(&c.state) == ConnStateDisconnecting
 }
 
 func (c *Connector) GetState() int32 {
-	return c.state
+	return atomic.LoadInt32(&c.state)
 }
 
 // 内部连接函数
@@ -147,4 +150,14 @@ func (c *Connector) connect(address string, timeout time.Duration) (net.Conn, er
 		return nil, err
 	}
 	return conn, nil
+}
+
+func (c *Connector) doAsyncResult(err error, conn net.Conn) {
+	if err == nil {
+		c.conn = conn
+		c.state = ConnStateConnected
+	} else {
+		c.state = ConnStateNotConnect
+	}
+	c.connectCallback(err)
 }

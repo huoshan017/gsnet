@@ -175,6 +175,9 @@ func (l *condSendList) PushBack(wd wrapperSendData) bool {
 }
 
 func (l *condSendList) PopFront() (wrapperSendData, bool) {
+	if atomic.LoadInt32(&l.quit) == 1 {
+		return nullWrapperSendData, false
+	}
 	l.cond.L.Lock()
 	defer l.cond.L.Unlock()
 	for l.sendList.getLength() == 0 {

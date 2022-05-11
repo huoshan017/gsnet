@@ -52,13 +52,13 @@ func (h *serverHandlerUseMsgAgentClient) OnConnected(sess *msg.MsgSession) {
 }
 
 func (h *serverHandlerUseMsgAgentClient) OnReady(sess *msg.MsgSession) {
-	h.agentSess = h.msgAgentClient.BoundSession(sess, h.OnMsgFromAgentServer)
+	h.agentSess = h.msgAgentClient.BoundServerSession(sess, h.OnMsgFromAgentServer)
 	log.Infof("session %v ready", sess.GetId())
 }
 
 func (h *serverHandlerUseMsgAgentClient) OnDisconnected(sess *msg.MsgSession, err error) {
 	if h.agentSess != nil {
-		h.msgAgentClient.UnboundSession(sess, h.agentSess)
+		h.msgAgentClient.UnboundServerSession(sess, h.agentSess)
 	}
 	log.Infof("session %v disconnected from server", sess.GetId())
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/packet"
-	"github.com/huoshan017/gsnet/pool"
 )
 
 type commonHandler struct {
@@ -69,19 +68,6 @@ func (h *commonHandler) OnError(err error) {
 	}
 }
 
-func (h *commonHandler) Send(sess common.ISession, id uint64, data []byte) error {
-	temp := make([]byte, 8)
-	common.Uint64ToBuffer(id, temp)
-	return sess.SendBytesArray([][]byte{temp, data}, false)
-}
-
-func (h *commonHandler) SendOnCopy(sess common.ISession, id uint64, data []byte) error {
-	buffer := pool.GetBuffPool().Alloc(8 + int32(len(data)))
-	common.Uint64ToBuffer(id, (*buffer)[:8])
-	copy((*buffer)[8:], data)
-	return sess.SendPoolBuffer(buffer)
-}
-
 type clientHandler struct {
 	commonHandler
 	owner    *AgentClient
@@ -93,10 +79,10 @@ func newClientHandler(c *AgentClient) *clientHandler {
 }
 
 func (h *clientHandler) OnPacket(sess common.ISession, pak packet.IPacket) error {
-	agentId := common.BufferToUint32(pak.Data()[:4])
-	chPak := h.owner.getPakChan(agentId)
+	agentSessionId := common.BufferToUint32(pak.Data()[:4])
+	chPak := h.owner.getPakChan(agentSessionId)
 	if chPak == nil {
-		log.Infof("gsnet: not yet bound handle for agent %v", agentId)
+		log.Infof("gsnet: not yet bound handle for agent %v", agentSessionId)
 		return nil
 	}
 	if pak.MMType() == packet.MemoryManagementSystemGC {
@@ -120,9 +106,9 @@ func (h *clientHandler) OnPacket(sess common.ISession, pak packet.IPacket) error
 }
 
 type AgentClient struct {
+	id       int32
 	c        *Client
 	handler  *clientHandler
-	id       int32
 	pakChans sync.Map
 }
 
@@ -163,14 +149,14 @@ func (c *AgentClient) DialTimeout(address string, timeout time.Duration) error {
 	return nil
 }
 
-func (c *AgentClient) BoundSession(sess common.ISession, handle func(common.ISession, packet.IPacket) error) *common.AgentSession {
+func (c *AgentClient) BoundServerSession(sess common.ISession, handle func(common.ISession, packet.IPacket) error) *common.AgentSession {
 	sess.AddInboundHandle(c.id, handle)
 	agentSessionId := getNextAgentSessionId()
 	c.pakChans.Store(agentSessionId, sess.GetPacketChannel())
 	return common.NewAgentSession(agentSessionId, c.c.GetSession())
 }
 
-func (c *AgentClient) UnboundSession(sess common.ISession, asess *common.AgentSession) {
+func (c *AgentClient) UnboundServerSession(sess common.ISession, asess *common.AgentSession) {
 	sess.RemoveInboundHandle(c.id)
 	c.pakChans.Delete(asess.AgentSessionId())
 }

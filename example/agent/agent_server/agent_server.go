@@ -34,7 +34,9 @@ func (h *agentServerHandler) OnPacket(sess common.ISession, pak packet.IPacket) 
 	if _, o := sess.(*common.AgentSession); !o {
 		panic("!!!!! Must *AgentSession type")
 	}
-	return sess.Send(pak.Data(), true)
+	return sess.Send(pak.Data(), func() bool {
+		return pak.MMType() != packet.MemoryManagementSystemGC
+	}())
 }
 
 func (h *agentServerHandler) OnTick(sess common.ISession, tick time.Duration) {
