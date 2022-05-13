@@ -21,6 +21,10 @@ func (sc *SessionChannel) GetId() uint64 {
 	return sc.sess.GetId()
 }
 
+func (sc *SessionChannel) Conn() IConn {
+	return sc.sess.Conn()
+}
+
 func (sc *SessionChannel) send(data []byte) error {
 	temp := make([]byte, 8)
 	Uint64ToBuffer(sc.id, temp)
@@ -68,6 +72,10 @@ func (sc *SessionChannel) Close() {
 
 func (sc *SessionChannel) CloseWaitSecs(secs int) {
 	sc.sess.CloseWaitSecs(secs)
+}
+
+func (sc *SessionChannel) IsClosed() bool {
+	return sc.sess.IsClosed()
 }
 
 func (sc *SessionChannel) AddInboundHandle(id int32, handle func(ISession, packet.IPacket) error) {

@@ -149,6 +149,50 @@ func (c *AgentClient) DialTimeout(address string, timeout time.Duration) error {
 	return nil
 }
 
+func (c *AgentClient) DialAsync(address string, timeout time.Duration, callback func(error)) {
+	c.c.ConnectAsync(address, timeout, callback)
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.WithStack(err)
+			}
+		}()
+		c.c.Run()
+	}()
+}
+
+func (c *AgentClient) Close() {
+	c.c.Close()
+}
+
+func (c *AgentClient) CloseWait(secs int) {
+	c.c.CloseWait(secs)
+}
+
+func (c *AgentClient) IsNotConnect() bool {
+	return c.c.IsNotConnect()
+}
+
+func (c *AgentClient) IsConnecting() bool {
+	return c.c.IsConnecting()
+}
+
+func (c *AgentClient) IsConnected() bool {
+	return c.c.IsConnected()
+}
+
+func (c *AgentClient) IsReady() bool {
+	return c.c.IsReady()
+}
+
+func (c *AgentClient) IsDisconnecting() bool {
+	return c.c.IsDisconnecting()
+}
+
+func (c *AgentClient) IsDisconnected() bool {
+	return c.c.IsDisconnected()
+}
+
 func (c *AgentClient) BoundServerSession(sess common.ISession, handle func(common.ISession, packet.IPacket) error) *common.AgentSession {
 	sess.AddInboundHandle(c.id, handle)
 	agentSessionId := getNextAgentSessionId()

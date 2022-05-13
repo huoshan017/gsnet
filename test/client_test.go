@@ -15,11 +15,11 @@ import (
 type testClientUseRunHandler struct {
 	t          *testing.T
 	b          *testing.B
-	state      int32 // 1 客户端模式   2 服务器模式
 	sentList   [][]byte
 	compareNum int32
+	totalNum   int32
 	ran        *rand.Rand
-	canSend    bool
+	isReady    bool
 }
 
 func newTestClientUseRunHandler(args ...any) common.ISessionEventHandler {
@@ -32,39 +32,34 @@ func newTestClientUseRunHandler(args ...any) common.ISessionEventHandler {
 	if !o {
 		h.b, _ = args[0].(*testing.B)
 	}
-	h.state = args[1].(int32)
+	h.totalNum = args[1].(int32)
 	return h
 }
 
 func (h *testClientUseRunHandler) OnConnect(sess common.ISession) {
-	//if h.state == 2 {
 	if h.t != nil {
 		h.t.Logf("TestClientUseRun connected")
 	} else if h.b != nil {
 		h.b.Logf("TestClientUseRun connected")
 	}
-	//}
 }
 
 func (h *testClientUseRunHandler) OnReady(sess common.ISession) {
-	h.canSend = true
-	//if h.state == 2 {
+	h.isReady = true
+	h.compareNum = 0
 	if h.t != nil {
 		h.t.Logf("TestClientUseRun ready")
 	} else if h.b != nil {
 		h.b.Logf("TestClientUseRun ready")
 	}
-	//}
 }
 
 func (h *testClientUseRunHandler) OnDisconnect(sess common.ISession, err error) {
-	//if h.state == 2 {
 	if h.t != nil {
 		h.t.Logf("TestClientUseRun disconnected, err: %v", err)
 	} else if h.b != nil {
 		h.b.Logf("TestClientUseRun disconnected, err: %v", err)
 	}
-	//}
 }
 
 func (h *testClientUseRunHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
@@ -79,15 +74,15 @@ func (h *testClientUseRunHandler) OnPacket(sess common.ISession, packet packet.I
 	}
 	h.sentList = h.sentList[1:]
 	h.compareNum += 1
-	if h.compareNum >= 100 {
+	if h.totalNum > 0 && h.compareNum >= h.totalNum {
 		sess.Close()
 	}
-	h.t.Logf("testClientUseRunHandler.OnPacket compared %v", data)
+	h.t.Logf("testClientUseRunHandler.OnPacket compared count %v", h.compareNum)
 	return nil
 }
 
 func (h *testClientUseRunHandler) OnTick(sess common.ISession, tick time.Duration) {
-	if !h.canSend {
+	if !h.isReady || sess.IsClosed() {
 		return
 	}
 	d := randBytes(100, h.ran)
@@ -104,18 +99,16 @@ func (h *testClientUseRunHandler) OnTick(sess common.ISession, tick time.Duratio
 }
 
 func (h *testClientUseRunHandler) OnError(err error) {
-	//if h.state == 2 {
 	if h.t != nil {
 		h.t.Logf("TestClientUseRun occur err: %v", err)
 	} else if h.b != nil {
 		h.t.Logf("TestClientUseRun occur err: %v", err)
 	}
-	//}
 }
 
-func createTestClientUseRun(t *testing.T, state int32) *client.Client {
+func createTestClientUseRun(t *testing.T, totalNum int32) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseRunHandler(t, state), common.WithTickSpan(time.Millisecond*100), common.WithConnDataType(connDataType))
+	return client.NewClient(newTestClientUseRunHandler(t, totalNum), common.WithTickSpan(time.Second), common.WithConnDataType(connDataType))
 }
 
 func TestClientUseRun(t *testing.T) {
@@ -131,7 +124,7 @@ func TestClientUseRun(t *testing.T) {
 
 	t.Logf("server for TestClientUseRun running")
 
-	tc := createTestClientUseRun(t, 2)
+	tc := createTestClientUseRun(t, 200)
 	err = tc.Connect(testAddress)
 	if err != nil {
 		t.Errorf("TestClientUseRun connect err: %+v", err)
@@ -342,7 +335,7 @@ func TestConnectAsyncConnect2(t *testing.T) {
 
 	t.Logf("server for test client running")
 
-	tc := createTestClientUseRun(t, 2)
+	tc := createTestClientUseRun(t, 200)
 	tc.ConnectAsync(testAddress, 3*time.Second, func(err error) {
 		if err != nil {
 			t.Logf("test client connect async err %v", err)
@@ -412,4 +405,46 @@ func TestNilChannel(t *testing.T) {
 			time.Sleep(time.Second)
 		}
 	}
+}
+
+func createTestClientUseReconnect(t *testing.T, totalNum int32) *client.Client {
+	// 启用tick处理
+	return client.NewClient(newTestClientUseRunHandler(t, totalNum), client.WithReconnect(true), common.WithTickSpan(time.Second))
+}
+
+func TestClientReconnect(t *testing.T) {
+	ts := createTestServer(t, 1)
+	err := ts.Listen(testAddress)
+	if err != nil {
+		t.Errorf("server for test client listen err: %+v", err)
+		return
+	}
+	defer func() {
+		ts.End()
+		t.Logf("server end")
+	}()
+
+	go ts.Serve()
+
+	t.Logf("server for test client running")
+
+	tc := createTestClientUseReconnect(t, 10)
+	tc.ConnectAsync(testAddress, 3*time.Second, func(err error) {
+		if err != nil {
+			t.Logf("test client connect async err %v", err)
+		} else {
+			t.Logf("test client connected")
+		}
+	})
+
+	t.Logf("connecting")
+
+	go func() {
+		time.Sleep(120 * time.Second)
+		tc.Close()
+	}()
+
+	tc.Run()
+
+	t.Logf("test done")
 }

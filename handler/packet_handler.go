@@ -1,20 +1,15 @@
-package common
+package handler
 
 import (
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
+	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/packet"
-)
-
-const (
-	DefaultSentAckTimeSpan            = time.Millisecond * 200 // 默认发送确认包间隔时间
-	DefaultAckSentNum                 = 10                     // 默认确认发送包数
-	DefaultHeartbeatTimeSpan          = time.Second * 10       // 默认发送心跳间隔时间
-	DefaultMinimumHeartbeatTimeSpan   = time.Second * 3        // 最小心跳发送间隔
-	DefaultDisconnectHeartbeatTimeout = time.Second * 30       // 断开连接的心跳超时
+	"github.com/huoshan017/gsnet/protocol"
 )
 
 var (
@@ -53,19 +48,19 @@ const (
 
 type DefaultBasePacketHandler struct {
 	cors               bool
-	conn               IConn
+	sess               common.ISession
 	packetEventHandler IPacketEventHandler
 	argsGetter         IPacketBuilderArgsGetter
-	resendEventHandler IResendEventHandler
-	options            *Options
+	resendEventHandler common.IResendEventHandler
+	options            *common.Options
 	lastTime           time.Time
 	state              HandlerState
 }
 
-func NewDefaultBasePacketHandler4Client(conn IConn, packetEventHandler IPacketEventHandler, resendEventHandler IResendEventHandler, options *Options) *DefaultBasePacketHandler {
+func NewDefaultBasePacketHandler4Client(sess common.ISession, packetEventHandler IPacketEventHandler, resendEventHandler common.IResendEventHandler, options *common.Options) *DefaultBasePacketHandler {
 	return &DefaultBasePacketHandler{
 		cors:               true,
-		conn:               conn,
+		sess:               sess,
 		packetEventHandler: packetEventHandler,
 		resendEventHandler: resendEventHandler,
 		options:            options,
@@ -74,10 +69,10 @@ func NewDefaultBasePacketHandler4Client(conn IConn, packetEventHandler IPacketEv
 	}
 }
 
-func NewDefaultBasePacketHandler4Server(conn IConn, argsGetter IPacketBuilderArgsGetter, resendEventHandler IResendEventHandler, options *Options) *DefaultBasePacketHandler {
+func NewDefaultBasePacketHandler4Server(sess common.ISession, argsGetter IPacketBuilderArgsGetter, resendEventHandler common.IResendEventHandler, options *common.Options) *DefaultBasePacketHandler {
 	return &DefaultBasePacketHandler{
 		cors:               false,
-		conn:               conn,
+		sess:               sess,
 		argsGetter:         argsGetter,
 		resendEventHandler: resendEventHandler,
 		options:            options,
@@ -114,21 +109,16 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 			err = ErrBasePacketHandlerServerCantRecvHandshakeAck
 		} else {
 			h.state = HandlerStateNormal
-			data := pak.Data()
-			ct := packet.CompressType(data[0])
-			et := packet.EncryptionType(data[1])
-			h.options.SetPacketCompressType(ct)
-			h.options.SetPacketEncryptionType(et)
-			l := data[2]
-			if l > 0 {
-				key := data[3 : 3+l]
-				if h.packetEventHandler != nil {
-					h.packetEventHandler.OnHandshakeDone(ct, et, key)
-					log.Infof("handshake ack, compress type %v, encryption type %v, crypto key %v", ct, et, key)
-				}
-			} else {
-				h.packetEventHandler.OnHandshakeDone(ct, et)
-				log.Infof("handshake ack, compress type %v, encryption type %v", ct, et)
+			var hd protocol.HandshakeData
+			if err = proto.Unmarshal(pak.Data(), &hd); err != nil {
+				return res, err
+			}
+			h.options.SetPacketCompressType(packet.CompressType(hd.CompressType))
+			h.options.SetPacketEncryptionType(packet.EncryptionType(hd.EncryptionType))
+			if h.packetEventHandler != nil {
+				err = h.packetEventHandler.OnHandshakeDone(packet.CompressType(hd.CompressType), packet.EncryptionType(hd.EncryptionType), hd.EncryptionKey, hd.SessionId)
+				log.Infof("handshake ack, compress type %v, encryption type %v, crypto key %v, sessoion id %v",
+					hd.CompressType, hd.EncryptionType, hd.EncryptionKey, hd.SessionId)
 			}
 			res = 2
 		}
@@ -166,7 +156,7 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 			res = h.resendEventHandler.OnAck(pak)
 			if res < 0 {
 				log.Fatalf("gsnet: length of rend list less than ack num")
-				err = ErrResendDataInvalid
+				err = common.ErrResendDataInvalid
 			}
 		}
 	default:
@@ -202,22 +192,22 @@ func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 			// heartbeat timeout to disconnect
 			disconnectTimeout := h.options.GetDisconnectHeartbeatTimeout()
 			if disconnectTimeout <= 0 {
-				disconnectTimeout = DefaultDisconnectHeartbeatTimeout
+				disconnectTimeout = common.DefaultDisconnectHeartbeatTimeout
 			}
 			duration := time.Since(h.lastTime)
 			if duration >= disconnectTimeout {
-				h.conn.Close()
+				h.sess.Close()
 				return err
 			}
 
 			// heartbeat timespan
 			minSpan := h.options.GetMinHeartbeatTimeSpan()
-			if minSpan < DefaultMinimumHeartbeatTimeSpan {
-				minSpan = DefaultMinimumHeartbeatTimeSpan
+			if minSpan < common.DefaultMinimumHeartbeatTimeSpan {
+				minSpan = common.DefaultMinimumHeartbeatTimeSpan
 			}
 			span := h.options.GetHeartbeatTimeSpan()
 			if span <= 0 {
-				span = DefaultHeartbeatTimeSpan
+				span = common.DefaultHeartbeatTimeSpan
 			} else if span < minSpan {
 				span = minSpan
 			}
@@ -232,13 +222,13 @@ func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 		}
 	}
 	if h.resendEventHandler != nil {
-		err = h.resendEventHandler.OnUpdate(h.conn)
+		err = h.resendEventHandler.OnUpdate(h.sess.Conn())
 	}
 	return err
 }
 
 func (h *DefaultBasePacketHandler) sendHandshake() error {
-	return h.conn.Send(packet.PacketHandshake, []byte{}, false)
+	return h.sess.Conn().Send(packet.PacketHandshake, []byte{}, false)
 }
 
 func (h *DefaultBasePacketHandler) sendHandshakeAck() error {
@@ -256,19 +246,31 @@ func (h *DefaultBasePacketHandler) sendHandshakeAck() error {
 		return errors.New("gsnet: packet builder argument crypto key type cast failed")
 	}
 	log.Infof("send compress type %v, encryption type %v, key %v", ct, et, key)
-	data := []byte{
-		byte(ct),       // compress type
-		byte(et),       // encryption type
-		byte(len(key)), // crypto key
+	/*
+		data := []byte{
+			byte(ct),       // compress type
+			byte(et),       // encryption type
+			byte(len(key)), // crypto key
+		}
+		data = append(data, key...)
+	*/
+	hd := &protocol.HandshakeData{
+		CompressType:   int32(ct),
+		EncryptionType: int32(et),
+		EncryptionKey:  key,
+		SessionId:      h.sess.GetId(),
 	}
-	data = append(data, key...)
-	return h.conn.Send(packet.PacketHandshakeAck, data, false)
+	data, err := proto.Marshal(hd)
+	if err != nil {
+		return err
+	}
+	return h.sess.Conn().Send(packet.PacketHandshakeAck, data, false)
 }
 
 func (h *DefaultBasePacketHandler) sendHeartbeat() error {
-	return h.conn.Send(packet.PacketHeartbeat, []byte{}, false)
+	return h.sess.Conn().Send(packet.PacketHeartbeat, []byte{}, false)
 }
 
 func (h *DefaultBasePacketHandler) sendHeartbeatAck() error {
-	return h.conn.Send(packet.PacketHeartbeatAck, []byte{}, false)
+	return h.sess.Conn().Send(packet.PacketHeartbeatAck, []byte{}, false)
 }

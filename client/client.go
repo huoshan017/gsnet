@@ -8,22 +8,30 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/handler"
 	"github.com/huoshan017/gsnet/packet"
 )
 
 var (
-	ErrClientRunUpdateMode          = errors.New("gsnet: client run update mode")
-	ErrClientRunMainLoopMode        = errors.New("gsnet: client run main loop mode")
-	ErrClientConnectionNotEstablish = errors.New("gsnet: client not establish connection")
+	ErrClientRunUpdateMode   = errors.New("gsnet: client run update mode")
+	ErrClientRunMainLoopMode = errors.New("gsnet: client run main loop mode")
+	ErrClientNotConnect      = errors.New("gsnet: client not connect")
+	ErrClientNotReady        = errors.New("gsnet: client not ready")
+	ErrClientConnecting      = errors.New("gsnet: client is connecting")
+	ErrClientDisconnecting   = errors.New("gsnet: client is disconnecting")
+	ErrClientDisconnected    = errors.New("gsnet: client is disconnected")
 )
 
 // 数据客户端
 type Client struct {
+	address           string
+	connTimeout       time.Duration
+	connAsyncCallback func(error)
 	connector         *Connector
 	conn              common.IConn
-	sess              common.ISession
+	sess              *common.SessionEx
 	handler           common.ISessionEventHandler
-	basePacketHandler common.IBasePacketHandler
+	basePacketHandler handler.IBasePacketHandler
 	packetBuilder     *common.PacketBuilder
 	resend            *common.ResendData
 	options           ClientOptions
@@ -31,6 +39,7 @@ type Client struct {
 	ctx               context.Context
 	cancel            context.CancelFunc
 	isReady           int32
+	activeClosed      int32
 }
 
 func NewClient(handler common.ISessionEventHandler, options ...common.Option) *Client {
@@ -61,12 +70,20 @@ func (c *Client) init() {
 	}
 }
 
+func (c *Client) reset() {
+	c.connector.Reset()
+	c.lastTime = time.Now()
+	atomic.StoreInt32(&c.isReady, 0)
+	atomic.StoreInt32(&c.activeClosed, 0)
+}
+
 func (c *Client) Connect(addr string) error {
 	connector := c.newConnector()
 	conn, err := connector.Connect(addr)
 	if err == nil {
 		err = c.doConnectResult(conn)
 	}
+	c.address = addr
 	return err
 }
 
@@ -76,20 +93,24 @@ func (c *Client) ConnectWithTimeout(addr string, timeout time.Duration) error {
 	if err == nil {
 		err = c.doConnectResult(conn)
 	}
+	c.address = addr
+	c.connTimeout = timeout
 	return err
 }
 
 func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(error)) {
-	//if c.options.GetRunMode() != RunModeOnlyUpdate {
-	//	panic(ErrClientRunUpdateMode)
-	//}
 	connector := c.newConnector()
 	connector.ConnectAsync(addr, timeout, func(err error) {
 		if err == nil {
 			err = c.doConnectResult(connector.GetConn())
 		}
-		callback(err)
+		if callback != nil {
+			callback(err)
+		}
 	})
+	c.address = addr
+	c.connTimeout = timeout
+	c.connAsyncCallback = callback
 }
 
 func (c *Client) newConnector() *Connector {
@@ -121,9 +142,9 @@ func (c *Client) doConnectResult(con net.Conn) error {
 	c.sess = common.NewSessionNoId(c.conn)
 
 	// 包事件处理器
-	var pakEvtHandler common.IPacketEventHandler
+	var pakEvtHandler handler.IPacketEventHandler
 	if c.packetBuilder != nil {
-		pakEvtHandler = &packetEventHandler{handler: c.packetBuilder}
+		pakEvtHandler = &packetEventHandler{builder: c.packetBuilder, sess: c.sess}
 	}
 
 	// 重传事件处理器
@@ -133,7 +154,7 @@ func (c *Client) doConnectResult(con net.Conn) error {
 	}
 
 	// 基础包处理器
-	c.basePacketHandler = common.NewDefaultBasePacketHandler4Client(c.conn, pakEvtHandler, resendEventHandler, &c.options.Options)
+	c.basePacketHandler = handler.NewDefaultBasePacketHandler4Client(c.sess, pakEvtHandler, resendEventHandler, &c.options.Options)
 
 	// 连接跑起来
 	c.conn.Run()
@@ -147,29 +168,29 @@ func (c *Client) doConnectResult(con net.Conn) error {
 }
 
 func (c *Client) Send(data []byte, copyData bool) error {
-	if c.connector.GetState() != ConnStateConnected {
-		return ErrClientConnectionNotEstablish
+	if err := c.getError(); err != nil {
+		return err
 	}
 	return c.sess.Send(data, copyData)
 }
 
 func (c *Client) SendPoolBuffer(buffer *[]byte) error {
-	if c.connector.GetState() != ConnStateConnected {
-		return ErrClientConnectionNotEstablish
+	if err := c.getError(); err != nil {
+		return err
 	}
 	return c.sess.SendPoolBuffer(buffer)
 }
 
 func (c *Client) SendBytesArray(bytesArray [][]byte, copyData bool) error {
-	if c.connector.GetState() != ConnStateConnected {
-		return errors.New("gsnet: client not establish connection")
+	if err := c.getError(); err != nil {
+		return err
 	}
 	return c.sess.SendBytesArray(bytesArray, copyData)
 }
 
 func (c *Client) SendPoolBufferArray(bufferArray []*[]byte) error {
-	if c.connector.GetState() != ConnStateConnected {
-		return errors.New("gsnet: client not establish connection")
+	if err := c.getError(); err != nil {
+		return err
 	}
 	return c.sess.SendPoolBufferArray(bufferArray)
 }
@@ -197,13 +218,24 @@ func (c *Client) Update() error {
 }
 
 func (c *Client) Run() {
-	runMode := c.options.GetRunMode()
-	if runMode != RunModeAsMainLoop {
+	if c.options.GetRunMode() != RunModeAsMainLoop {
 		c.handler.OnError(ErrClientRunMainLoopMode)
 		return
 	}
 
-	var err error
+	var (
+		err            error
+		lastCheck      time.Time = time.Now()
+		reconnectTimer *time.Timer
+	)
+
+	defer func() {
+		if reconnectTimer != nil {
+			reconnectTimer.Stop()
+		}
+	}()
+
+MainLoop:
 
 	if c.IsConnecting() {
 		_, err = c.connector.WaitResult(true)
@@ -217,6 +249,11 @@ func (c *Client) Run() {
 	}
 
 	c.handleErr(err)
+
+	if c.options.IsReconnect() && atomic.LoadInt32(&c.activeClosed) == 0 {
+		c.handleReconnect(&lastCheck, reconnectTimer)
+		goto MainLoop
+	}
 }
 
 func (c *Client) Quit() {
@@ -229,10 +266,12 @@ func (c *Client) Close() {
 	} else {
 		c.conn.Close()
 	}
+	atomic.StoreInt32(&c.activeClosed, 1)
 }
 
 func (c *Client) CloseWait(secs int) {
 	c.conn.CloseWait(secs)
+	atomic.StoreInt32(&c.activeClosed, 1)
 }
 
 func (c *Client) GetSession() common.ISession {
@@ -390,16 +429,49 @@ func (c *Client) handleErr(err error) error {
 	return err
 }
 
+func (c *Client) handleReconnect(lastCheck *time.Time, reconnectTimer *time.Timer) {
+	since := time.Since(*lastCheck)
+	if since < time.Duration(c.options.GetReconnectSeconds()) {
+		if reconnectTimer == nil {
+			reconnectTimer = time.NewTimer(time.Duration(c.options.GetReconnectSeconds()) - since)
+		} else {
+			reconnectTimer.Reset(time.Duration(c.options.GetReconnectSeconds()) - since)
+		}
+		<-reconnectTimer.C
+	}
+	*lastCheck = time.Now()
+	c.reset()
+	c.ConnectAsync(c.address, c.connTimeout, c.connAsyncCallback)
+}
+
+func (c *Client) getError() error {
+	var err error
+	if c.IsNotConnect() {
+		err = ErrClientNotConnect
+	} else if c.IsConnecting() {
+		err = ErrClientConnecting
+	} else if c.IsDisconnecting() {
+		err = ErrClientDisconnecting
+	} else if c.IsDisconnected() {
+		err = ErrClientDisconnected
+	} else if c.IsConnected() && !c.IsReady() {
+		err = ErrClientNotReady
+	}
+	return err
+}
+
 type packetEventHandler struct {
-	handler *common.PacketBuilder
+	builder *common.PacketBuilder
+	sess    *common.SessionEx
 }
 
 func (h *packetEventHandler) OnHandshakeDone(args ...any) error {
 	var (
-		ct  packet.CompressType
-		et  packet.EncryptionType
-		key []byte
-		o   bool
+		ct     packet.CompressType
+		et     packet.EncryptionType
+		key    []byte
+		sessId uint64
+		o      bool
 	)
 	lenArgs := len(args)
 	if lenArgs > 0 {
@@ -419,7 +491,14 @@ func (h *packetEventHandler) OnHandshakeDone(args ...any) error {
 				}
 			}
 		}
-		h.handler.Reset(ct, et, key)
+		h.builder.Reset(ct, et, key)
+		if lenArgs > 3 {
+			sessId, o = args[3].(uint64)
+			if !o {
+				return errors.New("gsnet: handshake complete cast session id type failed")
+			}
+			h.sess.SetId(sessId)
+		}
 	}
 	return nil
 }

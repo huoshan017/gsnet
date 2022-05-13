@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/handler"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/packet"
 )
@@ -183,7 +184,7 @@ func (s *Server) handleTick(lastTime *time.Time) {
 	*lastTime = now
 }
 
-func (s *Server) handleHandshake(conn common.IConn, basePacketHandler common.IBasePacketHandler) (bool, error) {
+func (s *Server) handleHandshake(conn common.IConn, basePacketHandler handler.IBasePacketHandler) (bool, error) {
 	var (
 		pak packet.IPacket
 		res int32
@@ -228,7 +229,7 @@ func (s *Server) handleConn(c net.Conn) {
 	}
 
 	// 创建包创建器参数获取者
-	var argsGetter common.IPacketBuilderArgsGetter
+	var argsGetter handler.IPacketBuilderArgsGetter
 	if packetBuilder != nil {
 		argsGetter = &packetBuilderArgsGetter{packetBuilder}
 	}
@@ -241,8 +242,14 @@ func (s *Server) handleConn(c net.Conn) {
 		return resendData
 	}()
 
+	// 創建會話
+	sess := common.NewSession(conn, getNextSessionId())
+	sess.SetResendData(resendData)
+	s.sessMap[sess.GetId()] = sess
+	s.waitWg.Add(1)
+
 	// 创建基础包处理器
-	basePacketHandler := common.NewDefaultBasePacketHandler4Server(conn, argsGetter, resendEventHandler, &s.options.Options)
+	basePacketHandler := handler.NewDefaultBasePacketHandler4Server(sess, argsGetter, resendEventHandler, &s.options.Options)
 
 	// 先讓連接跑起來
 	conn.Run()
@@ -259,12 +266,6 @@ func (s *Server) handleConn(c net.Conn) {
 			handler = s.newHandlerFunc(s.options.GetNewSessionHandlerFuncArgs()...)
 		}
 	}
-
-	// 創建會話
-	sess := common.NewSession(conn, getNextSessionId())
-	sess.SetResendData(resendData)
-	s.sessMap[sess.GetId()] = sess
-	s.waitWg.Add(1)
 
 	// 會話處理綫程
 	go func(conn common.IConn) {

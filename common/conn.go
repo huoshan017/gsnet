@@ -293,7 +293,6 @@ func (c *Conn) closeWait(secs int) {
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
-	//c.packetBuilder.Close()
 	close(c.closeCh)
 	if c.options.GetSendListMode() >= 0 {
 		c.csendList.Close()

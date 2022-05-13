@@ -37,6 +37,51 @@ func (c *MsgAgentClient) DialTimeout(address string, timeout time.Duration) erro
 	return c.c.DialTimeout(address, timeout)
 }
 
+// MsgAgentClient.DialAsync  dial to address async
+func (c *MsgAgentClient) DialAsync(address string, timeout time.Duration, callback func(error)) {
+	c.c.DialAsync(address, timeout, callback)
+}
+
+// MsgAgentClient.Close
+func (c *MsgAgentClient) Close() {
+	c.c.Close()
+}
+
+//  MsgAgentClient.CloseWait
+func (c *MsgAgentClient) CloseWait(secs int) {
+	c.c.CloseWait(secs)
+}
+
+// MsgAgentClient.IsNotConnect
+func (c *MsgAgentClient) IsNotConnect() bool {
+	return c.c.IsNotConnect()
+}
+
+// MsgAgentClient.IsConnecting
+func (c *MsgAgentClient) IsConnecting() bool {
+	return c.c.IsConnecting()
+}
+
+// MsgAgentClient.IsConnected
+func (c *MsgAgentClient) IsConnected() bool {
+	return c.c.IsConnected()
+}
+
+// MsgAgentClient.IsReady
+func (c *MsgAgentClient) IsReady() bool {
+	return c.c.IsReady()
+}
+
+// MsgAgentClient.IsDisconnecting
+func (c *MsgAgentClient) IsDisconnecting() bool {
+	return c.c.IsDisconnecting()
+}
+
+// MsgAgentClient.IsDisconnected
+func (c *MsgAgentClient) IsDisconnected() bool {
+	return c.c.IsDisconnected()
+}
+
 // MsgAgentClient.SetConnectHandle  set connect handle
 func (c *MsgAgentClient) SetConnectHandle(handle func(*MsgSession)) {
 	var h func(common.ISession) = func(sess common.ISession) {

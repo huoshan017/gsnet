@@ -33,6 +33,7 @@ type IConn interface {
 	Run()
 	Close()
 	CloseWait(int)
+	IsClosed() bool
 	Recv() (packet.IPacket, error)
 	RecvNonblock() (packet.IPacket, error)
 	Send(packet.PacketType, []byte, bool) error
@@ -45,12 +46,14 @@ type IConn interface {
 // 会话接口
 type ISession interface {
 	GetId() uint64
+	Conn() IConn
 	Send([]byte, bool) error
 	SendBytesArray([][]byte, bool) error
 	SendPoolBuffer(*[]byte) error
 	SendPoolBufferArray([]*[]byte) error
 	Close()
 	CloseWaitSecs(int)
+	IsClosed() bool
 	AddInboundHandle(int32, func(ISession, packet.IPacket) error)
 	RemoveInboundHandle(int32)
 	GetInboundHandles() map[int32]func(ISession, packet.IPacket) error

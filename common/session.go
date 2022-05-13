@@ -25,14 +25,12 @@ func NewSession(conn IConn, id uint64) *Session {
 	}
 }
 
-func NewSessionNoId(conn IConn) *Session {
-	return &Session{
-		conn: conn,
-	}
-}
-
 func (s *Session) GetId() uint64 {
 	return s.id
+}
+
+func (s *Session) Conn() IConn {
+	return s.conn
 }
 
 func (s *Session) Send(data []byte, toCopy bool) error {
@@ -63,6 +61,10 @@ func (s *Session) CloseWaitSecs(secs int) {
 		s.resendData.Dispose()
 	}
 	s.conn.CloseWait(secs)
+}
+
+func (s *Session) IsClosed() bool {
+	return s.conn.IsClosed()
 }
 
 func (s *Session) AddInboundHandle(id int32, handle func(ISession, packet.IPacket) error) {
@@ -111,6 +113,20 @@ func (s *Session) GetResendData() *ResendData {
 	return s.resendData
 }
 
+type SessionEx struct {
+	*Session
+}
+
+func NewSessionNoId(conn IConn) *SessionEx {
+	return &SessionEx{
+		Session: &Session{conn: conn},
+	}
+}
+
+func (s *SessionEx) SetId(id uint64) {
+	s.id = id
+}
+
 type AgentSession struct {
 	agentSessionId uint32
 	sess           ISession
@@ -125,6 +141,10 @@ func NewAgentSession(agentSessionId uint32, sess ISession) *AgentSession {
 
 func (sc *AgentSession) GetId() uint64 {
 	return sc.sess.GetId()
+}
+
+func (sc *AgentSession) Conn() IConn {
+	return sc.sess.Conn()
 }
 
 func (sc *AgentSession) AgentSessionId() uint32 {
@@ -178,6 +198,10 @@ func (as *AgentSession) Close() {
 
 func (sc *AgentSession) CloseWaitSecs(secs int) {
 	sc.sess.CloseWaitSecs(secs)
+}
+
+func (sc *AgentSession) IsClosed() bool {
+	return sc.sess.IsClosed()
 }
 
 func (sc *AgentSession) AddInboundHandle(id int32, handle func(ISession, packet.IPacket) error) {

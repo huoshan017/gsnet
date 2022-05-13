@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+option go_package="../protocol";
+package protocol;
+
+message HandshakeData {
+    int32 CompressType = 1;
+    int32 EncryptionType = 2;
+    bytes EncryptionKey = 3;
+    uint64 SessionId = 4;
+    uint64 SessionKey = 5;
+}

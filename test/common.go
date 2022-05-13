@@ -228,9 +228,6 @@ func (h *testServerHandler) OnDisconnect(sess common.ISession, err error) {
 }
 
 func (h *testServerHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
-	if h.t != nil {
-		h.t.Logf("testServerHandler.OnPacket packet %v", packet.Data())
-	}
 	err := sess.Send(packet.Data(), true)
 	if err != nil {
 		str := fmt.Sprintf("OnData with session %v send err: %v", sess.GetId(), err)
