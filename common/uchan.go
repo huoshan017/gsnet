@@ -32,18 +32,20 @@ func newUnlimitedChan() *unlimitedChan {
 
 func (c *unlimitedChan) run() {
 	go func() {
-		var sendList *slist
+		var (
+			inData, outData wrapperSendData
+			ok, peeked      bool = true, false
+			outDataChan     chan wrapperSendData
+			sendList        *slist
+		)
+
 		defer func() {
 			sendList.recycle()
 			if err := recover(); err != nil {
 				log.WithStack(err)
 			}
 		}()
-		var (
-			inData, outData wrapperSendData
-			ok, peeked      bool = true, false
-			outDataChan     chan wrapperSendData
-		)
+
 		sendList = newSlist()
 		for ok {
 			if sendList.getLength() > 0 {
@@ -76,6 +78,7 @@ func (c *unlimitedChan) run() {
 				ok = false
 			}
 		}
+
 		close(c.outChan)
 	}()
 }

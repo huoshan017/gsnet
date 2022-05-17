@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -23,10 +24,19 @@ var (
 	ErrBasePacketHandlerServerCantRecvHeartbeatAck = errors.New("base packet handler for server cant receive heartbeat ack")
 )
 
+type roleType int8
+
+const (
+	roleTypeClient roleType = iota
+	roleTypeServer roleType = 1
+)
+
 type IBasePacketHandler interface {
+	OnStart(any) error
 	OnHandleHandshake(pak packet.IPacket) (int32, error)
+	OnHandleReconnect(pak packet.IPacket) (int32, error)
 	OnPreHandle(packet.IPacket) (int32, error)
-	OnPostHandle(packet.IPacket) error
+	OnPostHandle(packet.IPacket)
 	OnUpdateHandle() error
 }
 
@@ -43,11 +53,26 @@ type HandlerState int32
 const (
 	HandlerStateNotBegin  HandlerState = iota
 	HandlerStateHandshake HandlerState = 1
-	HandlerStateNormal    HandlerState = 2
+	HandlerStateReconnect HandlerState = 2
+	HandlerStateNormal    HandlerState = 10
+)
+
+const (
+	ReconnectStateNone      = 0
+	ReconnectStateSyn       = 1
+	ReconnectStateAck       = 2
+	ReconnectStateTransport = 3
+	ReconnectStateEnd       = 4
+)
+
+const (
+	HandshakeStateNone        = 0
+	HandshakeStateServerReady = 1
+	HandshakeStateClientReady = 2
 )
 
 type DefaultBasePacketHandler struct {
-	cors               bool
+	rtype              roleType
 	sess               common.ISession
 	packetEventHandler IPacketEventHandler
 	argsGetter         IPacketBuilderArgsGetter
@@ -55,11 +80,18 @@ type DefaultBasePacketHandler struct {
 	options            *common.Options
 	lastTime           time.Time
 	state              HandlerState
+	reconnInfo         *common.ReconnectInfo
+	reconnected        bool
+	reconnInfoMap      sync.Map
 }
 
-func NewDefaultBasePacketHandler4Client(sess common.ISession, packetEventHandler IPacketEventHandler, resendEventHandler common.IResendEventHandler, options *common.Options) *DefaultBasePacketHandler {
+func NewDefaultBasePacketHandler4Client(
+	sess common.ISession,
+	packetEventHandler IPacketEventHandler,
+	resendEventHandler common.IResendEventHandler,
+	options *common.Options) *DefaultBasePacketHandler {
 	return &DefaultBasePacketHandler{
-		cors:               true,
+		rtype:              roleTypeClient,
 		sess:               sess,
 		packetEventHandler: packetEventHandler,
 		resendEventHandler: resendEventHandler,
@@ -69,21 +101,84 @@ func NewDefaultBasePacketHandler4Client(sess common.ISession, packetEventHandler
 	}
 }
 
-func NewDefaultBasePacketHandler4Server(sess common.ISession, argsGetter IPacketBuilderArgsGetter, resendEventHandler common.IResendEventHandler, options *common.Options) *DefaultBasePacketHandler {
+func NewDefaultBasePacketHandler4Server(
+	sess common.ISession,
+	argsGetter IPacketBuilderArgsGetter,
+	resendEventHandler common.IResendEventHandler,
+	options *common.Options,
+	reconnInfoMap sync.Map) *DefaultBasePacketHandler {
 	return &DefaultBasePacketHandler{
-		cors:               false,
+		rtype:              roleTypeServer,
 		sess:               sess,
 		argsGetter:         argsGetter,
 		resendEventHandler: resendEventHandler,
 		options:            options,
 		lastTime:           time.Now(),
 		state:              HandlerStateNotBegin,
+		reconnInfoMap:      reconnInfoMap,
 	}
+}
+
+func (h *DefaultBasePacketHandler) OnStart(d any) error {
+	if h.state != HandlerStateNotBegin {
+		return nil
+	}
+
+	var (
+		err error
+	)
+
+	if d != nil {
+		h.reconnInfo, _ = d.(*common.ReconnectInfo)
+	}
+
+	if h.rtype == roleTypeClient {
+		// handle reconnect
+		if h.reconnInfo != nil {
+			h.state = HandlerStateReconnect
+			if err = h.sendReconnectSyn(); err != nil {
+				return err
+			}
+		}
+
+		if h.reconnInfo == nil || h.reconnected {
+			// handle handshake
+			err = h.sendHandshake()
+			if err == nil {
+				h.state = HandlerStateHandshake
+			}
+		}
+	}
+
+	return err
+}
+
+func (h *DefaultBasePacketHandler) OnHandleReconnect(pak packet.IPacket) (int32, error) {
+	var (
+		res int32
+		err error
+	)
+	if h.state != HandlerStateReconnect {
+		return ReconnectStateNone, nil
+	}
+	switch pak.Type() {
+	case packet.PacketReconnectSyn:
+		if h.rtype == roleTypeServer {
+			var reconnSyn protocol.ReconnectSyn
+			if err = proto.Unmarshal(pak.Data(), &reconnSyn); err == nil {
+				reconnSyn.GetCurrSessionId()
+			}
+		}
+	case packet.PacketReconnectAck:
+	case packet.PacketReconnectTransport:
+	case packet.PacketReconnectEnd:
+	}
+	return res, err
 }
 
 func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32, error) {
 	if h.state == HandlerStateNotBegin {
-		if !h.cors {
+		if h.rtype == roleTypeServer {
 			h.state = HandlerStateHandshake
 		}
 	}
@@ -96,16 +191,16 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 		typ = pak.Type()
 	)
 	if typ == packet.PacketHandshake { // server side
-		if !h.cors {
+		if h.rtype == roleTypeServer {
 			err = h.sendHandshakeAck()
 			if err == nil {
-				res = 1
+				res = HandshakeStateServerReady // server ready
 			}
 		} else {
 			err = ErrBasePacketHandlerClientCantRecvHandshake
 		}
 	} else if typ == packet.PacketHandshakeAck { // client side
-		if !h.cors {
+		if h.rtype == roleTypeServer {
 			err = ErrBasePacketHandlerServerCantRecvHandshakeAck
 		} else {
 			h.state = HandlerStateNormal
@@ -120,7 +215,9 @@ func (h *DefaultBasePacketHandler) OnHandleHandshake(pak packet.IPacket) (int32,
 				log.Infof("handshake ack, compress type %v, encryption type %v, crypto key %v, sessoion id %v",
 					hd.CompressType, hd.EncryptionType, hd.EncryptionKey, hd.SessionId)
 			}
-			res = 2
+			if err == nil {
+				res = HandshakeStateClientReady // client ready
+			}
 		}
 	}
 	return res, err
@@ -138,7 +235,7 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 			err = ErrBasePacketHandlerDisableHeartbeat
 			break
 		}
-		if h.cors {
+		if h.rtype == roleTypeClient {
 			err = ErrBasePacketHandlerClientCantRecvHeartbeat
 		} else {
 			err = h.sendHeartbeatAck()
@@ -148,16 +245,12 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 			err = ErrBasePacketHandlerDisableHeartbeat
 			break
 		}
-		if !h.cors {
+		if h.rtype == roleTypeServer {
 			err = ErrBasePacketHandlerServerCantRecvHeartbeatAck
 		}
 	case packet.PacketSentAck:
 		if h.resendEventHandler != nil {
-			res = h.resendEventHandler.OnAck(pak)
-			if res < 0 {
-				log.Fatalf("gsnet: length of rend list less than ack num")
-				err = common.ErrResendDataInvalid
-			}
+			err = h.resendEventHandler.OnAck(pak)
 		}
 	default:
 		// reset heartbeat timer
@@ -169,26 +262,18 @@ func (h *DefaultBasePacketHandler) OnPreHandle(pak packet.IPacket) (int32, error
 	return res, err
 }
 
-func (h *DefaultBasePacketHandler) OnPostHandle(pak packet.IPacket) error {
-	var err error
+func (h *DefaultBasePacketHandler) OnPostHandle(pak packet.IPacket) {
 	if h.resendEventHandler != nil {
-		h.resendEventHandler.OnProcessed(1)
+		h.resendEventHandler.OnProcessed(pak)
 	}
-	return err
 }
 
 func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 	var err error
 	switch h.state {
-	case HandlerStateNotBegin:
-		if h.cors {
-			err = h.sendHandshake()
-			if err == nil {
-				h.state = HandlerStateHandshake
-			}
-		}
+
 	case HandlerStateNormal:
-		if h.cors && h.options.IsUseHeartbeat() {
+		if h.rtype == roleTypeClient && h.options.IsUseHeartbeat() {
 			// heartbeat timeout to disconnect
 			disconnectTimeout := h.options.GetDisconnectHeartbeatTimeout()
 			if disconnectTimeout <= 0 {
@@ -227,6 +312,22 @@ func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 	return err
 }
 
+func (h *DefaultBasePacketHandler) sendReconnectSyn() error {
+	return nil
+}
+
+func (h *DefaultBasePacketHandler) sendReconnectAck() error {
+	return nil
+}
+
+func (h *DefaultBasePacketHandler) sendReconnectTransportData() error {
+	return nil
+}
+
+func (h *DefaultBasePacketHandler) sendReconnectEnd() error {
+	return nil
+}
+
 func (h *DefaultBasePacketHandler) sendHandshake() error {
 	return h.sess.Conn().Send(packet.PacketHandshake, []byte{}, false)
 }
@@ -246,14 +347,6 @@ func (h *DefaultBasePacketHandler) sendHandshakeAck() error {
 		return errors.New("gsnet: packet builder argument crypto key type cast failed")
 	}
 	log.Infof("send compress type %v, encryption type %v, key %v", ct, et, key)
-	/*
-		data := []byte{
-			byte(ct),       // compress type
-			byte(et),       // encryption type
-			byte(len(key)), // crypto key
-		}
-		data = append(data, key...)
-	*/
 	hd := &protocol.HandshakeData{
 		CompressType:   int32(ct),
 		EncryptionType: int32(et),

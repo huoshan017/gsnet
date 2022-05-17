@@ -9,11 +9,13 @@ import (
 )
 
 const (
-	DefaultSentAckTimeSpan            = time.Millisecond * 200 // 默认发送确认包间隔时间
-	DefaultAckSentNum                 = 10                     // 默认确认发送包数
-	DefaultHeartbeatTimeSpan          = time.Second * 10       // 默认发送心跳间隔时间
-	DefaultMinimumHeartbeatTimeSpan   = time.Second * 3        // 最小心跳发送间隔
-	DefaultDisconnectHeartbeatTimeout = time.Second * 30       // 断开连接的心跳超时
+	DefaultSentAckTimeSpan                  = time.Millisecond * 200 // 默认发送确认包间隔时间
+	DefaultAckSentNum                       = 10                     // 默认确认发送包数量
+	MaxAckSentNum                           = 100                    // 最大确认发送包数量
+	DefaultHeartbeatTimeSpan                = time.Second * 10       // 默认发送心跳间隔时间
+	DefaultMinimumHeartbeatTimeSpan         = time.Second * 3        // 最小心跳发送间隔
+	DefaultDisconnectHeartbeatTimeout       = time.Second * 30       // 断开连接的心跳超时
+	DefaultReconnectSeconds           int32 = 5
 )
 
 type GenCryptoKeyFunc func(*rand.Rand) []byte
@@ -46,7 +48,8 @@ type Options struct {
 	minHeartbeatTimeSpan       time.Duration          // 最小心跳间隔
 	disconnectHeartbeatTimeout time.Duration          // 断连的心跳超时
 	customDatas                map[string]any         // 自定义数据
-
+	reconnect                  bool                   // 是否重连
+	reconnectSeconds           int32                  // second
 	// todo 以下是需要实现的配置逻辑
 	// flushWriteInterval time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
 }
@@ -186,10 +189,13 @@ func (options *Options) GetResendConfig() *ResendConfig {
 }
 
 func (options *Options) SetResendConfig(config *ResendConfig) {
-	if config.AckSentNum == 0 {
+	if config.AckSentNum <= 0 {
 		config.AckSentNum = DefaultAckSentNum
 	}
-	if config.AckSentSpan == 0 {
+	if config.AckSentNum > MaxAckSentNum {
+		config.AckSentNum = MaxAckSentNum
+	}
+	if config.AckSentSpan <= 0 {
 		config.AckSentSpan = DefaultSentAckTimeSpan
 	}
 	options.resendConfig = config
@@ -278,6 +284,26 @@ func (options *Options) GetCreatePacketHeaderFunc() CreatePacketHeaderFunc {
 
 func (options *Options) SetCreatePacketHeaderFunc(fun CreatePacketHeaderFunc) {
 	options.createPacketHeaderFunc = fun
+}
+
+func (options *Options) IsReconnect() bool {
+	return options.reconnect
+}
+
+func (options *Options) SetReconnect(enable bool) {
+	options.reconnect = enable
+}
+
+func (options *Options) GetReconnectSeconds() int32 {
+	secs := options.reconnectSeconds
+	if secs <= 0 {
+		secs = DefaultReconnectSeconds
+	}
+	return secs
+}
+
+func (options *Options) SetReconnectSeconds(secs int32) {
+	options.reconnectSeconds = secs
 }
 
 func WithNoDelay(noDelay bool) Option {
@@ -421,5 +447,17 @@ func WithPacketHeaderLength(length uint8) Option {
 func WithCreatePacketHeaderFunc(fun CreatePacketHeaderFunc) Option {
 	return func(options *Options) {
 		options.SetCreatePacketHeaderFunc(fun)
+	}
+}
+
+func WithReconnect(enable bool) Option {
+	return func(options *Options) {
+		options.SetReconnect(enable)
+	}
+}
+
+func WithReconnectSeconds(secs int32) Option {
+	return func(options *Options) {
+		options.SetReconnectSeconds(secs)
 	}
 }

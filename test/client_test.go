@@ -48,9 +48,9 @@ func (h *testClientUseRunHandler) OnReady(sess common.ISession) {
 	h.isReady = true
 	h.compareNum = 0
 	if h.t != nil {
-		h.t.Logf("TestClientUseRun ready")
+		h.t.Logf("TestClientUseRun ready (session %v)", sess.GetId())
 	} else if h.b != nil {
-		h.b.Logf("TestClientUseRun ready")
+		h.b.Logf("TestClientUseRun ready (session %v)", sess.GetId())
 	}
 }
 
@@ -409,7 +409,7 @@ func TestNilChannel(t *testing.T) {
 
 func createTestClientUseReconnect(t *testing.T, totalNum int32) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseRunHandler(t, totalNum), client.WithReconnect(true), common.WithTickSpan(time.Second))
+	return client.NewClient(newTestClientUseRunHandler(t, totalNum), common.WithReconnect(true), common.WithTickSpan(time.Second))
 }
 
 func TestClientReconnect(t *testing.T) {

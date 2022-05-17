@@ -21,6 +21,10 @@ func (sc *SessionChannel) GetId() uint64 {
 	return sc.sess.GetId()
 }
 
+func (sc *SessionChannel) GetKey() uint64 {
+	return sc.sess.GetKey()
+}
+
 func (sc *SessionChannel) Conn() IConn {
 	return sc.sess.Conn()
 }

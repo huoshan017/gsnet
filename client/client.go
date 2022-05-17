@@ -39,7 +39,9 @@ type Client struct {
 	ctx               context.Context
 	cancel            context.CancelFunc
 	isReady           int32
+	isReconnect       int32
 	activeClosed      int32
+	reconnInfo        common.ReconnectInfo
 }
 
 func NewClient(handler common.ISessionEventHandler, options ...common.Option) *Client {
@@ -74,6 +76,7 @@ func (c *Client) reset() {
 	c.connector.Reset()
 	c.lastTime = time.Now()
 	atomic.StoreInt32(&c.isReady, 0)
+	atomic.StoreInt32(&c.isReconnect, 0)
 	atomic.StoreInt32(&c.activeClosed, 0)
 }
 
@@ -99,7 +102,18 @@ func (c *Client) ConnectWithTimeout(addr string, timeout time.Duration) error {
 }
 
 func (c *Client) ConnectAsync(addr string, timeout time.Duration, callback func(error)) {
+	c.connectAsync(addr, timeout, callback, false)
+}
+
+func (c *Client) reconnectAsync(addr string, timeout time.Duration, callback func(error)) {
+	c.connectAsync(addr, timeout, callback, true)
+}
+
+func (c *Client) connectAsync(addr string, timeout time.Duration, callback func(error), reconnect bool) {
 	connector := c.newConnector()
+	if reconnect {
+		atomic.StoreInt32(&c.isReconnect, 1)
+	}
 	connector.ConnectAsync(addr, timeout, func(err error) {
 		if err == nil {
 			err = c.doConnectResult(connector.GetConn())
@@ -119,38 +133,36 @@ func (c *Client) newConnector() *Connector {
 }
 
 func (c *Client) doConnectResult(con net.Conn) error {
-	var (
-		resend *common.ResendData
-	)
-
 	switch c.options.GetConnDataType() {
 	case 1:
 		c.conn = common.NewSimpleConn(con, c.options.Options)
 	default:
 		c.packetBuilder = common.NewPacketBuilder(&c.options.Options)
-		resendConfig := c.options.GetResendConfig()
-		if resendConfig != nil {
-			resend = common.NewResendData(resendConfig)
-		}
-		if resend != nil {
-			c.conn = common.NewConnUseResend(con, c.packetBuilder, resend, &c.options.Options)
-		} else {
-			c.conn = common.NewConn(con, c.packetBuilder, &c.options.Options)
-		}
+		c.conn = common.NewConn(con, c.packetBuilder, &c.options.Options)
 	}
 
-	c.sess = common.NewSessionNoId(c.conn)
-
-	// 包事件处理器
-	var pakEvtHandler handler.IPacketEventHandler
-	if c.packetBuilder != nil {
-		pakEvtHandler = &packetEventHandler{builder: c.packetBuilder, sess: c.sess}
+	// 重传配置
+	resendConfig := c.options.GetResendConfig()
+	if resendConfig != nil {
+		c.resend = common.NewResendData(resendConfig)
 	}
 
 	// 重传事件处理器
 	var resendEventHandler common.IResendEventHandler
 	if c.resend != nil {
-		resendEventHandler = resend
+		resendEventHandler = c.resend
+	}
+
+	if c.resend != nil {
+		c.sess = common.NewSessionNoIdWithResend(c.conn, c.resend)
+	} else {
+		c.sess = common.NewSessionNoId(c.conn)
+	}
+
+	// 包事件处理器
+	var pakEvtHandler handler.IPacketEventHandler
+	if c.packetBuilder != nil {
+		pakEvtHandler = &packetEventHandler{builder: c.packetBuilder, sess: c.sess}
 	}
 
 	// 基础包处理器
@@ -168,29 +180,29 @@ func (c *Client) doConnectResult(con net.Conn) error {
 }
 
 func (c *Client) Send(data []byte, copyData bool) error {
-	if err := c.getError(); err != nil {
-		return err
+	if c.IsConnected() && !c.IsReady() {
+		return ErrClientNotReady
 	}
 	return c.sess.Send(data, copyData)
 }
 
 func (c *Client) SendPoolBuffer(buffer *[]byte) error {
-	if err := c.getError(); err != nil {
-		return err
+	if c.IsConnected() && !c.IsReady() {
+		return ErrClientNotReady
 	}
 	return c.sess.SendPoolBuffer(buffer)
 }
 
 func (c *Client) SendBytesArray(bytesArray [][]byte, copyData bool) error {
-	if err := c.getError(); err != nil {
-		return err
+	if c.IsConnected() && !c.IsReady() {
+		return ErrClientNotReady
 	}
 	return c.sess.SendBytesArray(bytesArray, copyData)
 }
 
 func (c *Client) SendPoolBufferArray(bufferArray []*[]byte) error {
-	if err := c.getError(); err != nil {
-		return err
+	if c.IsConnected() && !c.IsReady() {
+		return ErrClientNotReady
 	}
 	return c.sess.SendPoolBufferArray(bufferArray)
 }
@@ -323,10 +335,17 @@ func (c *Client) fromConnect2Ready() error {
 		err error
 	)
 	c.handler.OnConnect(c.sess)
-	for {
-		res, err = c.handleHandshake(0)
-		if err != nil || res {
-			break
+	err = c.basePacketHandler.OnStart(struct {
+		sessId     uint64
+		sessKey    uint64
+		resendData *common.ResendData
+	}{c.sess.GetId(), c.sess.GetKey(), c.resend})
+	if err == nil {
+		for {
+			res, err = c.handleReady(0)
+			if err != nil || res {
+				break
+			}
 		}
 	}
 	if err == nil {
@@ -336,16 +355,12 @@ func (c *Client) fromConnect2Ready() error {
 	return err
 }
 
-func (c *Client) handleHandshake(mode int32) (bool, error) {
+func (c *Client) handleReady(mode int32) (bool, error) {
 	var (
 		pak packet.IPacket
 		res int32
 		err error
 	)
-	err = c.basePacketHandler.OnUpdateHandle()
-	if err != nil {
-		return false, err
-	}
 	if mode == 0 {
 		pak, _, err = c.conn.Wait(c.ctx, nil)
 	} else {
@@ -358,7 +373,7 @@ func (c *Client) handleHandshake(mode int32) (bool, error) {
 	if err == common.ErrRecvChanEmpty {
 		err = nil
 	}
-	return res == 2, err
+	return res == handler.HandshakeStateClientReady, err
 }
 
 func (c *Client) handle(mode int32) error {
@@ -376,14 +391,10 @@ func (c *Client) handle(mode int32) error {
 	if err == nil {
 		if pak != nil { // net packet handle
 			res, err = c.basePacketHandler.OnPreHandle(pak)
-			if err == nil {
-				if res == 0 {
-					err = c.handler.OnPacket(c.sess, pak)
-				}
+			if err == nil && res == 0 {
+				err = c.handler.OnPacket(c.sess, pak)
 			}
-			if err == nil {
-				err = c.basePacketHandler.OnPostHandle(pak)
-			}
+			c.basePacketHandler.OnPostHandle(pak)
 			c.options.GetPacketPool().Put(pak)
 		} else { // tick handle
 			c.handleTick()
@@ -441,23 +452,8 @@ func (c *Client) handleReconnect(lastCheck *time.Time, reconnectTimer *time.Time
 	}
 	*lastCheck = time.Now()
 	c.reset()
-	c.ConnectAsync(c.address, c.connTimeout, c.connAsyncCallback)
-}
-
-func (c *Client) getError() error {
-	var err error
-	if c.IsNotConnect() {
-		err = ErrClientNotConnect
-	} else if c.IsConnecting() {
-		err = ErrClientConnecting
-	} else if c.IsDisconnecting() {
-		err = ErrClientDisconnecting
-	} else if c.IsDisconnected() {
-		err = ErrClientDisconnected
-	} else if c.IsConnected() && !c.IsReady() {
-		err = ErrClientNotReady
-	}
-	return err
+	c.reconnInfo.Set(c.sess.GetId(), c.sess.GetKey(), c.resend)
+	c.reconnectAsync(c.address, c.connTimeout, c.connAsyncCallback)
 }
 
 type packetEventHandler struct {

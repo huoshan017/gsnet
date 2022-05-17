@@ -13,25 +13,29 @@ var (
 	ErrHeaderLengthTooSmall = errors.New("gsnet: default packet header length too small")
 )
 
-type PacketType int8
+type PacketType uint8
 
 const (
-	PacketNormalData   PacketType = iota
-	PacketHandshake    PacketType = 1
-	PacketHandshakeAck PacketType = 2
-	PacketHeartbeat    PacketType = 3
-	PacketHeartbeatAck PacketType = 4
-	PacketSentAck      PacketType = 5
+	PacketNormalData         PacketType = iota
+	PacketHandshake          PacketType = 1
+	PacketHandshakeAck       PacketType = 2
+	PacketHeartbeat          PacketType = 3
+	PacketHeartbeatAck       PacketType = 4
+	PacketReconnectSyn       PacketType = 5
+	PacketReconnectAck       PacketType = 6
+	PacketReconnectTransport PacketType = 7
+	PacketReconnectEnd       PacketType = 8
+	PacketSentAck            PacketType = 100
 )
 
 // 内存管理类型
-type MemoryManagementType int8
+type MemoryManagementType uint8
 
 const (
 	MemoryManagementSystemGC           MemoryManagementType = iota // 系统GC，默认管理方式
 	MemoryManagementPoolFrameworkFree  MemoryManagementType = 1    // 内存池分配由框架释放
 	MemoryManagementPoolUserManualFree MemoryManagementType = 2    // 内存池分配使用者手动释放
-	MemoryManagementNone               MemoryManagementType = 127
+	MemoryManagementNone               MemoryManagementType = 255
 )
 
 const (

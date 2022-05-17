@@ -2,7 +2,6 @@ package common
 
 import (
 	"sync"
-	"sync/atomic"
 
 	"github.com/huoshan017/gsnet/packet"
 )
@@ -44,22 +43,40 @@ type wrapperSendData struct {
 	pt_mmt int32
 }
 
+func mergePacketTypeMMTAndResend(pt packet.PacketType, mmt packet.MemoryManagementType, resend bool) int32 {
+	var r = func() int32 {
+		if resend {
+			return 1
+		}
+		return 0
+	}()
+	return (int32(pt) << 16 & 0x00ff0000) | (int32(mmt) << 8 & 0xff00) | r
+}
+
+func getPacketType(pt_mmt int32) packet.PacketType {
+	return packet.PacketType((pt_mmt >> 16) & 0xff)
+}
+
 // wrapperSendData.getData transfer any data to the right type
 func (sd *wrapperSendData) getData() ([]byte, *[]byte, [][]byte, []*[]byte) {
 	return GetSendData(sd.data)
 }
 
 func (sd wrapperSendData) getPacketType() packet.PacketType {
-	return packet.PacketType((sd.pt_mmt >> 16) & 0xffff)
+	return getPacketType(sd.pt_mmt)
 }
 
 func (sd wrapperSendData) getMMT() packet.MemoryManagementType {
-	return packet.MemoryManagementType(sd.pt_mmt & 0xffff)
+	return packet.MemoryManagementType(sd.pt_mmt >> 8 & 0xff)
+}
+
+func (sd wrapperSendData) getResend() bool {
+	return sd.pt_mmt&0xff > 0
 }
 
 // only free to returns from wrapperSendData.getData with same instance
 func (sd *wrapperSendData) toFree(b []byte, pb *[]byte, ba [][]byte, pba []*[]byte) {
-	mmt := sd.getMMT()
+	var mmt = sd.getMMT()
 	FreeSendData2(mmt, b, pb, ba, pba)
 }
 
@@ -153,7 +170,7 @@ type ISendList interface {
 type condSendList struct {
 	cond     *sync.Cond
 	sendList *slist
-	quit     int32
+	//quit     int32
 }
 
 func newCondSendList() *condSendList {
@@ -164,9 +181,9 @@ func newCondSendList() *condSendList {
 }
 
 func (l *condSendList) PushBack(wd wrapperSendData) bool {
-	if atomic.LoadInt32(&l.quit) == 1 {
-		return false
-	}
+	//if atomic.LoadInt32(&l.quit) == 1 {
+	//	return false
+	//}
 	l.cond.L.Lock()
 	defer l.cond.L.Unlock()
 	l.sendList.pushBack(wd)
@@ -175,16 +192,16 @@ func (l *condSendList) PushBack(wd wrapperSendData) bool {
 }
 
 func (l *condSendList) PopFront() (wrapperSendData, bool) {
-	if atomic.LoadInt32(&l.quit) == 1 {
-		return nullWrapperSendData, false
-	}
+	//if atomic.LoadInt32(&l.quit) == 1 {
+	//	return nullWrapperSendData, false
+	//}
 	l.cond.L.Lock()
 	defer l.cond.L.Unlock()
 	for l.sendList.getLength() == 0 {
 		l.cond.Wait()
-		if atomic.LoadInt32(&l.quit) == 1 {
-			return nullWrapperSendData, false
-		}
+		//if atomic.LoadInt32(&l.quit) == 1 {
+		//	return nullWrapperSendData, false
+		//}
 	}
 	return l.sendList.popFront()
 }
@@ -196,7 +213,7 @@ func (l *condSendList) Finalize() {
 }
 
 func (l *condSendList) Close() {
-	atomic.StoreInt32(&l.quit, 1)
+	//atomic.StoreInt32(&l.quit, 1)
 	l.cond.Signal()
 }
 

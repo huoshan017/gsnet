@@ -2,32 +2,31 @@ package common
 
 import (
 	"fmt"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
-	"github.com/huoshan017/gsnet/log"
+	"github.com/gogo/protobuf/proto"
 	"github.com/huoshan017/gsnet/packet"
+	"github.com/huoshan017/gsnet/protocol"
 )
 
 const (
-	MaxCacheSentPacket int16 = 256
+	MaxCacheSentPacket int32 = 256
+	MaxSentPacketCount int32 = 65536
+)
+
+var (
+	ErrPeerRecvNumMustEqualToAckNum = func(peerRecvNum, ackNum int32) error {
+		return fmt.Errorf("gsnet: peer received packet num %v must equal to ack num %v", peerRecvNum, ackNum)
+	}
 )
 
 type IResendEventHandler interface {
-	OnSent(data any, pt_mmt int32) bool
-	OnAck(pak packet.IPacket) int32
-	OnProcessed(n int16)
+	OnSent(data any, pt_mmt int32)
+	OnAck(pak packet.IPacket) error
+	OnProcessed(packet.IPacket)
 	OnUpdate(IConn) error
-}
-
-type IResendChecker interface {
-	CanSend() bool
-}
-
-type IResender interface {
-	Resend(sess ISession) error
 }
 
 type sendNode struct {
@@ -100,127 +99,85 @@ func cas(p *unsafe.Pointer, old, new *sendNode) (ok bool) {
 }
 
 type ResendConfig struct {
-	SentListLength int16
+	SentListLength int32
 	AckSentSpan    time.Duration
-	AckSentNum     int16
+	AckSentNum     int32
 	UseLockFree    bool
 }
 
+// 重传数据类
 type ResendData struct {
 	config           ResendConfig
-	sentList         []wrapperSendData
-	locker           sync.Mutex
-	sentList2        *SendList
-	nextSentIndex    int16
-	nextAckSentIndex int16
-	nProcessed       int16
-	nextRecvIndex    int16
+	sentList         *SendList
+	ackTotalNum      int32 // 已确认自己发送数据包的总数量
+	peerRecvTotalNum int32 // 对面已接收自己发送数据包的总数量，对方的确认包中带来的
+	recvTotalNum     int32 // 已接收对方数据包的总数量
+	sendRecvCount    int32 // 可发送确认包时的接收数量，没发送一次重置清零，一般不超过100
 	ackTime          time.Time
 	disposed         bool
 }
 
 func NewResendData(config *ResendConfig) *ResendData {
 	return &ResendData{
-		sentList:  make([]wrapperSendData, 0),
-		sentList2: newSendList(),
-		config:    *config,
+		sentList: newSendList(),
+		config:   *config,
 	}
-}
-
-func (rd *ResendData) CanSend() bool {
-	var can bool
-	if rd.config.UseLockFree {
-		if rd.sentList2.getNum() < 255 {
-			can = true
-		}
-	} else {
-		if len(rd.sentList) < 255 {
-			can = true
-		}
-	}
-	return can
 }
 
 // ResendData.OnSent call in different goroutine to OnAck
-func (rd *ResendData) OnSent(data any, pt_mmt int32) bool {
-	var sent bool
-	if rd.config.UseLockFree {
-		if rd.sentList2.getNum() < int32(MaxCacheSentPacket) {
-			rd.sentList2.pushBack(&wrapperSendData{data, pt_mmt})
-			sent = true
-		}
-	} else {
-		rd.locker.Lock()
-		if len(rd.sentList) < int(MaxCacheSentPacket) {
-			rd.sentList = append(rd.sentList, wrapperSendData{data, pt_mmt})
-			sent = true
-		}
-		rd.locker.Unlock()
-	}
-	if sent {
-		rd.nextSentIndex += 1
-		if rd.nextSentIndex >= int16(MaxCacheSentPacket) {
-			rd.nextSentIndex = 0
-		}
-	}
-	return sent
+func (rd *ResendData) OnSent(data any, pt_mmt int32) {
+	rd.sentList.pushBack(&wrapperSendData{data, pt_mmt})
 }
 
 // ResendData.OnAck ack the packet
 // the return value 0 means not ack packet, -1 means ack packet failed, 1 means success
-func (rd *ResendData) OnAck(pak packet.IPacket) int32 {
+func (rd *ResendData) OnAck(pak packet.IPacket) error {
 	if pak.Type() != packet.PacketSentAck {
-		return 0
+		return nil
 	}
 
 	d := pak.Data()
-	n := (int16(d[0])<<8)&0x7f00 | int16(d[1]&0xff)
-
-	if rd.config.UseLockFree {
-		num := int16(rd.sentList2.getNum())
-		if n > num {
-			errstr := fmt.Sprintf("acknum %v > length of sentlist %v", n, num)
-			log.Fatalf(errstr)
-			//panic(errstr)
-			return -1
-		}
-
-		if n <= 0 {
-			n = num
-		}
-
-		for i := int16(0); i < n; i++ {
-			node := rd.sentList2.popFront()
-			FreeSendData(node.getMMT(), node.data)
-		}
-	} else {
-		if int(n) > len(rd.sentList) {
-			errstr := fmt.Sprintf("acknum %v > length of sentlist %v", n, len(rd.sentList))
-			log.Fatalf(errstr)
-			return -1
-		}
-
-		if n <= 0 {
-			n = int16(len(rd.sentList))
-		}
-
-		rd.locker.Lock()
-		for i := int16(0); i < n; i++ {
-			sd := rd.sentList[i]
-			FreeSendData(sd.getMMT(), sd.data)
-		}
-		rd.sentList = rd.sentList[n:]
-		rd.locker.Unlock()
+	var sentAck protocol.SentAck
+	err := proto.Unmarshal(d, &sentAck)
+	if err != nil {
+		return err
 	}
 
-	rd.nextAckSentIndex = (rd.nextAckSentIndex + n) % MaxCacheSentPacket
+	sentNum := rd.sentList.getNum()
+	if sentAck.RecvCount > sentNum {
+		return fmt.Errorf("acknum %v > length of sentlist %v", sentAck.RecvCount, sentNum)
+	}
 
-	return 1
+	for i := int32(0); i < sentAck.RecvCount; i++ {
+		node := rd.sentList.popFront()
+		FreeSendData(node.getMMT(), node.data)
+	}
+
+	// 对面已收到的总数量
+	rd.peerRecvTotalNum = sentAck.RecvTotalNum
+
+	// 已确认的总数量
+	rd.ackTotalNum += sentAck.RecvCount
+	if rd.ackTotalNum > MaxSentPacketCount {
+		rd.ackTotalNum -= MaxSentPacketCount
+	}
+
+	if rd.peerRecvTotalNum != rd.ackTotalNum {
+		return ErrPeerRecvNumMustEqualToAckNum(rd.peerRecvTotalNum, rd.ackTotalNum)
+	}
+
+	return nil
 }
 
-func (rd *ResendData) OnProcessed(n int16) {
-	rd.nProcessed += n
-	rd.nextRecvIndex = (rd.nextRecvIndex + n) % MaxCacheSentPacket
+func (rd *ResendData) OnProcessed(pak packet.IPacket) {
+	if pak.Type() != packet.PacketNormalData {
+		return
+	}
+	rd.sendRecvCount += 1
+	rd.recvTotalNum += 1
+	if rd.recvTotalNum > MaxSentPacketCount {
+		rd.recvTotalNum -= MaxSentPacketCount
+	}
 }
 
 func (rd *ResendData) OnUpdate(conn IConn) error {
@@ -231,21 +188,26 @@ func (rd *ResendData) Dispose() {
 	if rd.disposed {
 		return
 	}
-	if rd.config.UseLockFree {
-		n := rd.sentList2.getNum()
-		for i := int32(0); i < n; i++ {
-			sd := rd.sentList2.popFront()
+	n := rd.sentList.getNum()
+	for i := int32(0); i < n; i++ {
+		sd := rd.sentList.popFront()
+		if sd != nil {
 			FreeSendData(sd.getMMT(), sd.data)
 		}
-	} else {
-		n := len(rd.sentList)
-		for i := int16(0); i < int16(n); i++ {
-			sd := rd.sentList[i]
-			FreeSendData(sd.getMMT(), sd.data)
-		}
-		rd.sentList = rd.sentList[:0]
 	}
 	rd.disposed = true
+}
+
+func (rd ResendData) getAckTotalNum() int32 {
+	return rd.ackTotalNum
+}
+
+func (rd ResendData) getSendRecvCount() int32 {
+	return rd.sendRecvCount
+}
+
+func (rd ResendData) getRecvTotalNum() int32 {
+	return rd.recvTotalNum
 }
 
 func (rd *ResendData) update(conn IConn) error {
@@ -254,16 +216,54 @@ func (rd *ResendData) update(conn IConn) error {
 		rd.ackTime = now
 	}
 
-	var err error
-	if rd.nProcessed <= 0 {
-		return err
+	if rd.sendRecvCount <= 0 {
+		return nil
 	}
-	if rd.nProcessed >= rd.config.AckSentNum || now.Sub(rd.ackTime) >= rd.config.AckSentSpan {
-		err = conn.Send(packet.PacketSentAck, []byte{byte(rd.nProcessed >> 8), byte(rd.nProcessed & 0xff)}, false)
-		if err == nil || IsNoDisconnectError(err) {
-			rd.nProcessed = 0
-			rd.ackTime = now
+
+	var (
+		data []byte
+		err  error
+	)
+
+	if rd.sendRecvCount >= rd.config.AckSentNum || now.Sub(rd.ackTime) >= rd.config.AckSentSpan {
+		var sentAck = &protocol.SentAck{
+			RecvCount:    rd.sendRecvCount,
+			RecvTotalNum: rd.recvTotalNum,
+		}
+		if data, err = proto.Marshal(sentAck); err == nil {
+			err = conn.Send(packet.PacketSentAck, data, false)
+			if err == nil || IsNoDisconnectError(err) {
+				rd.sendRecvCount = 0
+				rd.ackTime = now
+			}
 		}
 	}
+
 	return err
+}
+
+type ReconnectInfo struct {
+	sessId     uint64
+	sessKey    uint64
+	resendData *ResendData
+}
+
+func (ri ReconnectInfo) GetSessionId() uint64 {
+	return atomic.LoadUint64(&ri.sessId)
+}
+
+func (ri ReconnectInfo) GetSessionKey() uint64 {
+	return atomic.LoadUint64(&ri.sessKey)
+}
+
+func (ri ReconnectInfo) GetResendData() *ResendData {
+	var rp = (*unsafe.Pointer)(unsafe.Pointer(&ri.resendData))
+	return (*ResendData)(atomic.LoadPointer(rp))
+}
+
+func (ri *ReconnectInfo) Set(id uint64, key uint64, resendData *ResendData) {
+	atomic.StoreUint64(&ri.sessId, id)
+	atomic.StoreUint64(&ri.sessKey, key)
+	var rp = (*unsafe.Pointer)(unsafe.Pointer(&ri.resendData))
+	atomic.StorePointer(rp, unsafe.Pointer(resendData))
 }

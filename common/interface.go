@@ -46,6 +46,7 @@ type IConn interface {
 // 会话接口
 type ISession interface {
 	GetId() uint64
+	GetKey() uint64
 	Conn() IConn
 	Send([]byte, bool) error
 	SendBytesArray([][]byte, bool) error

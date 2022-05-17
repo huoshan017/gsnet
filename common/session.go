@@ -10,12 +10,14 @@ const (
 )
 
 type Session struct {
-	conn           IConn
-	id             uint64
-	dataMap        map[string]any
-	chPak          chan IdWithPacket
-	inboundHandles map[int32]func(ISession, packet.IPacket) error
-	resendData     *ResendData
+	conn             IConn
+	senderWithResend ISenderWithResend
+	id               uint64
+	key              uint64
+	dataMap          map[string]any
+	chPak            chan IdWithPacket
+	inboundHandles   map[int32]func(ISession, packet.IPacket) error
+	resendData       *ResendData
 }
 
 func NewSession(conn IConn, id uint64) *Session {
@@ -25,8 +27,22 @@ func NewSession(conn IConn, id uint64) *Session {
 	}
 }
 
+func NewSessionWithResend(conn IConn, id uint64, resendData *ResendData) *Session {
+	sender, _ := conn.(ISenderWithResend)
+	return &Session{
+		conn:             conn,
+		senderWithResend: sender,
+		id:               id,
+		resendData:       resendData,
+	}
+}
+
 func (s *Session) GetId() uint64 {
 	return s.id
+}
+
+func (s *Session) GetKey() uint64 {
+	return s.key
 }
 
 func (s *Session) Conn() IConn {
@@ -34,18 +50,30 @@ func (s *Session) Conn() IConn {
 }
 
 func (s *Session) Send(data []byte, toCopy bool) error {
+	if s.senderWithResend != nil {
+		return s.senderWithResend.send(data, toCopy, s.resendData)
+	}
 	return s.conn.Send(packet.PacketNormalData, data, toCopy)
 }
 
 func (s *Session) SendBytesArray(bytesArray [][]byte, toCopy bool) error {
+	if s.senderWithResend != nil {
+		return s.senderWithResend.sendBytesArray(bytesArray, toCopy, s.resendData)
+	}
 	return s.conn.SendBytesArray(packet.PacketNormalData, bytesArray, toCopy)
 }
 
 func (s *Session) SendPoolBuffer(pBytes *[]byte) error {
+	if s.senderWithResend != nil {
+		return s.senderWithResend.sendPoolBuffer(pBytes, packet.MemoryManagementPoolUserManualFree, s.resendData)
+	}
 	return s.conn.SendPoolBuffer(packet.PacketNormalData, pBytes, packet.MemoryManagementPoolUserManualFree)
 }
 
 func (s *Session) SendPoolBufferArray(pBytesArray []*[]byte) error {
+	if s.senderWithResend != nil {
+		return s.senderWithResend.sendPoolBufferArray(pBytesArray, packet.MemoryManagementPoolUserManualFree, s.resendData)
+	}
 	return s.conn.SendPoolBufferArray(packet.PacketNormalData, pBytesArray, packet.MemoryManagementPoolUserManualFree)
 }
 
@@ -105,10 +133,6 @@ func (s *Session) GetUserData(k string) any {
 	return s.dataMap[k]
 }
 
-func (s *Session) SetResendData(resendData *ResendData) {
-	s.resendData = resendData
-}
-
 func (s *Session) GetResendData() *ResendData {
 	return s.resendData
 }
@@ -119,7 +143,13 @@ type SessionEx struct {
 
 func NewSessionNoId(conn IConn) *SessionEx {
 	return &SessionEx{
-		Session: &Session{conn: conn},
+		Session: NewSession(conn, 0),
+	}
+}
+
+func NewSessionNoIdWithResend(conn IConn, resend *ResendData) *SessionEx {
+	return &SessionEx{
+		Session: NewSessionWithResend(conn, 0, resend),
 	}
 }
 
@@ -141,6 +171,10 @@ func NewAgentSession(agentSessionId uint32, sess ISession) *AgentSession {
 
 func (sc *AgentSession) GetId() uint64 {
 	return sc.sess.GetId()
+}
+
+func (sc *AgentSession) GetKey() uint64 {
+	return sc.sess.GetKey()
 }
 
 func (sc *AgentSession) Conn() IConn {

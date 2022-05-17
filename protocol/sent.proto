@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+option go_package="../protocol";
+package protocol;
+
+message SentAck {
+    int32 RecvCount = 1;
+    int32 RecvTotalNum = 2;
+}

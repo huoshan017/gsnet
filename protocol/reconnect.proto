@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option go_package="../protocol";
+package protocol;
+
+message ReconnectSyn {
+    uint64 CurrSessionId = 1;
+    uint64 PrevSessionId = 2;
+    int32 SentNum = 3;
+    int32 RecvNum = 4;
+}
+
+message ReconnectAck {
+    int32 RecvNum = 1;
+    int32 SentNum = 2;
+}
+
+message ReconnectTransport {
+    repeated bytes DataList = 1;
+}
+
+message ReconnectEnd {
+    bool IsSuccess = 1;
+}

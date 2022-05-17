@@ -38,6 +38,7 @@ type Server struct {
 	cancel            context.CancelFunc
 	waitWg            sync.WaitGroup
 	endLoopCh         chan struct{}
+	reconnInfoMap     sync.Map
 }
 
 func NewServer(newFunc NewSessionHandlerFunc, options ...common.Option) *Server {
@@ -157,7 +158,7 @@ func (s *Server) Serve() {
 		case <-tickerCh:
 			s.handleTick(&lastTime)
 		case c := <-s.sessCloseInfoChan:
-			s.handleClose(c)
+			s.handleConnClose(c)
 		}
 	}
 	if ticker != nil {
@@ -197,7 +198,7 @@ func (s *Server) handleHandshake(conn common.IConn, basePacketHandler handler.IB
 	if pak != nil {
 		s.options.GetPacketPool().Put(pak)
 	}
-	return res == 1, err
+	return res == handler.HandshakeStateServerReady, err
 }
 
 func (s *Server) handleConn(c net.Conn) {
@@ -219,13 +220,7 @@ func (s *Server) handleConn(c net.Conn) {
 		conn = common.NewSimpleConn(c, s.options.Options)
 	default:
 		packetBuilder = common.NewPacketBuilder(&s.options.Options)
-		resendConfig := s.options.GetResendConfig()
-		if resendConfig != nil {
-			resendData = common.NewResendData(resendConfig)
-			conn = common.NewConnUseResend(c, packetBuilder, resendData, &s.options.Options)
-		} else {
-			conn = common.NewConn(c, packetBuilder, &s.options.Options)
-		}
+		conn = common.NewConn(c, packetBuilder, &s.options.Options)
 	}
 
 	// 创建包创建器参数获取者
@@ -233,6 +228,22 @@ func (s *Server) handleConn(c net.Conn) {
 	if packetBuilder != nil {
 		argsGetter = &packetBuilderArgsGetter{packetBuilder}
 	}
+
+	// 重传数据
+	resendConfig := s.options.GetResendConfig()
+	if resendConfig != nil {
+		resendData = common.NewResendData(resendConfig)
+	}
+
+	// 創建會話
+	var sess *common.Session
+	if resendData != nil {
+		sess = common.NewSessionWithResend(conn, getNextSessionId(), resendData)
+	} else {
+		sess = common.NewSession(conn, getNextSessionId())
+	}
+	s.sessMap[sess.GetId()] = sess
+	s.waitWg.Add(1)
 
 	// 类型的指针值为空，其包含的接口类型的值不一定为空
 	resendEventHandler := func() common.IResendEventHandler {
@@ -242,17 +253,8 @@ func (s *Server) handleConn(c net.Conn) {
 		return resendData
 	}()
 
-	// 創建會話
-	sess := common.NewSession(conn, getNextSessionId())
-	sess.SetResendData(resendData)
-	s.sessMap[sess.GetId()] = sess
-	s.waitWg.Add(1)
-
 	// 创建基础包处理器
-	basePacketHandler := handler.NewDefaultBasePacketHandler4Server(sess, argsGetter, resendEventHandler, &s.options.Options)
-
-	// 先讓連接跑起來
-	conn.Run()
+	basePacketHandler := handler.NewDefaultBasePacketHandler4Server(sess, argsGetter, resendEventHandler, &s.options.Options, s.reconnInfoMap)
 
 	// 创建會話處理器
 	var handler common.ISessionEventHandler
@@ -267,6 +269,9 @@ func (s *Server) handleConn(c net.Conn) {
 		}
 	}
 
+	// 先讓連接跑起來
+	conn.Run()
+
 	// 會話處理綫程
 	go func(conn common.IConn) {
 		defer func() {
@@ -280,9 +285,9 @@ func (s *Server) handleConn(c net.Conn) {
 			run = true
 		)
 		// handle handshake
-		var complete bool
-		for !complete {
-			complete, err = s.handleHandshake(conn, basePacketHandler)
+		var ready bool
+		for !ready {
+			ready, err = s.handleHandshake(conn, basePacketHandler)
 			if err != nil {
 				break
 			}
@@ -311,9 +316,7 @@ func (s *Server) handleConn(c net.Conn) {
 							if err == nil && res == 0 {
 								err = handler.OnPacket(sess, pak)
 							}
-							if err == nil {
-								err = basePacketHandler.OnPostHandle(pak)
-							}
+							basePacketHandler.OnPostHandle(pak)
 						}
 						// free packet to pool
 						s.options.GetPacketPool().Put(pak)
@@ -347,12 +350,15 @@ func (s *Server) handleConn(c net.Conn) {
 	}(conn)
 }
 
-func (s *Server) handleClose(err *sessionCloseInfo) {
+func (s *Server) handleConnClose(err *sessionCloseInfo) {
 	_, o := s.sessMap[err.sessionId]
 	if o {
-		sess := s.sessMap[err.sessionId]
-		if sess != nil {
-			sess.GetResendData()
+		var sess = s.sessMap[err.sessionId]
+		// 暂存重连数据
+		if s.options.IsReconnect() && sess != nil {
+			var ri = &common.ReconnectInfo{}
+			ri.Set(sess.GetId(), sess.GetKey(), sess.GetResendData())
+			s.reconnInfoMap.Store(sess.GetId(), ri)
 		}
 		delete(s.sessMap, err.sessionId)
 		s.waitWg.Done()
