@@ -55,9 +55,9 @@ type ISession interface {
 	Close()
 	CloseWaitSecs(int)
 	IsClosed() bool
-	AddInboundHandle(int32, func(ISession, packet.IPacket) error)
+	AddInboundHandle(int32, func(ISession, int32, packet.IPacket) error)
 	RemoveInboundHandle(int32)
-	GetInboundHandles() map[int32]func(ISession, packet.IPacket) error
+	GetInboundHandle(int32) func(ISession, int32, packet.IPacket) error
 	GetPacketChannel() chan IdWithPacket
 	SetUserData(string, any)
 	GetUserData(string) any

@@ -73,7 +73,7 @@ func (h *serverHandlerUseWorkerClient) getWorkerSess(sess common.ISession) commo
 	return h.workerSess
 }
 
-func (h *serverHandlerUseWorkerClient) OnPacketFromWorkerServer(sess common.ISession, pak packet.IPacket) error {
+func (h *serverHandlerUseWorkerClient) OnPacketFromWorkerServer(sess common.ISession, agentId int32, pak packet.IPacket) error {
 	return sess.Send(pak.Data(), true)
 }
 

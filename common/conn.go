@@ -365,7 +365,7 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 			if resendEventHandler != nil {
 				useResend = true
 			}
-			sd := c.getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType, useResend)
+			sd := getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType, useResend)
 			// 多线程情况下，在发送数据之前调用重发的接口缓存数据，防止从发送完数据到对方收到再回确认包过来时还没来得及缓存造成确认失败
 			if resendEventHandler != nil && pt == packet.PacketNormalData {
 				resendEventHandler.OnSent(sd.data, sd.pt_mmt)
@@ -387,7 +387,7 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 			}
 		case <-c.closeCh:
 			return c.genErrConnClosed()
-		case c.sendCh <- c.getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType, false):
+		case c.sendCh <- getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType, false):
 		}
 	}
 	return nil
@@ -410,87 +410,11 @@ func (c *Conn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) er
 		}
 	case <-c.closeCh:
 		err = c.genErrConnClosed()
-	case c.sendCh <- c.getWrapperSendBytes(pt, data, copyData, false):
+	case c.sendCh <- getWrapperSendBytes(pt, data, copyData, false):
 	default:
 		err = ErrSendChanFull
 	}
 	return err
-}
-
-// Conn.getWrapperSendData  wrapper send data
-func (c *Conn) getWrapperSendData(pt packet.PacketType, data []byte, datas [][]byte, copyData bool, pData *[]byte, pDataArray []*[]byte, mt packet.MemoryManagementType, useResend bool) wrapperSendData {
-	if data != nil {
-		return c.getWrapperSendBytes(pt, data, copyData, useResend)
-	}
-	if datas != nil {
-		return c.getWrapperSendBytesArray(pt, datas, copyData, useResend)
-	}
-	if pData != nil {
-		return c.getWrapperSendPoolBuffer(pt, pData, mt, useResend)
-	}
-	return c.getWrapperSendPoolBufferArray(pt, pDataArray, mt, useResend)
-}
-
-// Conn.getWrapperSendBytes  wrapper bytes data for send
-func (c *Conn) getWrapperSendBytes(pt packet.PacketType, data []byte, copyData bool, useResend bool) wrapperSendData {
-	if !copyData {
-		return wrapperSendData{data: data, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementSystemGC, useResend)}
-	}
-	b := pool.GetBuffPool().Alloc(int32(len(data)))
-	copy(*b, data)
-	return wrapperSendData{data: b, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementPoolUserManualFree, useResend)}
-}
-
-// Conn.getWrapperSendBytesArray wrap bytes array data for send
-func (c *Conn) getWrapperSendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool, useResend bool) wrapperSendData {
-	if !copyData {
-		return wrapperSendData{data: datas, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementSystemGC, useResend)}
-	}
-
-	var ds [][]byte
-	for i := 0; i < len(datas); i++ {
-		b := pool.GetBuffPool().Alloc(int32(len(datas[i])))
-		copy(*b, datas[i])
-		ds = append(ds, *b)
-	}
-
-	return wrapperSendData{data: ds, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementPoolUserManualFree, useResend)}
-}
-
-// Conn.getWrapperSendPoolBuffer wrap pool buffer for send
-func (c *Conn) getWrapperSendPoolBuffer(pt packet.PacketType, pData *[]byte, mt packet.MemoryManagementType, useResend bool) wrapperSendData {
-	var sd wrapperSendData
-	switch mt {
-	case packet.MemoryManagementSystemGC, packet.MemoryManagementPoolUserManualFree:
-		sd.data = pData
-		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
-	case packet.MemoryManagementPoolFrameworkFree:
-		b := pool.GetBuffPool().Alloc(int32(len(*pData)))
-		copy(*b, *pData)
-		sd.data = b
-		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
-	}
-	return sd
-}
-
-// Conn.getWrapperSendPoolBufferArray wrap pool buffer array data for send
-func (c *Conn) getWrapperSendPoolBufferArray(pt packet.PacketType, pDataArray []*[]byte, mt packet.MemoryManagementType, useResend bool) wrapperSendData {
-	var sd wrapperSendData
-	switch mt {
-	case packet.MemoryManagementSystemGC, packet.MemoryManagementPoolUserManualFree:
-		sd.data = pDataArray
-		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
-	case packet.MemoryManagementPoolFrameworkFree:
-		var pda []*[]byte
-		for i := 0; i < len(pDataArray); i++ {
-			b := pool.GetBuffPool().Alloc(int32(len(*pDataArray[i])))
-			copy(*b, *pDataArray[i])
-			pda = append(pda, b)
-		}
-		sd.data = pda
-		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
-	}
-	return sd
 }
 
 // Conn.Recv recv packet (接收数据)
@@ -604,4 +528,80 @@ func (c *Conn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacke
 		}
 	}
 	return p, id, err
+}
+
+// getWrapperSendData  wrapper send data
+func getWrapperSendData(pt packet.PacketType, data []byte, datas [][]byte, copyData bool, pData *[]byte, pDataArray []*[]byte, mt packet.MemoryManagementType, useResend bool) wrapperSendData {
+	if data != nil {
+		return getWrapperSendBytes(pt, data, copyData, useResend)
+	}
+	if datas != nil {
+		return getWrapperSendBytesArray(pt, datas, copyData, useResend)
+	}
+	if pData != nil {
+		return getWrapperSendPoolBuffer(pt, pData, mt, useResend)
+	}
+	return getWrapperSendPoolBufferArray(pt, pDataArray, mt, useResend)
+}
+
+// getWrapperSendBytes  wrapper bytes data for send
+func getWrapperSendBytes(pt packet.PacketType, data []byte, copyData bool, useResend bool) wrapperSendData {
+	if !copyData {
+		return wrapperSendData{data: data, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementSystemGC, useResend)}
+	}
+	b := pool.GetBuffPool().Alloc(int32(len(data)))
+	copy(*b, data)
+	return wrapperSendData{data: b, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementPoolUserManualFree, useResend)}
+}
+
+// getWrapperSendBytesArray wrap bytes array data for send
+func getWrapperSendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool, useResend bool) wrapperSendData {
+	if !copyData {
+		return wrapperSendData{data: datas, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementSystemGC, useResend)}
+	}
+
+	var ds [][]byte
+	for i := 0; i < len(datas); i++ {
+		b := pool.GetBuffPool().Alloc(int32(len(datas[i])))
+		copy(*b, datas[i])
+		ds = append(ds, *b)
+	}
+
+	return wrapperSendData{data: ds, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementPoolUserManualFree, useResend)}
+}
+
+// getWrapperSendPoolBuffer wrap pool buffer for send
+func getWrapperSendPoolBuffer(pt packet.PacketType, pData *[]byte, mt packet.MemoryManagementType, useResend bool) wrapperSendData {
+	var sd wrapperSendData
+	switch mt {
+	case packet.MemoryManagementSystemGC, packet.MemoryManagementPoolUserManualFree:
+		sd.data = pData
+		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
+	case packet.MemoryManagementPoolFrameworkFree:
+		b := pool.GetBuffPool().Alloc(int32(len(*pData)))
+		copy(*b, *pData)
+		sd.data = b
+		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
+	}
+	return sd
+}
+
+// getWrapperSendPoolBufferArray wrap pool buffer array data for send
+func getWrapperSendPoolBufferArray(pt packet.PacketType, pDataArray []*[]byte, mt packet.MemoryManagementType, useResend bool) wrapperSendData {
+	var sd wrapperSendData
+	switch mt {
+	case packet.MemoryManagementSystemGC, packet.MemoryManagementPoolUserManualFree:
+		sd.data = pDataArray
+		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
+	case packet.MemoryManagementPoolFrameworkFree:
+		var pda []*[]byte
+		for i := 0; i < len(pDataArray); i++ {
+			b := pool.GetBuffPool().Alloc(int32(len(*pDataArray[i])))
+			copy(*b, *pDataArray[i])
+			pda = append(pda, b)
+		}
+		sd.data = pda
+		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
+	}
+	return sd
 }

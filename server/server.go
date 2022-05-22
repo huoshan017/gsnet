@@ -305,9 +305,9 @@ func (s *Server) handleConn(c net.Conn) {
 				if err == nil {
 					if pak != nil {
 						if id != 0 {
-							inboundHandle := sess.GetInboundHandles()[id]
+							inboundHandle := sess.GetInboundHandle(id)
 							if inboundHandle != nil {
-								err = inboundHandle(sess, pak)
+								err = inboundHandle(sess, id, pak)
 							} else {
 								log.Infof("gsnet: inbound handle with id %v not found", id)
 							}
@@ -355,7 +355,7 @@ func (s *Server) handleConnClose(err *sessionCloseInfo) {
 	if o {
 		var sess = s.sessMap[err.sessionId]
 		// 暂存重连数据
-		if s.options.IsReconnect() && sess != nil {
+		if s.options.GetResendConfig() != nil && sess != nil {
 			var ri = &common.ReconnectInfo{}
 			ri.Set(sess.GetId(), sess.GetKey(), sess.GetResendData())
 			s.reconnInfoMap.Store(sess.GetId(), ri)

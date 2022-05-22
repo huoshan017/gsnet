@@ -409,7 +409,7 @@ func TestNilChannel(t *testing.T) {
 
 func createTestClientUseReconnect(t *testing.T, totalNum int32) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseRunHandler(t, totalNum), common.WithReconnect(true), common.WithTickSpan(time.Second))
+	return client.NewClient(newTestClientUseRunHandler(t, totalNum), common.WithAutoReconnect(true), common.WithTickSpan(time.Second))
 }
 
 func TestClientReconnect(t *testing.T) {

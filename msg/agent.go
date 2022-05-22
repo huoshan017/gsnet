@@ -123,14 +123,14 @@ func (c *MsgAgentClient) SetErrorHandle(handle func(error)) {
 }
 
 // MsgAgentClient.BoundSession  bound message handle and create message agent session
-func (c *MsgAgentClient) BoundServerSession(sess *MsgSession, handle func(*MsgSession, MsgIdType, any) error) *MsgAgentSession {
-	var h = func(sess common.ISession, pak packet.IPacket) error {
+func (c *MsgAgentClient) BoundServerSession(sess *MsgSession, handle func(*MsgSession, int32, MsgIdType, any) error) *MsgAgentSession {
+	var h = func(sess common.ISession, agentId int32, pak packet.IPacket) error {
 		var ms = MsgSession{sess: sess, codec: c.codec, mapper: c.mapper, options: &c.options.MsgOptions}
 		msgid, msgobj, err := ms.splitIdAndMsg(pak.Data())
 		if err != nil {
 			return err
 		}
-		return handle(&ms, msgid, msgobj)
+		return handle(&ms, agentId, msgid, msgobj)
 	}
 	agentSess := c.c.BoundServerSession(sess.GetSess(), h)
 	return &MsgAgentSession{AgentSession: agentSess, c: c}

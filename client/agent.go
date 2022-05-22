@@ -169,6 +169,10 @@ func (c *AgentClient) CloseWait(secs int) {
 	c.c.CloseWait(secs)
 }
 
+func (c *AgentClient) GetId() int32 {
+	return c.id
+}
+
 func (c *AgentClient) IsNotConnect() bool {
 	return c.c.IsNotConnect()
 }
@@ -193,7 +197,7 @@ func (c *AgentClient) IsDisconnected() bool {
 	return c.c.IsDisconnected()
 }
 
-func (c *AgentClient) BoundServerSession(sess common.ISession, handle func(common.ISession, packet.IPacket) error) *common.AgentSession {
+func (c *AgentClient) BoundServerSession(sess common.ISession, handle func(common.ISession, int32, packet.IPacket) error) *common.AgentSession {
 	sess.AddInboundHandle(c.id, handle)
 	agentSessionId := getNextAgentSessionId()
 	c.pakChans.Store(agentSessionId, sess.GetPacketChannel())

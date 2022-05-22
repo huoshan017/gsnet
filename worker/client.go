@@ -77,7 +77,7 @@ func (c *Client) DialTimeout(address string, timeout time.Duration) error {
 	return nil
 }
 
-func (c *Client) BoundPacketHandle(sess common.ISession, handle func(common.ISession, packet.IPacket) error) {
+func (c *Client) BoundPacketHandle(sess common.ISession, handle func(common.ISession, int32, packet.IPacket) error) {
 	sess.AddInboundHandle(c.id, handle)
 	c.pakChans.Store(sess.GetId(), sess.GetPacketChannel())
 }

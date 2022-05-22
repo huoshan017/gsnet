@@ -88,7 +88,7 @@ func (h *serverHandlerUseMsgAgentClient) OnError(err error) {
 	log.Infof("occur err %v on server", err)
 }
 
-func (h *serverHandlerUseMsgAgentClient) OnMsgFromAgentServer(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
+func (h *serverHandlerUseMsgAgentClient) OnMsgFromAgentServer(sess *msg.MsgSession, agentId int32, msgid msg.MsgIdType, msgobj any) error {
 	return sess.SendMsg(msgid, msgobj)
 }
 

@@ -87,7 +87,6 @@ func (c *Connector) GetConn() net.Conn {
 	return c.conn
 }
 
-// 等待结果，wait参数为等待时间，如何这个时间内有了结果就提前返回
 func (c *Connector) WaitResult(isBlock bool) (int32, error) {
 	var err error
 	if isBlock {
@@ -96,6 +95,7 @@ func (c *Connector) WaitResult(isBlock bool) (int32, error) {
 			return ConnStateConnected, nil
 		}
 		c.doAsyncResult(d.err, d.conn)
+		err = d.err
 	} else {
 		select {
 		case d, o := <-c.asyncResultCh:
@@ -103,6 +103,7 @@ func (c *Connector) WaitResult(isBlock bool) (int32, error) {
 				return ConnStateConnected, nil
 			}
 			c.doAsyncResult(d.err, d.conn)
+			err = d.err
 		default:
 		}
 	}

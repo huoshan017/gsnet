@@ -82,7 +82,7 @@ func (sc *SessionChannel) IsClosed() bool {
 	return sc.sess.IsClosed()
 }
 
-func (sc *SessionChannel) AddInboundHandle(id int32, handle func(ISession, packet.IPacket) error) {
+func (sc *SessionChannel) AddInboundHandle(id int32, handle func(ISession, int32, packet.IPacket) error) {
 	sc.sess.AddInboundHandle(id, handle)
 }
 
@@ -90,8 +90,8 @@ func (sc *SessionChannel) RemoveInboundHandle(id int32) {
 	sc.sess.RemoveInboundHandle(id)
 }
 
-func (sc *SessionChannel) GetInboundHandles() map[int32]func(ISession, packet.IPacket) error {
-	return sc.sess.GetInboundHandles()
+func (sc *SessionChannel) GetInboundHandle(id int32) func(ISession, int32, packet.IPacket) error {
+	return sc.sess.GetInboundHandle(id)
 }
 
 func (sc *SessionChannel) GetPacketChannel() chan IdWithPacket {

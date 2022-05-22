@@ -15,7 +15,7 @@ const (
 	DefaultHeartbeatTimeSpan                = time.Second * 10       // 默认发送心跳间隔时间
 	DefaultMinimumHeartbeatTimeSpan         = time.Second * 3        // 最小心跳发送间隔
 	DefaultDisconnectHeartbeatTimeout       = time.Second * 30       // 断开连接的心跳超时
-	DefaultReconnectSeconds           int32 = 5
+	DefaultAutoReconnectSeconds       int32 = 5
 )
 
 type GenCryptoKeyFunc func(*rand.Rand) []byte
@@ -48,8 +48,8 @@ type Options struct {
 	minHeartbeatTimeSpan       time.Duration          // 最小心跳间隔
 	disconnectHeartbeatTimeout time.Duration          // 断连的心跳超时
 	customDatas                map[string]any         // 自定义数据
-	reconnect                  bool                   // 是否重连
-	reconnectSeconds           int32                  // second
+	autoReconnect              bool                   // 是否自动重连
+	autoReconnectSeconds       int32                  // second
 	// todo 以下是需要实现的配置逻辑
 	// flushWriteInterval time.Duration // 写缓冲数据刷新到网络IO的最小时间间隔
 }
@@ -286,24 +286,24 @@ func (options *Options) SetCreatePacketHeaderFunc(fun CreatePacketHeaderFunc) {
 	options.createPacketHeaderFunc = fun
 }
 
-func (options *Options) IsReconnect() bool {
-	return options.reconnect
+func (options *Options) IsAutoReconnect() bool {
+	return options.autoReconnect
 }
 
-func (options *Options) SetReconnect(enable bool) {
-	options.reconnect = enable
+func (options *Options) SetAutoReconnect(enable bool) {
+	options.autoReconnect = enable
 }
 
-func (options *Options) GetReconnectSeconds() int32 {
-	secs := options.reconnectSeconds
+func (options *Options) GetAutoReconnectSeconds() int32 {
+	secs := options.autoReconnectSeconds
 	if secs <= 0 {
-		secs = DefaultReconnectSeconds
+		secs = DefaultAutoReconnectSeconds
 	}
 	return secs
 }
 
-func (options *Options) SetReconnectSeconds(secs int32) {
-	options.reconnectSeconds = secs
+func (options *Options) SetAutoReconnectSeconds(secs int32) {
+	options.autoReconnectSeconds = secs
 }
 
 func WithNoDelay(noDelay bool) Option {
@@ -450,14 +450,14 @@ func WithCreatePacketHeaderFunc(fun CreatePacketHeaderFunc) Option {
 	}
 }
 
-func WithReconnect(enable bool) Option {
+func WithAutoReconnect(enable bool) Option {
 	return func(options *Options) {
-		options.SetReconnect(enable)
+		options.SetAutoReconnect(enable)
 	}
 }
 
-func WithReconnectSeconds(secs int32) Option {
+func WithAutoReconnectSeconds(secs int32) Option {
 	return func(options *Options) {
-		options.SetReconnectSeconds(secs)
+		options.SetAutoReconnectSeconds(secs)
 	}
 }

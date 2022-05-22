@@ -16,7 +16,7 @@ type Session struct {
 	key              uint64
 	dataMap          map[string]any
 	chPak            chan IdWithPacket
-	inboundHandles   map[int32]func(ISession, packet.IPacket) error
+	inboundHandles   map[int32]func(ISession, int32, packet.IPacket) error
 	resendData       *ResendData
 }
 
@@ -78,6 +78,7 @@ func (s *Session) SendPoolBufferArray(pBytesArray []*[]byte) error {
 }
 
 func (s *Session) Close() {
+	s.chPak = nil
 	if s.resendData != nil {
 		s.resendData.Dispose()
 	}
@@ -95,21 +96,23 @@ func (s *Session) IsClosed() bool {
 	return s.conn.IsClosed()
 }
 
-func (s *Session) AddInboundHandle(id int32, handle func(ISession, packet.IPacket) error) {
+func (s *Session) AddInboundHandle(id int32, handle func(ISession, int32, packet.IPacket) error) {
 	if s.inboundHandles == nil {
-		s.inboundHandles = make(map[int32]func(ISession, packet.IPacket) error)
+		s.inboundHandles = make(map[int32]func(ISession, int32, packet.IPacket) error)
 	}
 	s.inboundHandles[id] = handle
 }
 
 func (s *Session) RemoveInboundHandle(id int32) {
-	if s.inboundHandles != nil {
-		delete(s.inboundHandles, id)
-	}
+	delete(s.inboundHandles, id)
 }
 
-func (s *Session) GetInboundHandles() map[int32]func(ISession, packet.IPacket) error {
-	return s.inboundHandles
+func (s *Session) GetInboundHandle(id int32) func(ISession, int32, packet.IPacket) error {
+	h, o := s.inboundHandles[id]
+	if !o {
+		return nil
+	}
+	return h
 }
 
 func (s *Session) GetPacketChannel() chan IdWithPacket {
@@ -238,7 +241,7 @@ func (sc *AgentSession) IsClosed() bool {
 	return sc.sess.IsClosed()
 }
 
-func (sc *AgentSession) AddInboundHandle(id int32, handle func(ISession, packet.IPacket) error) {
+func (sc *AgentSession) AddInboundHandle(id int32, handle func(ISession, int32, packet.IPacket) error) {
 	sc.sess.AddInboundHandle(id, handle)
 }
 
@@ -246,8 +249,8 @@ func (sc *AgentSession) RemoveInboundHandle(id int32) {
 	sc.sess.RemoveInboundHandle(id)
 }
 
-func (sc *AgentSession) GetInboundHandles() map[int32]func(ISession, packet.IPacket) error {
-	return sc.sess.GetInboundHandles()
+func (sc *AgentSession) GetInboundHandle(id int32) func(ISession, int32, packet.IPacket) error {
+	return sc.sess.GetInboundHandle(id)
 }
 
 func (sc *AgentSession) GetPacketChannel() chan IdWithPacket {

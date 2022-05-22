@@ -262,7 +262,7 @@ MainLoop:
 
 	c.handleErr(err)
 
-	if c.options.IsReconnect() && atomic.LoadInt32(&c.activeClosed) == 0 {
+	if c.options.IsAutoReconnect() && atomic.LoadInt32(&c.activeClosed) == 0 {
 		c.handleReconnect(&lastCheck, reconnectTimer)
 		goto MainLoop
 	}
@@ -406,11 +406,7 @@ func (c *Client) handle(mode int32) error {
 		err = nil
 	}
 
-	if err != nil {
-		if common.IsNoDisconnectError(err) {
-			c.handler.OnError(err)
-		}
-	}
+	c.handleClose(err)
 
 	return err
 }
@@ -422,7 +418,7 @@ func (c *Client) handleTick() {
 	c.lastTime = now
 }
 
-func (c *Client) handleErr(err error) error {
+func (c *Client) handleClose(err error) {
 	if err != nil {
 		// if no disconnect error, reset err to nil
 		if common.IsNoDisconnectError(err) {
@@ -431,10 +427,18 @@ func (c *Client) handleErr(err error) error {
 			if c.packetBuilder != nil {
 				c.packetBuilder.Close()
 			}
-			if c.handler != nil {
+			if c.sess != nil {
 				c.handler.OnDisconnect(c.sess, err)
+				c.conn.Close()
 			}
-			c.conn.Close()
+		}
+	}
+}
+
+func (c *Client) handleErr(err error) error {
+	if err != nil {
+		if common.IsNoDisconnectError(err) {
+			c.handler.OnError(err)
 		}
 	}
 	return err
@@ -442,17 +446,19 @@ func (c *Client) handleErr(err error) error {
 
 func (c *Client) handleReconnect(lastCheck *time.Time, reconnectTimer *time.Timer) {
 	since := time.Since(*lastCheck)
-	if since < time.Duration(c.options.GetReconnectSeconds()) {
+	if since < time.Duration(c.options.GetAutoReconnectSeconds()) {
 		if reconnectTimer == nil {
-			reconnectTimer = time.NewTimer(time.Duration(c.options.GetReconnectSeconds()) - since)
+			reconnectTimer = time.NewTimer(time.Duration(c.options.GetAutoReconnectSeconds())*time.Second - since)
 		} else {
-			reconnectTimer.Reset(time.Duration(c.options.GetReconnectSeconds()) - since)
+			reconnectTimer.Reset(time.Duration(c.options.GetAutoReconnectSeconds())*time.Second - since)
 		}
 		<-reconnectTimer.C
 	}
 	*lastCheck = time.Now()
 	c.reset()
-	c.reconnInfo.Set(c.sess.GetId(), c.sess.GetKey(), c.resend)
+	if c.sess != nil {
+		c.reconnInfo.Set(c.sess.GetId(), c.sess.GetKey(), c.resend)
+	}
 	c.reconnectAsync(c.address, c.connTimeout, c.connAsyncCallback)
 }
 
