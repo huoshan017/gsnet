@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"math/rand"
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
@@ -12,7 +13,12 @@ import (
 	tproto "github.com/huoshan017/gsnet/test/tproto"
 )
 
+var (
+	maxLatency int32 = 100 // milliseconds
+)
+
 type msgAgentServerHandler struct {
+	rand *rand.Rand
 }
 
 func newMsgAgentServerHandler(args ...any) msg.IMsgSessionEventHandler {
@@ -20,6 +26,7 @@ func newMsgAgentServerHandler(args ...any) msg.IMsgSessionEventHandler {
 }
 
 func (h *msgAgentServerHandler) OnConnected(sess *msg.MsgSession) {
+	h.rand = rand.New(rand.NewSource(time.Now().UnixNano()))
 	log.Infof("session %v connected to message agent server", sess.GetId())
 }
 
@@ -34,6 +41,7 @@ func (h *msgAgentServerHandler) OnDisconnected(sess *msg.MsgSession, err error) 
 func (h *msgAgentServerHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
 	var err error
 	if msgid == fc.MsgIdPing {
+		//time.Sleep(time.Duration(h.rand.Int31n(maxLatency)) * time.Millisecond)
 		m := msgobj.(*tproto.MsgPing)
 		var response tproto.MsgPong
 		response.Content = m.Content

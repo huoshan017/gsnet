@@ -16,16 +16,16 @@ var (
 type PacketType uint8
 
 const (
-	PacketNormalData         PacketType = iota
-	PacketHandshake          PacketType = 1
-	PacketHandshakeAck       PacketType = 2
-	PacketHeartbeat          PacketType = 3
-	PacketHeartbeatAck       PacketType = 4
-	PacketReconnectSyn       PacketType = 5
-	PacketReconnectAck       PacketType = 6
-	PacketReconnectTransport PacketType = 7
-	PacketReconnectEnd       PacketType = 8
-	PacketSentAck            PacketType = 100
+	PacketNormalData         PacketType = iota // 数据包
+	PacketHandshake          PacketType = 1    // 握手请求
+	PacketHandshakeAck       PacketType = 2    // 握手回应
+	PacketHeartbeat          PacketType = 3    // 心跳请求
+	PacketHeartbeatAck       PacketType = 4    // 心跳回应
+	PacketReconnectSyn       PacketType = 5    // 重连
+	PacketReconnectAck       PacketType = 6    // 重连回应
+	PacketReconnectTransport PacketType = 7    // 重连数据传输
+	PacketReconnectEnd       PacketType = 8    // 重连结束
+	PacketSentAck            PacketType = 100  // 发送回应
 )
 
 // 内存管理类型

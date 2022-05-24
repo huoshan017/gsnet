@@ -1,6 +1,7 @@
 package frontend
 
 import (
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -14,18 +15,19 @@ import (
 type RouteType int32
 
 const (
-	RouteTypeRandom      RouteType = iota
+	RouteTypeRandom      RouteType = iota // 随机路由后端服务器一般是无状态的
 	RouteTypeFirstRandom RouteType = 1
 	RouteTypeSelect      RouteType = 2
 )
 
 const (
-	DefaultRingLength         int32 = 1024
-	DefaultCheckCacheDataTick       = 10 * time.Millisecond
+	DefaultRingLength             int32 = 1024
+	DefaultTimeoutDataFromBackend       = 10 * time.Second      // 默认从后端返回数据的超时
+	DefaultCheckCacheDataTick           = 50 * time.Millisecond // 默认检测超时的间隔
 )
 
 type ring struct {
-	list        []int32
+	list        []int32 // agent id
 	rn, wn, cnt int32
 }
 
@@ -55,23 +57,13 @@ func (r *ring) write(id int32) bool {
 	return true
 }
 
-func (r *ring) read() (int32, bool) {
-	var (
-		id int32
-		o  bool
-	)
-	id, o = r.peek()
-	if o {
-		r.advance()
-	}
-	return id, o
-}
-
 func (r ring) peek() (int32, bool) {
 	if r.cnt <= 0 {
 		return -1, false
 	}
-	var id int32
+	var (
+		id int32
+	)
 	if int(r.rn)+1 >= len(r.list) {
 		id = r.list[0]
 	} else {
@@ -93,6 +85,16 @@ type dnode struct {
 	next *dnode
 }
 
+func get_dnode() *dnode {
+	return dnodePool.Get().(*dnode)
+}
+
+func put_dnode(n *dnode) {
+	n.data = nil
+	n.next = nil
+	dnodePool.Put(n)
+}
+
 type dlist struct {
 	head, tail *dnode
 	length     int32
@@ -103,7 +105,8 @@ func newDlist() *dlist {
 }
 
 func (l *dlist) pushBack(data []byte) {
-	node := &dnode{data: data}
+	node := get_dnode() //&dnode{data: data}
+	node.data = data
 	if l.head == nil {
 		l.head = node
 		l.tail = l.head
@@ -131,6 +134,7 @@ func (l *dlist) peek() ([]byte, bool) {
 }
 
 func (l *dlist) removeFront() {
+	n := l.head
 	if l.tail == l.head {
 		l.head = nil
 		l.tail = nil
@@ -138,6 +142,7 @@ func (l *dlist) removeFront() {
 		l.head = l.head.next
 	}
 	l.length -= 1
+	put_dnode(n)
 }
 
 func (l *dlist) getLength() int32 {
@@ -185,10 +190,14 @@ func NewGateOptions(backendAddressList []string, routType RouteType) *GateOption
 }
 
 type gateSessionHandler struct {
-	routeType         RouteType
-	agentGroup        *client.AgentGroup
-	agentSessionMap   map[int32]*common.AgentSession
-	agentId           int32
+	routeType       RouteType
+	agentGroup      *client.AgentGroup
+	agentSessionMap map[int32]*common.AgentSession
+
+	// used to first random
+	agentId int32
+
+	// used to random
 	sequenceIds       *ring
 	agentCacheDataMap agentDataListMap
 }
@@ -199,8 +208,10 @@ func (h *gateSessionHandler) OnConnect(sess common.ISession) {
 
 func (h *gateSessionHandler) OnReady(sess common.ISession) {
 	h.agentSessionMap = h.agentGroup.BoundSession(sess, h.OnPacketFromBackEnd)
-	h.sequenceIds = newRing()
-	h.agentCacheDataMap = newAgentDataListMap()
+	if h.routeType == RouteTypeRandom {
+		h.sequenceIds = newRing()
+		h.agentCacheDataMap = newAgentDataListMap()
+	}
 	log.Infof("session %v ready", sess.GetId())
 }
 
@@ -233,9 +244,10 @@ func (h *gateSessionHandler) OnPacket(sess common.ISession, pak packet.IPacket) 
 		return nil
 	}
 
-	// 同一Session的逻辑在一个goroutine中执行，所以其发送协议的顺序可以保证
-	// 当从多个后端随机选择发送消息时，返回的消息顺序是无法确定的
-	// 因此需要保存一个发送的队列，对返回的消息排序再发回给客户端
+	// 同一Session的逻辑在一个goroutine中执行，所以其"发送消息"的顺序可以保证
+	// 当从多个后端随机选择一个向其发送消息时，"返回的消息"顺序是无法确定的
+	// 因此需要保存一个发送的队列，对返回的消息排序后再回给客户端
+	// 这个队列只要记录后端服务器对应的代理客户端id，就能保证顺序性
 	err := agentSess.Send(pak.Data(), func() bool {
 		return pak.MMType() != packet.MemoryManagementSystemGC
 	}())
@@ -354,8 +366,17 @@ func (g *Gate) ListenAndServe(address string) error {
 
 var (
 	agentIdCounter int32
+	dnodePool      *sync.Pool
 )
 
 func getNextAgentGroupId() int32 {
 	return atomic.AddInt32(&agentIdCounter, 1)
+}
+
+func init() {
+	dnodePool = &sync.Pool{
+		New: func() any {
+			return &dnode{}
+		},
+	}
 }
