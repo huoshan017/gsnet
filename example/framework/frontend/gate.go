@@ -13,6 +13,6 @@ func main() {
 	go func() {
 		http.ListenAndServe("0.0.0.0:6060", nil)
 	}()
-	gate := frontend.NewGate(frontend.NewGateOptions(common.BackendAddress, frontend.RouteTypeFirstRandom))
+	gate := frontend.NewGate(frontend.NewGateOptions(common.BackendAddress, frontend.RouteTypeRandom))
 	gate.ListenAndServe(common.GateAddress)
 }

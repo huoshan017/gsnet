@@ -3,6 +3,7 @@ package common
 import (
 	"reflect"
 
+	"github.com/huoshan017/gsnet/framework/frontend"
 	"github.com/huoshan017/gsnet/msg"
 	"github.com/huoshan017/gsnet/test/tproto"
 )
@@ -12,7 +13,11 @@ const (
 )
 
 var (
-	BackendAddress = []string{"127.0.0.1:9901", "127.0.0.1:9902", "127.0.0.1:9903"}
+	BackendAddress = []frontend.BackendInfo{
+		{Id: 1, Address: "127.0.0.1:9901", ConnNum: 5},
+		{Id: 2, Address: "127.0.0.1:9902", ConnNum: 5},
+		{Id: 3, Address: "127.0.0.1:9903", ConnNum: 5},
+	}
 )
 
 const (

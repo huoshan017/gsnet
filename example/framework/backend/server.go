@@ -73,7 +73,7 @@ func main() {
 	var addressIndex int
 	flag.IntVar(&addressIndex, "address_index", 0, "backend address index")
 	flag.Parse()
-	s := createMsgAgentServer(fc.BackendAddress[addressIndex])
+	s := createMsgAgentServer(fc.BackendAddress[addressIndex].Address)
 	if s == nil {
 		return
 	}

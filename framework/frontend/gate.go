@@ -22,8 +22,8 @@ const (
 
 const (
 	DefaultRingLength             int32 = 1024
-	DefaultTimeoutDataFromBackend       = 10 * time.Second      // 默认从后端返回数据的超时
-	DefaultCheckCacheDataTick           = 50 * time.Millisecond // 默认检测超时的间隔
+	DefaultTimeoutDataFromBackend       = 10 * time.Second // 默认从后端返回数据的超时
+	DefaultCheckCacheDataTick           = time.Second      // 默认tick间隔
 )
 
 type ring struct {
@@ -180,13 +180,19 @@ func (sm agentDataListMap) length() int32 {
 	return l
 }
 
-type GateOptions struct {
-	backendAddressList []string
-	routeType          RouteType
+type BackendInfo struct {
+	Id      int32
+	Address string
+	ConnNum int32
 }
 
-func NewGateOptions(backendAddressList []string, routType RouteType) *GateOptions {
-	return &GateOptions{backendAddressList: backendAddressList, routeType: routType}
+type GateOptions struct {
+	backendList []BackendInfo
+	routeType   RouteType
+}
+
+func NewGateOptions(backendList []BackendInfo, routType RouteType) *GateOptions {
+	return &GateOptions{backendList: backendList, routeType: routType}
 }
 
 type gateSessionHandler struct {
@@ -343,22 +349,29 @@ func newGateSessionHandler(args ...any) common.ISessionEventHandler {
 }
 
 type Gate struct {
-	serv               *server.Server
-	backendAddressList []string
-	agentGroup         *client.AgentGroup
+	serv       *server.Server
+	options    *GateOptions
+	agentGroup *client.AgentGroup
 }
 
 func NewGate(goptions *GateOptions, options ...common.Option) *Gate {
 	var gate = &Gate{
-		backendAddressList: goptions.backendAddressList,
-		agentGroup:         client.NewAgentGroup(getNextAgentGroupId()),
+		options:    goptions,
+		agentGroup: client.NewAgentGroup(getNextAgentGroupId()),
 	}
 	gate.serv = server.NewServer(newGateSessionHandler, server.WithNewSessionHandlerFuncArgs(gate.agentGroup, goptions.routeType), common.WithAutoReconnect(true), common.WithTickSpan(DefaultCheckCacheDataTick))
 	return gate
 }
 
 func (g *Gate) ListenAndServe(address string) error {
-	g.agentGroup.DialAsync(g.backendAddressList, 0, func(err error) {
+	var addressList []string
+	for i := 0; i < len(g.options.backendList); i++ {
+		bi := g.options.backendList[i]
+		for j := 0; j < int(bi.ConnNum); j++ {
+			addressList = append(addressList, bi.Address)
+		}
+	}
+	g.agentGroup.DialAsync(addressList, 0, func(err error) {
 		log.Infof("gate: dial err: %v", err)
 	})
 	return g.serv.ListenAndServe(address)
