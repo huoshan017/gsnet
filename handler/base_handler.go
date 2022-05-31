@@ -74,6 +74,7 @@ const (
 type DefaultBasePacketHandler struct {
 	rtype              roleType
 	sess               common.ISession
+	conn               common.IConn
 	packetEventHandler IPacketEventHandler
 	argsGetter         IPacketBuilderArgsGetter
 	resendEventHandler common.IResendEventHandler
@@ -90,9 +91,15 @@ func NewDefaultBasePacketHandler4Client(
 	packetEventHandler IPacketEventHandler,
 	resendEventHandler common.IResendEventHandler,
 	options *common.Options) *DefaultBasePacketHandler {
+	var conn common.IConn
+	connGetter, o := sess.(common.IConnGetter)
+	if o {
+		conn = connGetter.Conn()
+	}
 	return &DefaultBasePacketHandler{
 		rtype:              roleTypeClient,
 		sess:               sess,
+		conn:               conn,
 		packetEventHandler: packetEventHandler,
 		resendEventHandler: resendEventHandler,
 		options:            options,
@@ -107,9 +114,15 @@ func NewDefaultBasePacketHandler4Server(
 	resendEventHandler common.IResendEventHandler,
 	options *common.Options,
 	reconnInfoMap sync.Map) *DefaultBasePacketHandler {
+	var conn common.IConn
+	connGetter, o := sess.(common.IConnGetter)
+	if o {
+		conn = connGetter.Conn()
+	}
 	return &DefaultBasePacketHandler{
 		rtype:              roleTypeServer,
 		sess:               sess,
+		conn:               conn,
 		argsGetter:         argsGetter,
 		resendEventHandler: resendEventHandler,
 		options:            options,
@@ -307,7 +320,7 @@ func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 		}
 	}
 	if h.resendEventHandler != nil {
-		err = h.resendEventHandler.OnUpdate(h.sess.Conn())
+		err = h.resendEventHandler.OnUpdate(h.conn)
 	}
 	return err
 }
@@ -329,7 +342,11 @@ func (h *DefaultBasePacketHandler) sendReconnectEnd() error {
 }
 
 func (h *DefaultBasePacketHandler) sendHandshake() error {
-	return h.sess.Conn().Send(packet.PacketHandshake, []byte{}, false)
+	connGetter, o := h.sess.(common.IConnGetter)
+	if !o {
+		return nil
+	}
+	return connGetter.Conn().Send(packet.PacketHandshake, []byte{}, false)
 }
 
 func (h *DefaultBasePacketHandler) sendHandshakeAck() error {
@@ -357,13 +374,13 @@ func (h *DefaultBasePacketHandler) sendHandshakeAck() error {
 	if err != nil {
 		return err
 	}
-	return h.sess.Conn().Send(packet.PacketHandshakeAck, data, false)
+	return h.conn.Send(packet.PacketHandshakeAck, data, false)
 }
 
 func (h *DefaultBasePacketHandler) sendHeartbeat() error {
-	return h.sess.Conn().Send(packet.PacketHeartbeat, []byte{}, false)
+	return h.conn.Send(packet.PacketHeartbeat, []byte{}, false)
 }
 
 func (h *DefaultBasePacketHandler) sendHeartbeatAck() error {
-	return h.sess.Conn().Send(packet.PacketHeartbeatAck, []byte{}, false)
+	return h.conn.Send(packet.PacketHeartbeatAck, []byte{}, false)
 }

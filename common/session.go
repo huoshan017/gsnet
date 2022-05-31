@@ -172,6 +172,11 @@ func NewAgentSession(agentSessionId uint32, sess ISession) *AgentSession {
 	}
 }
 
+func (sc *AgentSession) Reset(agentSessionId uint32, sess ISession) {
+	sc.agentSessionId = agentSessionId
+	sc.sess = sess
+}
+
 func (sc *AgentSession) GetId() uint64 {
 	return sc.sess.GetId()
 }
@@ -180,11 +185,11 @@ func (sc *AgentSession) GetKey() uint64 {
 	return sc.sess.GetKey()
 }
 
-func (sc *AgentSession) Conn() IConn {
-	return sc.sess.Conn()
-}
+//func (sc *AgentSession) Conn() IConn {
+//	return sc.sess.Conn()
+//}
 
-func (sc *AgentSession) AgentSessionId() uint32 {
+func (sc *AgentSession) GetAgentId() uint32 {
 	return sc.agentSessionId
 }
 

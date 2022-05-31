@@ -25,6 +25,8 @@ const (
 	PacketReconnectAck       PacketType = 6    // 重连回应
 	PacketReconnectTransport PacketType = 7    // 重连数据传输
 	PacketReconnectEnd       PacketType = 8    // 重连结束
+	PacketAgentConnect       PacketType = 50   // 代理连接
+	PacketAgentDisconnect    PacketType = 51   // 代理断开
 	PacketSentAck            PacketType = 100  // 发送回应
 )
 

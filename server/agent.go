@@ -68,6 +68,7 @@ func (h *commonHandler) OnError(err error) {
 type serverHandler struct {
 	commonHandler
 	packetHandle func(common.ISession, packet.IPacket) error
+	agentSess    *common.AgentSession
 }
 
 func (h *serverHandler) setPacketHandle(handle func(common.ISession, packet.IPacket) error) {
@@ -87,8 +88,12 @@ func (h *serverHandler) OnPacket(sess common.ISession, pak packet.IPacket) error
 		p := packet.BytesPacket(bpak.Data()[4:])
 		pak = &p
 	}
-	agentSess := common.NewAgentSession(agentId, sess)
-	return h.packetHandle(agentSess, pak)
+	if h.agentSess == nil {
+		h.agentSess = common.NewAgentSession(agentId, sess)
+	} else {
+		h.agentSess.Reset(agentId, sess)
+	}
+	return h.packetHandle(h.agentSess, pak)
 }
 
 func newServerHandler(handler common.ISessionEventHandler) *serverHandler {

@@ -47,7 +47,7 @@ type IConn interface {
 type ISession interface {
 	GetId() uint64
 	GetKey() uint64
-	Conn() IConn
+	//Conn() IConn
 	Send([]byte, bool) error
 	SendBytesArray([][]byte, bool) error
 	SendPoolBuffer(*[]byte) error
@@ -61,6 +61,17 @@ type ISession interface {
 	GetPacketChannel() chan IdWithPacket
 	SetUserData(string, any)
 	GetUserData(string) any
+}
+
+// 连接提取器
+type IConnGetter interface {
+	Conn() IConn
+}
+
+// 代理会话接口
+type IAgentSession interface {
+	ISession
+	GetAgentId() uint32
 }
 
 // 会话处理器接口

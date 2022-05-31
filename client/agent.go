@@ -206,7 +206,7 @@ func (c *AgentClient) BoundServerSession(sess common.ISession, handle func(commo
 
 func (c *AgentClient) UnboundServerSession(sess common.ISession, asess *common.AgentSession) {
 	sess.RemoveInboundHandle(c.id)
-	c.pakChans.Delete(asess.AgentSessionId())
+	c.pakChans.Delete(asess.GetAgentId())
 }
 
 func (c *AgentClient) SetConnectHandle(handle func(common.ISession)) {

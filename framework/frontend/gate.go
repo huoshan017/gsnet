@@ -309,7 +309,7 @@ func (h *gateSessionHandler) OnPacketFromBackEnd(sess common.ISession, agentId i
 		copyData = pak.MMType() != packet.MemoryManagementSystemGC
 	}
 	err := sess.Send(data, copyData)
-	if err == nil {
+	if err == nil && h.routeType == RouteTypeRandom {
 		err = h.checkSendCacheData(sess)
 	}
 	return err

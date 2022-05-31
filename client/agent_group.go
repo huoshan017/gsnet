@@ -46,7 +46,12 @@ func (ag *AgentGroup) DialAsync(addressList []string, timeout time.Duration, cal
 	for i := 0; i < len(addressList); i++ {
 		agent := NewAgentClient(common.WithAutoReconnect(true))
 		agent.SetConnectHandle(func(sess common.ISession) {
-			log.Infof("agent session(%v) connected %v", sess.GetId(), sess.Conn().RemoteAddr())
+			connGetter, o := sess.(common.IConnGetter)
+			if o {
+				log.Infof("agent session(%v) connected %v", sess.GetId(), connGetter.Conn().RemoteAddr())
+			} else {
+				log.Infof("agent session(%v) connected", sess.GetId())
+			}
 		})
 		agent.SetReadyHandle(func(sess common.ISession) {
 			ag.addAgent(agent)
