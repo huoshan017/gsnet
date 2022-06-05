@@ -77,19 +77,19 @@ func (s *Session) SendPoolBufferArray(pBytesArray []*[]byte) error {
 	return s.conn.SendPoolBufferArray(packet.PacketNormalData, pBytesArray, packet.MemoryManagementPoolUserManualFree)
 }
 
-func (s *Session) Close() {
+func (s *Session) Close() error {
 	s.chPak = nil
 	if s.resendData != nil {
 		s.resendData.Dispose()
 	}
-	s.conn.Close()
+	return s.conn.Close()
 }
 
-func (s *Session) CloseWaitSecs(secs int) {
+func (s *Session) CloseWaitSecs(secs int) error {
 	if s.resendData != nil {
 		s.resendData.Dispose()
 	}
-	s.conn.CloseWait(secs)
+	return s.conn.CloseWait(secs)
 }
 
 func (s *Session) IsClosed() bool {
@@ -234,12 +234,12 @@ func (as *AgentSession) SendPoolBufferArray(bufferArray []*[]byte) error {
 	return as.sess.SendPoolBufferArray(bufferArray)
 }
 
-func (as *AgentSession) Close() {
-	as.sess.Close()
+func (as *AgentSession) Close() error {
+	return as.sess.Close()
 }
 
-func (sc *AgentSession) CloseWaitSecs(secs int) {
-	sc.sess.CloseWaitSecs(secs)
+func (sc *AgentSession) CloseWaitSecs(secs int) error {
+	return sc.sess.CloseWaitSecs(secs)
 }
 
 func (sc *AgentSession) IsClosed() bool {

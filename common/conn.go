@@ -256,17 +256,17 @@ func (c *Conn) writeLoop() {
 }
 
 // Conn.Close close connection
-func (c *Conn) Close() {
-	c.closeWait(0)
+func (c *Conn) Close() error {
+	return c.closeWait(0)
 }
 
 // Conn.CloseWait close connection wait seconds
-func (c *Conn) CloseWait(secs int) {
-	c.closeWait(secs)
+func (c *Conn) CloseWait(secs int) error {
+	return c.closeWait(secs)
 }
 
 // Conn.closeWait implementation for close connection
-func (c *Conn) closeWait(secs int) {
+func (c *Conn) closeWait(secs int) error {
 	defer func() {
 		// 清理接收通道内存池分配的内存
 		for d := range c.recvCh {
@@ -275,13 +275,13 @@ func (c *Conn) closeWait(secs int) {
 	}()
 
 	if !atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
-		return
+		return nil
 	}
 	if secs != 0 {
 		c.conn.(*net.TCPConn).SetLinger(secs)
 	}
 	// 连接断开
-	c.conn.Close()
+	err := c.conn.Close()
 	// 停止定时器
 	if c.ticker != nil {
 		c.ticker.Stop()
@@ -294,6 +294,7 @@ func (c *Conn) closeWait(secs int) {
 			close(c.sendCh)
 		}
 	}
+	return err
 }
 
 // Conn.IsClosed the connection is closed

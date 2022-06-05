@@ -271,31 +271,32 @@ func (c *SimpleConn) writeBytes(data []byte) (err error) {
 }
 
 // 正常关闭
-func (c *SimpleConn) Close() {
-	c.closeWait(0)
+func (c *SimpleConn) Close() error {
+	return c.closeWait(0)
 }
 
 // 等待關閉
-func (c *SimpleConn) CloseWait(secs int) {
-	c.closeWait(secs)
+func (c *SimpleConn) CloseWait(secs int) error {
+	return c.closeWait(secs)
 }
 
 // 關閉
-func (c *SimpleConn) closeWait(secs int) {
+func (c *SimpleConn) closeWait(secs int) error {
 	if !atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
-		return
+		return nil
 	}
 	if secs != 0 {
 		c.conn.(*net.TCPConn).SetLinger(secs)
 	}
 	// 连接断开
-	c.conn.Close()
+	err := c.conn.Close()
 	// 停止定时器
 	if c.ticker != nil {
 		c.ticker.Stop()
 	}
 	close(c.closeCh)
 	close(c.sendCh)
+	return err
 }
 
 // 是否关闭

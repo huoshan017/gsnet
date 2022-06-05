@@ -31,8 +31,8 @@ type IConn interface {
 	LocalAddr() net.Addr
 	RemoteAddr() net.Addr
 	Run()
-	Close()
-	CloseWait(int)
+	Close() error
+	CloseWait(int) error
 	IsClosed() bool
 	Recv() (packet.IPacket, error)
 	RecvNonblock() (packet.IPacket, error)
@@ -52,8 +52,8 @@ type ISession interface {
 	SendBytesArray([][]byte, bool) error
 	SendPoolBuffer(*[]byte) error
 	SendPoolBufferArray([]*[]byte) error
-	Close()
-	CloseWaitSecs(int)
+	Close() error
+	CloseWaitSecs(int) error
 	IsClosed() bool
 	AddInboundHandle(int32, func(ISession, int32, packet.IPacket) error)
 	RemoveInboundHandle(int32)
