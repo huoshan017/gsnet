@@ -278,7 +278,9 @@ func (c *Conn) closeWait(secs int) error {
 		return nil
 	}
 	if secs != 0 {
-		c.conn.(*net.TCPConn).SetLinger(secs)
+		if conn, o := c.conn.(*net.TCPConn); o {
+			conn.SetLinger(secs)
+		}
 	}
 	// 连接断开
 	err := c.conn.Close()

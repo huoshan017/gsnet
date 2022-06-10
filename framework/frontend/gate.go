@@ -250,13 +250,14 @@ func (h *gateSessionHandler) OnPacket(sess common.ISession, pak packet.IPacket) 
 		return nil
 	}
 
+	err := agentSess.Send(pak.Data(), func() bool {
+		return pak.MMType() != packet.MemoryManagementSystemGC
+	}())
+
 	// 同一Session的逻辑在一个goroutine中执行，所以其"发送消息"的顺序可以保证
 	// 当从多个后端随机选择一个向其发送消息时，"返回的消息"顺序是无法确定的
 	// 因此需要保存一个发送的队列，对返回的消息排序后再回给客户端
 	// 这个队列只要记录后端服务器对应的代理客户端id，就能保证顺序性
-	err := agentSess.Send(pak.Data(), func() bool {
-		return pak.MMType() != packet.MemoryManagementSystemGC
-	}())
 	if err == nil && h.routeType == RouteTypeRandom {
 		// 记录发送的代理客户端id
 		if !h.sequenceIds.write(agentId) {
