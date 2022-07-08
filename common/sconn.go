@@ -103,12 +103,12 @@ func NewSimpleConn(conn net.Conn, options Options) *SimpleConn {
 	}
 
 	if c.options.recvChanLen <= 0 {
-		c.options.recvChanLen = DefaultConnRecvChanLen
+		c.options.recvChanLen = DefaultConnRecvListLen
 	}
 	c.recvCh = make(chan packet.IPacket, c.options.recvChanLen)
 
 	if c.options.sendChanLen <= 0 {
-		c.options.sendChanLen = DefaultConnSendChanLen
+		c.options.sendChanLen = DefaultConnSendListLen
 	}
 	c.sendCh = make(chan []byte, c.options.sendChanLen)
 
@@ -349,7 +349,7 @@ func (c *SimpleConn) SendNonblock(pt packet.Packet, data []byte, toCopy bool) er
 		return c.genErrConnClosed()
 	case c.sendCh <- data:
 	default:
-		return ErrSendChanFull
+		return ErrSendListFull
 	}
 	return nil
 }
@@ -388,7 +388,7 @@ func (c *SimpleConn) RecvNonblock() (packet.IPacket, error) {
 			return nil, c.genErrConnClosed()
 		}
 	default:
-		return nil, ErrRecvChanEmpty
+		return nil, ErrRecvListEmpty
 	}
 	return data, nil
 }

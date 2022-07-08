@@ -60,7 +60,7 @@ func NewConn(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Con
 	}
 
 	if c.options.GetRecvChanLen() <= 0 {
-		c.options.SetRecvChanLen(DefaultConnRecvChanLen)
+		c.options.SetRecvChanLen(DefaultConnRecvListLen)
 	}
 	c.recvCh = make(chan packet.IPacket, c.options.recvChanLen)
 
@@ -68,7 +68,7 @@ func NewConn(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Con
 		c.csendList = newSendListFuncMap[c.options.GetSendListMode()]()
 	} else {
 		if c.options.GetSendChanLen() <= 0 {
-			c.options.SetSendChanLen(DefaultConnSendChanLen)
+			c.options.SetSendChanLen(DefaultConnSendListLen)
 		}
 		c.sendCh = make(chan wrapperSendData, c.options.sendChanLen)
 	}
@@ -373,9 +373,7 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 			if resendEventHandler != nil && pt == packet.PacketNormalData {
 				resendEventHandler.OnSent(sd.data, sd.pt_mmt)
 			}
-			if !c.csendList.PushBack(sd) {
-				return c.genErrConnClosed()
-			}
+			err = c.csendList.PushBack(sd)
 		}
 	} else {
 		select {
@@ -391,9 +389,11 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 		case <-c.closeCh:
 			return c.genErrConnClosed()
 		case c.sendCh <- getWrapperSendData(pt, data, datas, copyData, pData, pDataArray, mmType, false):
+		default:
+			err = ErrSendListFull
 		}
 	}
-	return nil
+	return err
 }
 
 // Conn.SendNonblock send data no bloacked (非阻塞发送)
@@ -415,7 +415,7 @@ func (c *Conn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) er
 		err = c.genErrConnClosed()
 	case c.sendCh <- getWrapperSendBytes(pt, data, copyData, false):
 	default:
-		err = ErrSendChanFull
+		err = ErrSendListFull
 	}
 	return err
 }
@@ -475,7 +475,7 @@ func (c *Conn) RecvNonblock() (packet.IPacket, error) {
 			err = c.genErrConnClosed()
 		}
 	default:
-		err = ErrRecvChanEmpty
+		err = ErrRecvListEmpty
 	}
 	return pak, err
 }

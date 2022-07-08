@@ -40,8 +40,8 @@ func testSendList(t ITest, sendList ISendList) {
 	go func() {
 		i := 0
 		for ; i < num; i++ {
-			if !sendList.PushBack(nullWrapperSendData) {
-				t.Errorf("num i %v, unlimited channel closed", i)
+			if err := sendList.PushBack(nullWrapperSendData); err != nil {
+				t.Errorf("num i %v, unlimited channel err %v", i, err)
 			}
 		}
 		t.Logf("write %v num", i)

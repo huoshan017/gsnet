@@ -99,17 +99,27 @@ type slist struct {
 	head   *snode
 	tail   *snode
 	length int32
+	maxLen int32
 }
 
 func newSlist() *slist {
-	return &slist{}
+	return newSlistWithLength(0)
+}
+
+func newSlistWithLength(length int32) *slist {
+	return &slist{
+		maxLen: length,
+	}
 }
 
 func (s slist) getLength() int32 {
 	return s.length
 }
 
-func (s *slist) pushBack(wd wrapperSendData) {
+func (s *slist) pushBack(wd wrapperSendData) bool {
+	if s.maxLen > 0 && s.length >= s.maxLen {
+		return false
+	}
 	n := snodeGet()
 	n.value = wd
 	if s.head == nil {
@@ -120,6 +130,7 @@ func (s *slist) pushBack(wd wrapperSendData) {
 		s.tail = n
 	}
 	s.length += 1
+	return true
 }
 
 func (s *slist) popFront() (wrapperSendData, bool) {
@@ -162,7 +173,7 @@ func (s *slist) recycle() {
 
 // 发送队列接口
 type ISendList interface {
-	PushBack(wrapperSendData) bool
+	PushBack(wrapperSendData) error
 	PopFront() (wrapperSendData, bool)
 	Close()
 	Finalize()
@@ -181,15 +192,17 @@ func newCondSendList() *condSendList {
 	}
 }
 
-func (l *condSendList) PushBack(wd wrapperSendData) bool {
+func (l *condSendList) PushBack(wd wrapperSendData) error {
 	if atomic.LoadInt32(&l.quit) == 1 {
-		return false
+		return ErrConnClosed
 	}
 	l.cond.L.Lock()
 	defer l.cond.L.Unlock()
-	l.sendList.pushBack(wd)
+	if !l.sendList.pushBack(wd) {
+		return ErrSendListFull
+	}
 	l.cond.Signal()
-	return true
+	return nil
 }
 
 func (l *condSendList) PopFront() (wrapperSendData, bool) {

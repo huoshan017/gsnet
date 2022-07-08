@@ -83,22 +83,24 @@ func (c *unlimitedChan) run() {
 	}()
 }
 
-func (c *unlimitedChan) PushBack(wd wrapperSendData) bool {
+func (c *unlimitedChan) PushBack(wd wrapperSendData) error {
 	if atomic.LoadInt32(&c.closed) == 1 {
 		c.onceCloseIn.Do(func() {
 			close(c.inChan)
 		})
-		return false
+		return ErrConnClosed
 	}
 	select {
 	case <-c.closeChan:
 		c.onceCloseIn.Do(func() {
 			close(c.inChan)
 		})
-		return false
+		return ErrConnClosed
 	case c.inChan <- wd:
+	default:
+		return ErrSendListFull
 	}
-	return true
+	return nil
 }
 
 func (c *unlimitedChan) PopFront() (wrapperSendData, bool) {

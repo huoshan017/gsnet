@@ -8,8 +8,8 @@ import (
 var (
 	ErrNoError             = errors.New("no error")
 	ErrConnClosed          = errors.New("connetion is closed")
-	ErrSendChanFull        = errors.New("send chan full")
-	ErrRecvChanEmpty       = errors.New("recv chan empty")
+	ErrSendListFull        = errors.New("send list full")
+	ErrRecvListEmpty       = errors.New("recv list empty")
 	ErrCancelWait          = errors.New("cancel wait")
 	ErrResendDisable       = errors.New("resend disable")
 	ErrResendDataInvalid   = errors.New("resend data invalid")
@@ -26,8 +26,8 @@ var (
 var noDisconnectErrMap = make(map[error]struct{})
 
 func init() {
-	noDisconnectErrMap[ErrSendChanFull] = struct{}{}
-	noDisconnectErrMap[ErrRecvChanEmpty] = struct{}{}
+	noDisconnectErrMap[ErrSendListFull] = struct{}{}
+	noDisconnectErrMap[ErrRecvListEmpty] = struct{}{}
 }
 
 func RegisterNoDisconnectError(err error) {

@@ -370,7 +370,7 @@ func (c *Client) handleReady(mode int32) (bool, error) {
 		res, err = c.basePacketHandler.OnHandleHandshake(pak)
 	}
 	c.options.GetPacketPool().Put(pak)
-	if err == common.ErrRecvChanEmpty {
+	if err == common.ErrRecvListEmpty {
 		err = nil
 	}
 	return res == handler.HandshakeStateClientReady, err
@@ -402,7 +402,7 @@ func (c *Client) handle(mode int32) error {
 		}
 	}
 
-	if mode != 0 && err == common.ErrRecvChanEmpty {
+	if mode != 0 && err == common.ErrRecvListEmpty {
 		err = nil
 	}
 
