@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option go_package="../protocol";
+package protocol;
+
+message PacketHeader {
+    int32 PacketType = 1;
+    int32 CompressType = 2;
+    int32 EncryptionType = 3;
+    int32 PayloadLength = 4;
+}
