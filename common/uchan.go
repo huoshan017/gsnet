@@ -13,6 +13,7 @@ var (
 )
 
 type unlimitedChan struct {
+	maxLength   int32
 	inChan      chan wrapperSendData
 	outChan     chan wrapperSendData
 	closeChan   chan struct{}
@@ -20,8 +21,9 @@ type unlimitedChan struct {
 	onceCloseIn sync.Once
 }
 
-func newUnlimitedChan() *unlimitedChan {
+func newUnlimitedChan(maxLength int32) *unlimitedChan {
 	uc := &unlimitedChan{
+		maxLength: maxLength,
 		inChan:    make(chan wrapperSendData),
 		outChan:   make(chan wrapperSendData),
 		closeChan: make(chan struct{}),
@@ -46,7 +48,7 @@ func (c *unlimitedChan) run() {
 			}
 		}()
 
-		sendList = newSlist()
+		sendList = newSlistWithLength(c.maxLength)
 		for ok {
 			if sendList.getLength() > 0 {
 				if !peeked {

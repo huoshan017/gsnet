@@ -185,10 +185,10 @@ type condSendList struct {
 	quit     int32
 }
 
-func newCondSendList() *condSendList {
+func newCondSendList(maxLength int32) *condSendList {
 	return &condSendList{
 		cond:     sync.NewCond(&sync.Mutex{}),
-		sendList: newSlist(),
+		sendList: newSlistWithLength(maxLength),
 	}
 }
 
@@ -231,11 +231,11 @@ func (l *condSendList) Close() {
 	l.cond.Signal()
 }
 
-type newSendListFunc func() ISendList
+type newSendListFunc func(int32) ISendList
 
 var (
 	newSendListFuncMap map[int32]newSendListFunc = map[int32]newSendListFunc{
-		0: func() ISendList { return newCondSendList() },
-		1: func() ISendList { return newUnlimitedChan() },
+		0: func(maxLength int32) ISendList { return newCondSendList(maxLength) },
+		1: func(maxLength int32) ISendList { return newUnlimitedChan(maxLength) },
 	}
 )

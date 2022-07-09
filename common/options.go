@@ -28,8 +28,8 @@ type Options struct {
 	readTimeout                time.Duration
 	writeTimeout               time.Duration
 	tickSpan                   time.Duration
-	sendChanLen                int
-	recvChanLen                int
+	sendListLen                int
+	recvListLen                int
 	sendListMode               int32                  // 发送队列模式
 	writeBuffSize              int                    // 写缓冲大小
 	readBuffSize               int                    // 都缓冲大小
@@ -120,20 +120,20 @@ func (options *Options) SetTickSpan(span time.Duration) {
 	options.tickSpan = span
 }
 
-func (options *Options) GetSendChanLen() int {
-	return options.sendChanLen
+func (options *Options) GetSendListLen() int {
+	return options.sendListLen
 }
 
-func (options *Options) SetSendChanLen(chanLen int) {
-	options.sendChanLen = chanLen
+func (options *Options) SetSendListLen(listLen int) {
+	options.sendListLen = listLen
 }
 
-func (options *Options) GetRecvChanLen() int {
-	return options.recvChanLen
+func (options *Options) GetRecvListLen() int {
+	return options.recvListLen
 }
 
-func (options *Options) SetRecvChanLen(chanLen int) {
-	options.recvChanLen = chanLen
+func (options *Options) SetRecvListLen(listLen int) {
+	options.recvListLen = listLen
 }
 
 func (options *Options) GetSendListMode() int32 {
@@ -342,15 +342,15 @@ func WithTickSpan(span time.Duration) Option {
 	}
 }
 
-func WithSendChanLen(chanLen int) Option {
+func WithSendListLen(listLen int) Option {
 	return func(options *Options) {
-		options.SetSendChanLen(chanLen)
+		options.SetSendListLen(listLen)
 	}
 }
 
-func WithRecvChanLen(chanLen int) Option {
+func WithRecvListLen(listLen int) Option {
 	return func(options *Options) {
-		options.SetRecvChanLen(chanLen)
+		options.SetRecvListLen(listLen)
 	}
 }
 

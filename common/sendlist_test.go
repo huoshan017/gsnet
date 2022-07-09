@@ -53,17 +53,17 @@ func testSendList(t ITest, sendList ISendList) {
 }
 
 func TestCSendList(t *testing.T) {
-	testSendList(t, newCondSendList())
+	testSendList(t, newCondSendList(0))
 }
 
 func TestUChan(t *testing.T) {
-	testSendList(t, newUnlimitedChan())
+	testSendList(t, newUnlimitedChan(0))
 }
 
 func BenchmarkCSendList(b *testing.B) {
-	testSendList(b, newCondSendList())
+	testSendList(b, newCondSendList(0))
 }
 
 func BenchmarkUChan(b *testing.B) {
-	testSendList(b, newUnlimitedChan())
+	testSendList(b, newUnlimitedChan(0))
 }

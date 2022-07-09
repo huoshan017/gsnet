@@ -59,18 +59,18 @@ func NewConn(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Con
 		c.reader = bufio.NewReaderSize(conn, c.options.readBuffSize)
 	}
 
-	if c.options.GetRecvChanLen() <= 0 {
-		c.options.SetRecvChanLen(DefaultConnRecvListLen)
+	if c.options.GetRecvListLen() <= 0 {
+		c.options.SetRecvListLen(DefaultConnRecvListLen)
 	}
-	c.recvCh = make(chan packet.IPacket, c.options.recvChanLen)
+	c.recvCh = make(chan packet.IPacket, c.options.recvListLen)
 
 	if c.options.GetSendListMode() >= 0 {
-		c.csendList = newSendListFuncMap[c.options.GetSendListMode()]()
+		c.csendList = newSendListFuncMap[c.options.GetSendListMode()](int32(c.options.sendListLen))
 	} else {
-		if c.options.GetSendChanLen() <= 0 {
-			c.options.SetSendChanLen(DefaultConnSendListLen)
+		if c.options.GetSendListLen() <= 0 {
+			c.options.SetSendListLen(DefaultConnSendListLen)
 		}
-		c.sendCh = make(chan wrapperSendData, c.options.sendChanLen)
+		c.sendCh = make(chan wrapperSendData, c.options.sendListLen)
 	}
 
 	if tcpConn, ok := c.conn.(*net.TCPConn); ok {

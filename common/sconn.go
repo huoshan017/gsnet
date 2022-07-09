@@ -102,15 +102,15 @@ func NewSimpleConn(conn net.Conn, options Options) *SimpleConn {
 		c.reader = bufio.NewReaderSize(conn, c.options.readBuffSize)
 	}
 
-	if c.options.recvChanLen <= 0 {
-		c.options.recvChanLen = DefaultConnRecvListLen
+	if c.options.recvListLen <= 0 {
+		c.options.recvListLen = DefaultConnRecvListLen
 	}
-	c.recvCh = make(chan packet.IPacket, c.options.recvChanLen)
+	c.recvCh = make(chan packet.IPacket, c.options.recvListLen)
 
-	if c.options.sendChanLen <= 0 {
-		c.options.sendChanLen = DefaultConnSendListLen
+	if c.options.sendListLen <= 0 {
+		c.options.sendListLen = DefaultConnSendListLen
 	}
-	c.sendCh = make(chan []byte, c.options.sendChanLen)
+	c.sendCh = make(chan []byte, c.options.sendListLen)
 
 	if c.dataProto == nil {
 		c.dataProto = &DefaultDataProto{}
