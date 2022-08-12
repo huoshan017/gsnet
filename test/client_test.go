@@ -112,7 +112,7 @@ func createTestClientUseRun(t *testing.T, totalNum int32) *client.Client {
 }
 
 func TestClientUseRun(t *testing.T) {
-	ts := createTestServer(t, 1)
+	ts := createTestServer(t, 1, 0)
 	err := ts.Listen(testAddress)
 	if err != nil {
 		t.Errorf("server for TestClientUseRun listen err: %+v", err)
@@ -206,8 +206,8 @@ func (h *testClientUseUpdateHandler) OnPacket(sess common.ISession, packet packe
 	h.compareNum += 1
 	if h.compareNum >= h.totalNum {
 		sess.Close()
+		h.t.Logf("compare %v num, to end", h.compareNum)
 	}
-	//h.t.Logf("compared %v", h.compareNum)
 	return nil
 }
 
@@ -222,13 +222,13 @@ func (h *testClientUseUpdateHandler) OnError(err error) {
 	}
 }
 
-func createTestClientUseUpdate(t *testing.T, state int32, userData any, count int32) *client.Client {
+func createTestClientUseUpdate(t *testing.T, state int32, userData any, count int32, connType int) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseUpdateHandler(t, state, userData, count), client.WithRunMode(client.RunModeOnlyUpdate))
+	return client.NewClient(newTestClientUseUpdateHandler(t, state, userData, count), client.WithRunMode(client.RunModeOnlyUpdate), common.WithConnDataType(connType))
 }
 
-func TestClientUseUpdate(t *testing.T) {
-	ts := createTestServer(t, 1)
+func testClientUseUpdate(t *testing.T, connType int) {
+	ts := createTestServer(t, 1, connType)
 	err := ts.Listen(testAddress)
 	if err != nil {
 		t.Errorf("server for test client listen err: %+v", err)
@@ -242,7 +242,7 @@ func TestClientUseUpdate(t *testing.T) {
 
 	sendNum := 10
 	sd := createSendDataInfo(int32(sendNum))
-	tc := createTestClientUseUpdate(t, 2, sd, 100)
+	tc := createTestClientUseUpdate(t, 2, sd, 100, connType)
 	err = tc.Connect(testAddress)
 	if err != nil {
 		t.Errorf("test client connect err: %+v", err)
@@ -272,8 +272,16 @@ func TestClientUseUpdate(t *testing.T) {
 	t.Logf("test done")
 }
 
+func TestClientUseUpdate(t *testing.T) {
+	testClientUseUpdate(t, 0)
+}
+
+func TestClientWithKConnUseUpdate(t *testing.T) {
+	testClientUseUpdate(t, 2)
+}
+
 func TestClientAsyncConnect(t *testing.T) {
-	ts := createTestServer(t, 1)
+	ts := createTestServer(t, 1, 0)
 	err := ts.Listen(testAddress)
 	if err != nil {
 		t.Errorf("server for test client listen err: %+v", err)
@@ -287,7 +295,7 @@ func TestClientAsyncConnect(t *testing.T) {
 
 	sendNum := 10
 	sd := createSendDataInfo(int32(sendNum))
-	tc := createTestClientUseUpdate(t, 2, sd, 100)
+	tc := createTestClientUseUpdate(t, 2, sd, 100, 0)
 	tc.ConnectAsync(testAddress, 0, func(err error) {
 		if err != nil {
 			t.Logf("test client connect async err %v", err)
@@ -320,7 +328,7 @@ func TestClientAsyncConnect(t *testing.T) {
 }
 
 func TestConnectAsyncConnect2(t *testing.T) {
-	ts := createTestServer(t, 1)
+	ts := createTestServer(t, 1, 0)
 	err := ts.Listen(testAddress)
 	if err != nil {
 		t.Errorf("server for test client listen err: %+v", err)
@@ -413,7 +421,7 @@ func createTestClientUseReconnect(t *testing.T, totalNum int32) *client.Client {
 }
 
 func TestClientReconnect(t *testing.T) {
-	ts := createTestServer(t, 1)
+	ts := createTestServer(t, 1, 0)
 	err := ts.Listen(testAddress)
 	if err != nil {
 		t.Errorf("server for test client listen err: %+v", err)

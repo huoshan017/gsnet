@@ -6,12 +6,18 @@ type IPacket interface {
 	MMType() MemoryManagementType
 	Data() []byte
 	PData() *[]byte
+	Release() bool
 }
 
 // packet池
 type IPacketPool interface {
 	Get() IPacket
+	GetWithType(PoolPacketType) IPacket
 	Put(IPacket)
+}
+
+type IPacketSharedPool interface {
+	GetShared() *SharedPacket
 }
 
 type IPacketBaseHeader interface {

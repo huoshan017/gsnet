@@ -212,21 +212,27 @@ func (s *Server) handleConn(c net.Conn) {
 		conn          common.IConn
 		resendData    *common.ResendData
 		packetBuilder *common.PacketBuilder
+		packetCodec   *common.PacketCodec
 	)
 
 	// 创建连接
 	switch s.options.GetConnDataType() {
 	case 1:
 		conn = common.NewSimpleConn(c, s.options.Options)
+	case 2:
+		packetCodec = common.NewPacketCodec(&s.options.Options)
+		conn = common.NewKConn(c, packetCodec, &s.options.Options)
 	default:
 		packetBuilder = common.NewPacketBuilder(&s.options.Options)
 		conn = common.NewConn(c, packetBuilder, &s.options.Options)
 	}
 
 	// 创建包创建器参数获取者
-	var argsGetter handler.IPacketBuilderArgsGetter
+	var argsGetter handler.IPacketArgsGetter
 	if packetBuilder != nil {
-		argsGetter = &packetBuilderArgsGetter{packetBuilder}
+		argsGetter = &packetArgsGetter{packetBuilder.BasePacketBuilder}
+	} else if packetCodec != nil {
+		argsGetter = &packetArgsGetter{packetCodec.BasePacketBuilder}
 	}
 
 	// 重传数据
@@ -365,11 +371,11 @@ func (s *Server) handleConnClose(err *sessionCloseInfo) {
 	}
 }
 
-type packetBuilderArgsGetter struct {
-	getter *common.PacketBuilder
+type packetArgsGetter struct {
+	getter *common.BasePacketBuilder
 }
 
-func (h *packetBuilderArgsGetter) Get() []any {
+func (h *packetArgsGetter) Get() []any {
 	return []any{h.getter.GetCryptoKey()}
 }
 

@@ -138,7 +138,7 @@ func (h *testClientHandler) OnPacket(sess common.ISession, packet packet.IPacket
 			panic(err)
 		}
 	}
-	h.t.Logf("session %v  OnPacket compared %v", sess.GetId(), data)
+	//h.t.Logf("session %v  OnPacket compared %v", sess.GetId(), data)
 	return nil
 }
 
@@ -218,25 +218,25 @@ func (h *testServerHandler) OnReady(sess common.ISession) {
 }
 
 func (h *testServerHandler) OnDisconnect(sess common.ISession, err error) {
-	if h.state == 1 {
-		if h.t != nil {
-			h.t.Logf("client(session_id: %v) disconnected, err: %v", sess.GetId(), err)
-		} else if h.b != nil {
-			h.b.Logf("client(session_id: %v) disconnected, err: %v", sess.GetId(), err)
-		}
+	if h.t != nil {
+		h.t.Logf("client(session_id: %v) disconnected, err: %v", sess.GetId(), err)
+	} else if h.b != nil {
+		h.b.Logf("client(session_id: %v) disconnected, err: %v", sess.GetId(), err)
 	}
 }
 
 func (h *testServerHandler) OnPacket(sess common.ISession, packet packet.IPacket) error {
 	err := sess.Send(packet.Data(), true)
 	if err != nil {
-		str := fmt.Sprintf("OnData with session %v send err: %v", sess.GetId(), err)
-		if h.state == 1 {
-			if h.t != nil {
-				h.t.Logf(str)
-			} else if h.b != nil {
-				h.b.Logf(str)
-			}
+		str := fmt.Sprintf("OnPacket with session %v send err: %v", sess.GetId(), err)
+		if h.t != nil {
+			h.t.Logf(str)
+		} else if h.b != nil {
+			h.b.Logf(str)
+		}
+	} else {
+		if h.t != nil {
+			//h.t.Logf("OnPacket session %v data %v", sess.GetId(), packet.Data())
 		}
 	}
 	return err
@@ -256,12 +256,12 @@ func (h *testServerHandler) OnError(err error) {
 	}
 }
 
-func createTestServer(t *testing.T, state int32) *server.Server {
+func createTestServer(t *testing.T, state int32, connType int) *server.Server {
 	return server.NewServer(newTestServerHandler,
 		server.WithNewSessionHandlerFuncArgs(t, state),
 		common.WithReadBuffSize(10*4096),
 		common.WithWriteBuffSize(5*4096),
-		common.WithConnDataType(connDataType),
+		common.WithConnDataType(connType),
 		common.WithPacketCompressType(packet.CompressSnappy),
 		common.WithPacketEncryptionType(packet.EncryptionDes),
 	)

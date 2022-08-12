@@ -1,6 +1,8 @@
 package common
 
 import (
+	"net"
+
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/pool"
 )
@@ -104,4 +106,11 @@ func BufferToUint32(buffer []byte) uint32 {
 		num += (uint32(buffer[i]) << (8 * i))
 	}
 	return num
+}
+
+func IsTimeoutError(err error) bool {
+	if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
+		return true
+	}
+	return false
 }

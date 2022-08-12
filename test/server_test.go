@@ -13,7 +13,7 @@ import (
 func testServer(t *testing.T, state int32, typ int32) {
 	var ts []*server.Server
 	if typ == 0 {
-		ts = []*server.Server{createTestServer(t, state)}
+		ts = []*server.Server{createTestServer(t, state, 2)}
 	} else if typ == 1 {
 		ts = []*server.Server{createTestServerWithHandler(t, state)}
 	} else if typ == 2 {
@@ -41,7 +41,7 @@ func testServer(t *testing.T, state int32, typ int32) {
 
 	t.Logf("test server is running")
 
-	clientNum := 4000
+	clientNum := 40
 	sendNum := 1000
 	n := int32(0)
 	var wg sync.WaitGroup
@@ -90,7 +90,7 @@ func TestServer(t *testing.T) {
 }
 
 func TestServer2(t *testing.T) {
-	srv := createTestServer(t, 1)
+	srv := createTestServer(t, 1, 0)
 	err := srv.Listen(testAddress)
 	if err != nil {
 		t.Errorf("test server listen address %v err: %v", testAddress, err)

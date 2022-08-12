@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+option go_package="../protocol";
+package protocol;
+
+message KcpSendSyn {
+}
+
+message KcpSendSynAck {
+    uint32 Conversation = 1;
+}
+
+message KcpSendAck {
+    uint32 Conversation = 1;
+}

@@ -3,7 +3,9 @@ package common
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -12,39 +14,69 @@ import (
 	"github.com/huoshan017/gsnet/pool"
 )
 
-type ISenderWithResend interface {
-	send([]byte, bool, IResendEventHandler) error
-	sendBytesArray([][]byte, bool, IResendEventHandler) error
-	sendPoolBuffer(*[]byte, packet.MemoryManagementType, IResendEventHandler) error
-	sendPoolBufferArray([]*[]byte, packet.MemoryManagementType, IResendEventHandler) error
+const (
+	chunkBufferDefaultLength = 4096
+)
+
+type chunk struct {
+	rawbuf  *[]byte
+	datalen int32
+	isend   bool
 }
 
-// Conn struct
-type Conn struct {
-	conn          net.Conn
-	options       *Options
-	writer        *bufio.Writer
-	reader        *bufio.Reader
-	recvCh        chan packet.IPacket  // 缓存从网络接收的数据，对应一个接收者一个发送者
-	sendCh        chan wrapperSendData // 缓存发往网络的数据，对应一个接收者一个发送者
-	csendList     ISendList            // 缓存发送队列
-	closeCh       chan struct{}        // 关闭通道
-	closed        int32                // 是否关闭
-	errCh         chan error           // 错误通道
-	errWriteCh    chan error           // 写错误通道
-	ticker        *time.Ticker         // 定时器
-	packetBuilder IPacketBuilder       // 包创建器
+var (
+	chunkPool *sync.Pool
+)
+
+func init() {
+	chunkPool = &sync.Pool{
+		New: func() any {
+			return &chunk{}
+		},
+	}
+}
+
+func getChunk() *chunk {
+	c := chunkPool.Get().(*chunk)
+	return c
+}
+
+func putChunk(c *chunk) {
+	//if c.isend {
+	//	pool.GetBuffPool().Free(c.rawbuf)
+	//}
+	c.rawbuf = nil
+	c.datalen = 0
+	c.isend = false
+	chunkPool.Put(c)
+}
+
+// KConn struct
+type KConn struct {
+	conn        net.Conn
+	options     *Options
+	writer      *bufio.Writer
+	recvCh      chan *chunk // 缓存从网络接收的数据，对应一个接收者一个发送者
+	blist       packet.BytesList
+	sendCh      chan wrapperSendData // 缓存发往网络的数据，对应一个接收者一个发送者
+	csendList   ISendList            // 缓存发送队列
+	closeCh     chan struct{}        // 关闭通道
+	closed      int32                // 是否关闭
+	errCh       chan error           // 错误通道
+	errWriteCh  chan error           // 写错误通道
+	ticker      *time.Ticker         // 定时器
+	packetCodec IPacketCodec         // 包解码器
 }
 
 // NewConn create Conn instance use resend
-func NewConn(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Conn {
-	c := &Conn{
-		conn:          conn,
-		options:       options,
-		closeCh:       make(chan struct{}),
-		errCh:         make(chan error, 1),
-		errWriteCh:    make(chan error, 1),
-		packetBuilder: packetBuilder,
+func NewKConn(conn net.Conn, packetCodec IPacketCodec, options *Options) *KConn {
+	c := &KConn{
+		conn:        conn,
+		options:     options,
+		closeCh:     make(chan struct{}),
+		errCh:       make(chan error, 1),
+		errWriteCh:  make(chan error, 1),
+		packetCodec: packetCodec,
 	}
 
 	if c.options.writeBuffSize <= 0 {
@@ -53,16 +85,11 @@ func NewConn(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Con
 		c.writer = bufio.NewWriterSize(conn, c.options.writeBuffSize)
 	}
 
-	if c.options.readBuffSize <= 0 {
-		c.reader = bufio.NewReader(conn)
-	} else {
-		c.reader = bufio.NewReaderSize(conn, c.options.readBuffSize)
-	}
-
 	if c.options.GetRecvListLen() <= 0 {
 		c.options.SetRecvListLen(DefaultConnRecvListLen)
 	}
-	c.recvCh = make(chan packet.IPacket, c.options.recvListLen)
+	c.recvCh = make(chan *chunk, c.options.recvListLen)
+	c.blist = packet.NewBytesList((packet.MaxPacketLength + chunkBufferDefaultLength - 1) / chunkBufferDefaultLength)
 
 	if c.options.GetSendListMode() >= 0 {
 		c.csendList = newSendListFuncMap[c.options.GetSendListMode()](int32(c.options.sendListLen))
@@ -103,17 +130,17 @@ func NewConn(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Con
 }
 
 // Conn.LocalAddr get local address for connection
-func (c *Conn) LocalAddr() net.Addr {
+func (c *KConn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
 // Conn.RemoteAddr get remote address for connection
-func (c *Conn) RemoteAddr() net.Addr {
+func (c *KConn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
 // Conn.Run read loop and write loop runing in goroutine
-func (c *Conn) Run() {
+func (c *KConn) Run() {
 	go c.readLoop()
 	if c.options.GetSendListMode() >= 0 {
 		go c.newWriteLoop()
@@ -123,7 +150,7 @@ func (c *Conn) Run() {
 }
 
 // Conn.readLoop read loop goroutine
-func (c *Conn) readLoop() {
+func (c *KConn) readLoop() {
 	defer func() {
 		if err := recover(); err != nil {
 			log.WithStack(err)
@@ -131,8 +158,10 @@ func (c *Conn) readLoop() {
 	}()
 
 	var (
-		pak packet.IPacket
-		err error
+		buf    *[]byte
+		offset int32
+		r      int
+		err    error
 	)
 	for err == nil {
 		if c.options.readTimeout != 0 {
@@ -141,15 +170,35 @@ func (c *Conn) readLoop() {
 				break
 			}
 		}
-		pak, err = c.packetBuilder.DecodeReadFrom(c.reader)
+		if buf == nil {
+			buf = pool.GetBuffPool().Alloc(chunkBufferDefaultLength)
+			offset = 0
+		}
+		r, err = c.conn.Read((*buf)[offset:])
 		if err == nil {
+			offset += int32(r)
+			isend := int(offset) == len(*buf)
 			select {
 			case <-c.closeCh:
-				c.options.GetPacketPool().Put(pak)
 				err = c.genErrConnClosed()
-			case c.recvCh <- pak:
+			case c.recvCh <- func() *chunk {
+				chunk := getChunk()
+				chunk.rawbuf = buf
+				chunk.datalen = int32(r)
+				chunk.isend = isend
+				//log.Infof("receive chunk %+v", *chunk)
+				return chunk
+			}():
+				if isend {
+					buf = nil
+				}
 			}
+		} else if IsTimeoutError(err) {
+			err = nil
 		}
+	}
+	if buf != nil && offset == 0 {
+		pool.GetBuffPool().Free(buf)
 	}
 	// 错误写入通道
 	if err != nil {
@@ -161,34 +210,65 @@ func (c *Conn) readLoop() {
 	close(c.recvCh)
 }
 
-func (c *Conn) realSend(d *wrapperSendData) error {
+func (c *KConn) realSend(d *wrapperSendData) error {
 	if d.data == nil {
 		panic("gsnet: wrapper send data nil")
-	}
-
-	var err error
-	if c.options.writeTimeout != 0 {
-		if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout)); err != nil {
-			return err
-		}
 	}
 
 	pt := d.getPacketType()
 	b, pb, ba, pba := d.getData()
 
+	var (
+		header []byte
+		data   []byte
+		datas  [][]byte
+		err    error
+	)
 	if b != nil {
-		err = c.packetBuilder.EncodeWriteTo(pt, b, c.writer)
+		header, data, err = c.packetCodec.Encode(pt, b)
 	} else if pb != nil {
-		err = c.packetBuilder.EncodeWriteTo(pt, *pb, c.writer)
+		header, data, err = c.packetCodec.Encode(pt, *pb)
 	} else if ba != nil {
-		err = c.packetBuilder.EncodeBytesArrayWriteTo(pt, ba, c.writer)
+		header, datas, err = c.packetCodec.EncodeBytesArray(pt, ba)
 	} else if pba != nil {
-		err = c.packetBuilder.EncodeBytesPointerArrayWriteTo(pt, pba, c.writer)
+		header, datas, err = c.packetCodec.EncodeBytesPointerArray(pt, pba)
 	}
 
 	if err == nil {
+		if c.options.writeTimeout != 0 {
+			if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout)); err != nil {
+				return err
+			}
+		}
+		_, err = c.writer.Write(header)
+		if err != nil {
+			return err
+		}
+
+		if data != nil {
+			var err error
+			if c.options.writeTimeout != 0 {
+				if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout)); err != nil {
+					return err
+				}
+			}
+			_, err = c.writer.Write(data)
+		} else if datas != nil {
+			var err error
+			if c.options.writeTimeout != 0 {
+				if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout)); err != nil {
+					return err
+				}
+			}
+			for i := 0; i < len(datas); i++ {
+				_, err = c.writer.Write(datas[i])
+				if err != nil {
+					break
+				}
+			}
+		}
 		// have data in buffer
-		if c.writer.Buffered() > 0 {
+		if err == nil && c.writer.Buffered() > 0 {
 			if c.options.writeTimeout != 0 {
 				err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
 			}
@@ -207,7 +287,7 @@ func (c *Conn) realSend(d *wrapperSendData) error {
 }
 
 // Conn.newWriteLoop new write loop goroutine
-func (c *Conn) newWriteLoop() {
+func (c *KConn) newWriteLoop() {
 	defer func() {
 		c.csendList.Finalize()
 		if err := recover(); err != nil {
@@ -232,7 +312,7 @@ func (c *Conn) newWriteLoop() {
 }
 
 // Conn.writeLoop write loop goroutine
-func (c *Conn) writeLoop() {
+func (c *KConn) writeLoop() {
 	defer func() {
 		// 退出时回收内存池分配的内存
 		for d := range c.sendCh {
@@ -257,21 +337,21 @@ func (c *Conn) writeLoop() {
 }
 
 // Conn.Close close connection
-func (c *Conn) Close() error {
+func (c *KConn) Close() error {
 	return c.closeWait(0)
 }
 
 // Conn.CloseWait close connection wait seconds
-func (c *Conn) CloseWait(secs int) error {
+func (c *KConn) CloseWait(secs int) error {
 	return c.closeWait(secs)
 }
 
 // Conn.closeWait implementation for close connection
-func (c *Conn) closeWait(secs int) error {
+func (c *KConn) closeWait(secs int) error {
 	defer func() {
 		// 清理接收通道内存池分配的内存
 		for d := range c.recvCh {
-			c.options.GetPacketPool().Put(d)
+			putChunk(d)
 		}
 	}()
 
@@ -301,52 +381,52 @@ func (c *Conn) closeWait(secs int) error {
 }
 
 // Conn.IsClosed the connection is closed
-func (c *Conn) IsClosed() bool {
+func (c *KConn) IsClosed() bool {
 	return atomic.LoadInt32(&c.closed) > 0
 }
 
 // Conn.Send send bytes data (发送数据，必須與Close函數在同一goroutine調用)
-func (c *Conn) Send(pt packet.PacketType, data []byte, copyData bool) error {
+func (c *KConn) Send(pt packet.PacketType, data []byte, copyData bool) error {
 	return c.sendData(pt, data, nil, copyData, nil, nil, packet.MemoryManagementNone, nil)
 }
 
 // Conn.SendPoolBuffer send buffer data with pool allocated (发送内存池缓存)
-func (c *Conn) SendPoolBuffer(pt packet.PacketType, pData *[]byte, mmType packet.MemoryManagementType) error {
+func (c *KConn) SendPoolBuffer(pt packet.PacketType, pData *[]byte, mmType packet.MemoryManagementType) error {
 	return c.sendData(pt, nil, nil, false, pData, nil, mmType, nil)
 }
 
 // Conn.SendBytesArray send bytes array data (发送缓冲数组)
-func (c *Conn) SendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool) error {
+func (c *KConn) SendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool) error {
 	return c.sendData(pt, nil, datas, copyData, nil, nil, packet.MemoryManagementNone, nil)
 }
 
 // Conn.SendPoolBufferArray send buffer array data with pool allocated (发送内存池缓存数组)
-func (c *Conn) SendPoolBufferArray(pt packet.PacketType, pDatas []*[]byte, mmType packet.MemoryManagementType) error {
+func (c *KConn) SendPoolBufferArray(pt packet.PacketType, pDatas []*[]byte, mmType packet.MemoryManagementType) error {
 	return c.sendData(pt, nil, nil, false, nil, pDatas, mmType, nil)
 }
 
 // Conn.send
-func (c *Conn) send(data []byte, copyData bool, resendEventHandler IResendEventHandler) error {
+func (c *KConn) send(data []byte, copyData bool, resendEventHandler IResendEventHandler) error {
 	return c.sendData(packet.PacketNormalData, data, nil, copyData, nil, nil, packet.MemoryManagementNone, resendEventHandler)
 }
 
 // Conn.sendBytesArray
-func (c *Conn) sendBytesArray(datas [][]byte, copyData bool, resendEventHandler IResendEventHandler) error {
+func (c *KConn) sendBytesArray(datas [][]byte, copyData bool, resendEventHandler IResendEventHandler) error {
 	return c.sendData(packet.PacketNormalData, nil, datas, copyData, nil, nil, packet.MemoryManagementNone, resendEventHandler)
 }
 
 // Conn.sendPoolBuffer
-func (c *Conn) sendPoolBuffer(pData *[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
+func (c *KConn) sendPoolBuffer(pData *[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
 	return c.sendData(packet.PacketNormalData, nil, nil, false, pData, nil, mmType, resendEventHandler)
 }
 
 // Conn.sendPoolBufferArray
-func (c *Conn) sendPoolBufferArray(pDatas []*[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
+func (c *KConn) sendPoolBufferArray(pDatas []*[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
 	return c.sendData(packet.PacketNormalData, nil, nil, false, nil, pDatas, mmType, resendEventHandler)
 }
 
 // Conn.sendData
-func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyData bool, pData *[]byte, pDataArray []*[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
+func (c *KConn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyData bool, pData *[]byte, pDataArray []*[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
 	}
@@ -398,7 +478,7 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 }
 
 // Conn.SendNonblock send data no bloacked (非阻塞发送)
-func (c *Conn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) error {
+func (c *KConn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
 	}
@@ -422,7 +502,7 @@ func (c *Conn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) er
 }
 
 // Conn.Recv recv packet (接收数据)
-func (c *Conn) Recv() (packet.IPacket, error) {
+func (c *KConn) Recv() (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, c.genErrConnClosed()
 	}
@@ -441,16 +521,17 @@ func (c *Conn) Recv() (packet.IPacket, error) {
 		}
 	case <-c.closeCh:
 		err = c.genErrConnClosed()
-	case pak = <-c.recvCh:
-		if pak == nil {
+	case chk := <-c.recvCh:
+		if chk == nil {
 			return nil, c.genErrConnClosed()
 		}
+		pak, err = c.recvChunk(chk)
 	}
 	return pak, err
 }
 
 // Conn.RecvNonblock recv packet no blocked (非阻塞接收数据)
-func (c *Conn) RecvNonblock() (packet.IPacket, error) {
+func (c *KConn) RecvNonblock() (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
 	}
@@ -471,10 +552,12 @@ func (c *Conn) RecvNonblock() (packet.IPacket, error) {
 		}
 	case <-c.closeCh:
 		err = c.genErrConnClosed()
-	case pak = <-c.recvCh:
-		if pak == nil {
+	case chk := <-c.recvCh:
+		if chk == nil {
 			err = c.genErrConnClosed()
+			break
 		}
+		pak, err = c.recvChunk(chk)
 	default:
 		err = ErrRecvListEmpty
 	}
@@ -482,12 +565,12 @@ func (c *Conn) RecvNonblock() (packet.IPacket, error) {
 }
 
 // Conn.genErrConnClosed generate connection closed error
-func (c *Conn) genErrConnClosed() error {
+func (c *KConn) genErrConnClosed() error {
 	return ErrConnClosed
 }
 
 // Conn.Wait wait packet or timer (等待选择结果)
-func (c *Conn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacket, int32, error) {
+func (c *KConn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacket, int32, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, 0, ErrConnClosed
 	}
@@ -497,6 +580,7 @@ func (c *Conn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacke
 		id       int32
 		err      error
 		tickerCh <-chan time.Time
+		loop     bool = true
 	)
 
 	if c.ticker == nil && c.options.tickSpan > 0 {
@@ -507,105 +591,44 @@ func (c *Conn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacke
 		tickerCh = c.ticker.C
 	}
 
-	select {
-	case <-ctx.Done():
-		err = ErrCancelWait
-	case p = <-c.recvCh:
-		if p == nil {
-			err = ErrConnClosed
+	for loop {
+		select {
+		case <-ctx.Done():
+			err = ErrCancelWait
+		case chk := <-c.recvCh:
+			if chk == nil {
+				err = ErrConnClosed
+				break
+			}
+			p, err = c.recvChunk(chk)
+		case <-tickerCh:
+			loop = false
+		case pak, o := <-chPak:
+			if o {
+				id = pak.id
+			} else {
+				log.Infof("gsnet: inbound channel is closed")
+			}
+		case err = <-c.errCh:
+			if err == nil {
+				err = ErrConnClosed
+			}
+		case err = <-c.errWriteCh:
+			if err == nil {
+				err = ErrConnClosed
+			}
 		}
-	case <-tickerCh:
-	case pak, o := <-chPak:
-		if o {
-			p = pak.pak
-			id = pak.id
-		} else {
-			log.Infof("gsnet: inbound channel is closed")
-		}
-	case err = <-c.errCh:
-		if err == nil {
-			err = ErrConnClosed
-		}
-	case err = <-c.errWriteCh:
-		if err == nil {
-			err = ErrConnClosed
+		if err != nil || p != nil || id > 0 {
+			loop = false
 		}
 	}
 	return p, id, err
 }
 
-// getWrapperSendData  wrapper send data
-func getWrapperSendData(pt packet.PacketType, data []byte, datas [][]byte, copyData bool, pData *[]byte, pDataArray []*[]byte, mt packet.MemoryManagementType, useResend bool) wrapperSendData {
-	if data != nil {
-		return getWrapperSendBytes(pt, data, copyData, useResend)
+func (c *KConn) recvChunk(chk *chunk) (packet.IPacket, error) {
+	if !c.blist.PushBytes(chk.rawbuf, chk.datalen) {
+		panic(fmt.Sprintf("!!!!! bl.PushBytes chk.rawbuf(%p) chk.datalen(%v) failed, BytesList %+v", chk.rawbuf, chk.datalen, c.blist))
 	}
-	if datas != nil {
-		return getWrapperSendBytesArray(pt, datas, copyData, useResend)
-	}
-	if pData != nil {
-		return getWrapperSendPoolBuffer(pt, pData, mt, useResend)
-	}
-	return getWrapperSendPoolBufferArray(pt, pDataArray, mt, useResend)
-}
-
-// getWrapperSendBytes  wrapper bytes data for send
-func getWrapperSendBytes(pt packet.PacketType, data []byte, copyData bool, useResend bool) wrapperSendData {
-	if !copyData {
-		return wrapperSendData{data: data, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementSystemGC, useResend)}
-	}
-	b := pool.GetBuffPool().Alloc(int32(len(data)))
-	copy(*b, data)
-	return wrapperSendData{data: b, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementPoolUserManualFree, useResend)}
-}
-
-// getWrapperSendBytesArray wrap bytes array data for send
-func getWrapperSendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool, useResend bool) wrapperSendData {
-	if !copyData {
-		return wrapperSendData{data: datas, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementSystemGC, useResend)}
-	}
-
-	var ds [][]byte
-	for i := 0; i < len(datas); i++ {
-		b := pool.GetBuffPool().Alloc(int32(len(datas[i])))
-		copy(*b, datas[i])
-		ds = append(ds, *b)
-	}
-
-	return wrapperSendData{data: ds, pt_mmt: mergePacketTypeMMTAndResend(pt, packet.MemoryManagementPoolUserManualFree, useResend)}
-}
-
-// getWrapperSendPoolBuffer wrap pool buffer for send
-func getWrapperSendPoolBuffer(pt packet.PacketType, pData *[]byte, mt packet.MemoryManagementType, useResend bool) wrapperSendData {
-	var sd wrapperSendData
-	switch mt {
-	case packet.MemoryManagementSystemGC, packet.MemoryManagementPoolUserManualFree:
-		sd.data = pData
-		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
-	case packet.MemoryManagementPoolFrameworkFree:
-		b := pool.GetBuffPool().Alloc(int32(len(*pData)))
-		copy(*b, *pData)
-		sd.data = b
-		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
-	}
-	return sd
-}
-
-// getWrapperSendPoolBufferArray wrap pool buffer array data for send
-func getWrapperSendPoolBufferArray(pt packet.PacketType, pDataArray []*[]byte, mt packet.MemoryManagementType, useResend bool) wrapperSendData {
-	var sd wrapperSendData
-	switch mt {
-	case packet.MemoryManagementSystemGC, packet.MemoryManagementPoolUserManualFree:
-		sd.data = pDataArray
-		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
-	case packet.MemoryManagementPoolFrameworkFree:
-		var pda []*[]byte
-		for i := 0; i < len(pDataArray); i++ {
-			b := pool.GetBuffPool().Alloc(int32(len(*pDataArray[i])))
-			copy(*b, *pDataArray[i])
-			pda = append(pda, b)
-		}
-		sd.data = pda
-		sd.pt_mmt = mergePacketTypeMMTAndResend(pt, mt, useResend)
-	}
-	return sd
+	putChunk(chk)
+	return c.packetCodec.Decode(&c.blist)
 }

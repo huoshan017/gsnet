@@ -15,6 +15,8 @@ require (
 
 require (
 	github.com/google/go-cmp v0.5.7 // indirect
+	github.com/huoshan017/kcpgo v0.0.0-20220724123157-bf77f0c8c09b // indirect
+	github.com/huoshan017/ponu v0.0.0-20220625105549-0934e1dcaecd // indirect
 	github.com/v2pro/plz v0.0.0-20200805122259-422184e41b6e // indirect
 	github.com/v2pro/quokka v0.0.0-20171201153428-382cb39c6ee6 // indirect
 	github.com/v2pro/wombat v0.0.0-20180402055224-a56dbdcddef2 // indirect

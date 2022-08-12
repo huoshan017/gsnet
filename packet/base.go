@@ -118,6 +118,10 @@ func (p BytesPacket) MMType() MemoryManagementType {
 	return MemoryManagementSystemGC
 }
 
+func (p BytesPacket) Release() bool {
+	return true
+}
+
 // 基础包结构
 type Packet struct {
 	typ    PacketType           // 类型
@@ -155,6 +159,10 @@ func (p Packet) MMType() MemoryManagementType {
 	return p.mType
 }
 
+func (p Packet) Release() bool {
+	return true
+}
+
 func (p *Packet) Set(typ PacketType, mType MemoryManagementType, data *[]byte) {
 	p.typ = typ
 	p.mType = mType
@@ -187,4 +195,46 @@ func (p *Packet) ChangeDataOwnership(newPak *Packet, dataOffset int32, toMMType 
 
 func (p *Packet) Offset(offset int32) {
 	p.offset = offset
+}
+
+type SharedPacket struct {
+	typ     PacketType
+	mtype   MemoryManagementType
+	node    *bytesNode
+	offset  int32
+	datalen int32
+}
+
+func (p *SharedPacket) Init(typ PacketType, mtype MemoryManagementType, bytes *Bytes) {
+	p.typ = typ
+	p.mtype = mtype
+	p.node = (bytes.ref).(*bytesNode)
+	p.offset = bytes.offset
+	p.datalen = bytes.datalen
+}
+
+func (p SharedPacket) Type() PacketType {
+	return p.typ
+}
+
+func (p SharedPacket) MMType() MemoryManagementType {
+	return p.mtype
+}
+
+func (p *SharedPacket) Data() []byte {
+	return (*p.node.buf)[p.offset : p.offset+p.datalen]
+}
+
+func (p *SharedPacket) PData() *[]byte {
+	return nil
+}
+
+func (p *SharedPacket) Release() bool {
+	p.node.usedOnce()
+	if p.node.checkRelease(true) {
+		putBytesNode(p.node)
+		p.node = nil
+		return true
+	}
+	return false
 }

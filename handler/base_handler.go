@@ -44,7 +44,7 @@ type IPacketEventHandler interface {
 	OnHandshakeDone(args ...any) error
 }
 
-type IPacketBuilderArgsGetter interface {
+type IPacketArgsGetter interface {
 	Get() []any
 }
 
@@ -76,7 +76,7 @@ type DefaultBasePacketHandler struct {
 	sess               common.ISession
 	conn               common.IConn
 	packetEventHandler IPacketEventHandler
-	argsGetter         IPacketBuilderArgsGetter
+	argsGetter         IPacketArgsGetter
 	resendEventHandler common.IResendEventHandler
 	options            *common.Options
 	lastTime           time.Time
@@ -110,7 +110,7 @@ func NewDefaultBasePacketHandler4Client(
 
 func NewDefaultBasePacketHandler4Server(
 	sess common.ISession,
-	argsGetter IPacketBuilderArgsGetter,
+	argsGetter IPacketArgsGetter,
 	resendEventHandler common.IResendEventHandler,
 	options *common.Options,
 	reconnInfoMap sync.Map) *DefaultBasePacketHandler {
@@ -363,7 +363,7 @@ func (h *DefaultBasePacketHandler) sendHandshakeAck() error {
 	if !o {
 		return errors.New("gsnet: packet builder argument crypto key type cast failed")
 	}
-	log.Infof("send compress type %v, encryption type %v, key %v", ct, et, key)
+	//log.Infof("send compress type %v, encryption type %v, key %v", ct, et, key)
 	hd := &protocol.HandshakeData{
 		CompressType:   int32(ct),
 		EncryptionType: int32(et),

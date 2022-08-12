@@ -33,6 +33,7 @@ type Client struct {
 	handler           common.ISessionEventHandler
 	basePacketHandler handler.IBasePacketHandler
 	packetBuilder     *common.PacketBuilder
+	packetCodec       *common.PacketCodec
 	resend            *common.ResendData
 	options           ClientOptions
 	lastTime          time.Time
@@ -136,6 +137,9 @@ func (c *Client) doConnectResult(con net.Conn) error {
 	switch c.options.GetConnDataType() {
 	case 1:
 		c.conn = common.NewSimpleConn(con, c.options.Options)
+	case 2:
+		c.packetCodec = common.NewPacketCodec(&c.options.Options)
+		c.conn = common.NewKConn(con, c.packetCodec, &c.options.Options)
 	default:
 		c.packetBuilder = common.NewPacketBuilder(&c.options.Options)
 		c.conn = common.NewConn(con, c.packetBuilder, &c.options.Options)
@@ -162,7 +166,9 @@ func (c *Client) doConnectResult(con net.Conn) error {
 	// 包事件处理器
 	var pakEvtHandler handler.IPacketEventHandler
 	if c.packetBuilder != nil {
-		pakEvtHandler = &packetEventHandler{builder: c.packetBuilder, sess: c.sess}
+		pakEvtHandler = &packetEventHandler{builder: c.packetBuilder.BasePacketBuilder, sess: c.sess}
+	} else if c.packetCodec != nil {
+		pakEvtHandler = &packetEventHandler{builder: c.packetCodec.BasePacketBuilder, sess: c.sess}
 	}
 
 	// 基础包处理器
@@ -369,7 +375,9 @@ func (c *Client) handleReady(mode int32) (bool, error) {
 	if err == nil && pak != nil {
 		res, err = c.basePacketHandler.OnHandleHandshake(pak)
 	}
-	c.options.GetPacketPool().Put(pak)
+	if pak != nil {
+		c.options.GetPacketPool().Put(pak)
+	}
 	if err == common.ErrRecvListEmpty {
 		err = nil
 	}
@@ -463,7 +471,7 @@ func (c *Client) handleReconnect(lastCheck *time.Time, reconnectTimer *time.Time
 }
 
 type packetEventHandler struct {
-	builder *common.PacketBuilder
+	builder *common.BasePacketBuilder
 	sess    *common.SessionEx
 }
 
