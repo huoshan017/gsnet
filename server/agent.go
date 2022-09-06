@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 )
 
@@ -111,7 +112,7 @@ type AgentServer struct {
 	*Server
 }
 
-func NewAgentServer(newFunc NewSessionHandlerFunc, options ...common.Option) *AgentServer {
+func NewAgentServer(newFunc NewSessionHandlerFunc, options ...options.Option) *AgentServer {
 	var rewriteNewFunc NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
 		handler := newFunc(args...)
 		return newServerHandler(handler)
@@ -121,7 +122,7 @@ func NewAgentServer(newFunc NewSessionHandlerFunc, options ...common.Option) *Ag
 	}
 }
 
-func NewAgentServerWithOptions(newFunc NewSessionHandlerFunc, options *ServerOptions) *AgentServer {
+func NewAgentServerWithOptions(newFunc NewSessionHandlerFunc, options *options.ServerOptions) *AgentServer {
 	var rewriteNewFunc NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
 		handler := newFunc(args...)
 		return newServerHandler(handler)

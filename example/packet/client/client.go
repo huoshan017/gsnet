@@ -12,6 +12,7 @@ import (
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 
 	ex_packet_common "github.com/huoshan017/gsnet/example/packet/common"
@@ -72,7 +73,7 @@ func (h *testClientUseUpdateHandler) OnError(err error) {
 func createTestClientUseUpdate(userData any) *client.Client {
 	// 启用tick处理
 	return client.NewClient(newTestClientUseUpdateHandler(userData),
-		client.WithRunMode(client.RunModeOnlyUpdate),
+		options.WithRunMode(options.RunModeOnlyUpdate),
 	)
 }
 

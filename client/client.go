@@ -9,6 +9,8 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/handler"
+	"github.com/huoshan017/gsnet/kcp"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 )
 
@@ -35,7 +37,7 @@ type Client struct {
 	packetBuilder     *common.PacketBuilder
 	packetCodec       *common.PacketCodec
 	resend            *common.ResendData
-	options           ClientOptions
+	options           options.ClientOptions
 	lastTime          time.Time
 	ctx               context.Context
 	cancel            context.CancelFunc
@@ -45,19 +47,19 @@ type Client struct {
 	reconnInfo        common.ReconnectInfo
 }
 
-func NewClient(handler common.ISessionEventHandler, options ...common.Option) *Client {
+func NewClient(handler common.ISessionEventHandler, ops ...options.Option) *Client {
 	c := &Client{
 		handler: handler,
-		options: ClientOptions{Options: *common.NewOptions()},
+		options: options.ClientOptions{Options: *options.NewOptions()},
 	}
-	for _, option := range options {
+	for _, option := range ops {
 		option(&c.options.Options)
 	}
 	c.init()
 	return c
 }
 
-func NewClientWithOptions(handler common.ISessionEventHandler, options *ClientOptions) *Client {
+func NewClientWithOptions(handler common.ISessionEventHandler, options *options.ClientOptions) *Client {
 	c := &Client{
 		options: *options,
 		handler: handler,
@@ -134,15 +136,24 @@ func (c *Client) newConnector() *Connector {
 }
 
 func (c *Client) doConnectResult(con net.Conn) error {
-	switch c.options.GetConnDataType() {
-	case 1:
-		c.conn = common.NewSimpleConn(con, c.options.Options)
-	case 2:
+	var netProto = c.options.GetNetProto()
+	switch netProto {
+	case options.NetProtoTCP, options.NetProtoTCP4, options.NetProtoTCP6:
+		switch c.options.GetConnDataType() {
+		case 1:
+			c.conn = common.NewSimpleConn(con, c.options.Options)
+		case 2:
+			c.packetCodec = common.NewPacketCodec(&c.options.Options)
+			c.conn = common.NewBConn(con, c.packetCodec, &c.options.Options)
+		default:
+			c.packetBuilder = common.NewPacketBuilder(&c.options.Options)
+			c.conn = common.NewConn(con, c.packetBuilder, &c.options.Options)
+		}
+	case options.NetProtoUDP, options.NetProtoUDP4, options.NetProtoUDP6:
 		c.packetCodec = common.NewPacketCodec(&c.options.Options)
-		c.conn = common.NewKConn(con, c.packetCodec, &c.options.Options)
+		c.conn = kcp.NewKConn(con, c.packetCodec, &c.options.Options)
 	default:
-		c.packetBuilder = common.NewPacketBuilder(&c.options.Options)
-		c.conn = common.NewConn(con, c.packetBuilder, &c.options.Options)
+		return common.ErrUnknownNetwork
 	}
 
 	// 重传配置
@@ -178,7 +189,7 @@ func (c *Client) doConnectResult(con net.Conn) error {
 	c.conn.Run()
 
 	// update模式下先把握手处理掉
-	if c.options.GetRunMode() == RunModeOnlyUpdate {
+	if c.options.GetRunMode() == options.RunModeOnlyUpdate {
 		return c.fromConnect2Ready()
 	}
 
@@ -214,7 +225,7 @@ func (c *Client) SendPoolBufferArray(bufferArray []*[]byte) error {
 }
 
 func (c *Client) Update() error {
-	if c.options.GetRunMode() != RunModeOnlyUpdate {
+	if c.options.GetRunMode() != options.RunModeOnlyUpdate {
 		return ErrClientRunUpdateMode
 	}
 
@@ -236,7 +247,7 @@ func (c *Client) Update() error {
 }
 
 func (c *Client) Run() {
-	if c.options.GetRunMode() != RunModeAsMainLoop {
+	if c.options.GetRunMode() != options.RunModeAsMainLoop {
 		c.handler.OnError(ErrClientRunMainLoopMode)
 		return
 	}

@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/pool"
 )
@@ -18,7 +19,7 @@ type IPacketBuilder interface {
 }
 
 type BasePacketBuilder struct {
-	options          *Options
+	options          *options.Options
 	sendHeaderPacket packet.IPacketHeader
 	sendHeaderBuff   []byte
 	recvHeaderPacket packet.IPacketHeader
@@ -30,25 +31,25 @@ type BasePacketBuilder struct {
 	cryptoKey        []byte
 }
 
-func newBasePacketBuilder(options *Options) *BasePacketBuilder {
+func newBasePacketBuilder(ops *options.Options) *BasePacketBuilder {
 	pb := &BasePacketBuilder{
-		options: options,
+		options: ops,
 	}
-	packetHeaderLength := options.GetPacketHeaderLength()
+	packetHeaderLength := ops.GetPacketHeaderLength()
 	if packetHeaderLength <= 0 {
 		packetHeaderLength = packet.DefaultPacketHeaderLen
 	}
-	encryptionType := options.GetPacketEncryptionType()
+	encryptionType := ops.GetPacketEncryptionType()
 	if pb.cryptoKey == nil {
-		ran := options.GetRand() // options.GetRand() 不是线程安全的，不过这里是在同一goroutine中使用，不存在并发安全问题
-		fun := options.GetGenCryptoKeyFunc()
+		ran := ops.GetRand() // options.GetRand() 不是线程安全的，不过这里是在同一goroutine中使用，不存在并发安全问题
+		fun := ops.GetGenCryptoKeyFunc()
 		if fun != nil {
 			pb.cryptoKey = fun(ran)
 		} else {
 			pb.cryptoKey = packet.GenCryptoKeyDefault(encryptionType, ran)
 		}
 	}
-	if pb.Reset(options.GetPacketCompressType(), encryptionType, pb.cryptoKey) != nil {
+	if pb.Reset(ops.GetPacketCompressType(), encryptionType, pb.cryptoKey) != nil {
 		return nil
 	}
 
@@ -377,8 +378,8 @@ type PacketBuilder struct {
 	*BasePacketBuilder
 }
 
-func NewPacketBuilder(options *Options) *PacketBuilder {
-	return &PacketBuilder{newBasePacketBuilder(options)}
+func NewPacketBuilder(ops *options.Options) *PacketBuilder {
+	return &PacketBuilder{newBasePacketBuilder(ops)}
 }
 
 func (pc *PacketBuilder) EncodeWriteTo(pType packet.PacketType, data []byte, writer io.Writer) error {

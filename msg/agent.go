@@ -6,6 +6,7 @@ import (
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/msg/codec"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/server"
 )
@@ -19,7 +20,7 @@ type MsgAgentClient struct {
 }
 
 // NewMsgAgentClient  create new agent message client
-func NewMsgAgentClient(codec IMsgCodec, mapper *IdMsgMapper, options ...common.Option) *MsgAgentClient {
+func NewMsgAgentClient(codec IMsgCodec, mapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
 	return &MsgAgentClient{
 		c:      client.NewAgentClient(options...),
 		codec:  codec,
@@ -168,27 +169,27 @@ func (c *MsgAgentSession) SendOnCopy(msgId MsgIdType, msgObj any) error {
 }
 
 // NewProtobufMsgAgentClient create protobuf message agent client
-func NewProtobufMsgAgentClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentClient {
+func NewProtobufMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
 	return NewMsgAgentClient(&codec.ProtobufCodec{}, idMsgMapper, options...)
 }
 
 // NewJsonMsgAgentClient create json message agent client
-func NewJsonMsgAgentClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentClient {
+func NewJsonMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
 	return NewMsgAgentClient(&codec.JsonCodec{}, idMsgMapper, options...)
 }
 
 // NewGobMsgAgentClient create gob message agent client
-func NewGobMsgAgentClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentClient {
+func NewGobMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
 	return NewMsgAgentClient(&codec.GobCodec{}, idMsgMapper, options...)
 }
 
 // NewThriftMsgAgentClient create thrift message agent client
-func NewThriftMsgAgentClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentClient {
+func NewThriftMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
 	return NewMsgAgentClient(&codec.ThriftCodec{}, idMsgMapper, options...)
 }
 
 // NewMsgpackMsgAgentClient create msgpack message agent client
-func NewMsgpackMsgAgentClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentClient {
+func NewMsgpackMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
 	return NewMsgAgentClient(&codec.MsgpackCodec{}, idMsgMapper, options...)
 }
 
@@ -199,7 +200,7 @@ type MsgAgentServer struct {
 }
 
 // NewMsgAgentServer create new message agent server
-func NewMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCodec, mapper *IdMsgMapper, options ...common.Option) *MsgAgentServer {
+func NewMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCodec, mapper *IdMsgMapper, options ...options.Option) *MsgAgentServer {
 	s := &MsgAgentServer{}
 	newSessionHandlerFunc := prepareMsgServer(newFunc, funcArgs, codec, mapper, &s.options, options...)
 	s.server = server.NewAgentServerWithOptions(newSessionHandlerFunc, &s.options.ServerOptions)
@@ -227,26 +228,26 @@ func (s *MsgAgentServer) End() {
 }
 
 // NewProtobufMsgAgentServer create a protobuf message agent server
-func NewProtobufMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentServer {
+func NewProtobufMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentServer {
 	return NewMsgAgentServer(newFunc, funcArgs, &codec.ProtobufCodec{}, idMsgMapper, options...)
 }
 
 // NewJsonMsgAgentServer create a json message agent server
-func NewJsonMsgAgentServerr(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentServer {
+func NewJsonMsgAgentServerr(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentServer {
 	return NewMsgAgentServer(newFunc, funcArgs, &codec.JsonCodec{}, idMsgMapper, options...)
 }
 
 // NewGobMsgAgentServer create a gob message agent server
-func NewGobMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentServer {
+func NewGobMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentServer {
 	return NewMsgAgentServer(newFunc, funcArgs, &codec.GobCodec{}, idMsgMapper, options...)
 }
 
 // NewThriftMsgAgentServer create a thrift message agent server
-func NewThriftMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentServer {
+func NewThriftMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentServer {
 	return NewMsgAgentServer(newFunc, funcArgs, &codec.ThriftCodec{}, idMsgMapper, options...)
 }
 
 // NewMsgpackMsgAgentServer create a msgpack message agent server
-func NewMsgpackMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgAgentServer {
+func NewMsgpackMsgAgentServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentServer {
 	return NewMsgAgentServer(newFunc, funcArgs, &codec.MsgpackCodec{}, idMsgMapper, options...)
 }

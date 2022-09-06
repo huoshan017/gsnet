@@ -1,6 +1,7 @@
 package common
 
 import (
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 )
 
@@ -16,9 +17,9 @@ type PacketCodec struct {
 	readHeader bool
 }
 
-func NewPacketCodec(options *Options) *PacketCodec {
+func NewPacketCodec(ops *options.Options) *PacketCodec {
 	return &PacketCodec{
-		BasePacketBuilder: newBasePacketBuilder(options),
+		BasePacketBuilder: newBasePacketBuilder(ops),
 	}
 }
 

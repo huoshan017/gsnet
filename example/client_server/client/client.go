@@ -11,6 +11,7 @@ import (
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 
 	ecommon "github.com/huoshan017/gsnet/example/agent/common"
@@ -117,7 +118,7 @@ func (h *testClientUseUpdateHandler) OnError(err error) {
 
 func createTestClientUseUpdate(userData any, count int32) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseUpdateHandler(userData, count), client.WithRunMode(client.RunModeOnlyUpdate))
+	return client.NewClient(newTestClientUseUpdateHandler(userData, count), options.WithRunMode(options.RunModeOnlyUpdate))
 }
 
 var letters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")

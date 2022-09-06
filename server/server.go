@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"reflect"
 	"sync"
@@ -10,7 +11,9 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/handler"
+	"github.com/huoshan017/gsnet/kcp"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 )
 
@@ -25,13 +28,16 @@ type sessionCloseInfo struct {
 	sessionId uint64
 }
 
+// 会话处理器函数类型
+type NewSessionHandlerFunc func(args ...any) common.ISessionEventHandler
+
 // 服务器
 type Server struct {
-	acceptor          *Acceptor
+	acceptor          IAcceptor
 	sessHandlerType   reflect.Type
 	newHandlerFunc    NewSessionHandlerFunc
 	mainTickHandle    func(time.Duration)
-	options           ServerOptions
+	options           options.ServerOptions
 	sessCloseInfoChan chan *sessionCloseInfo
 	sessMap           map[uint64]*common.Session
 	ctx               context.Context
@@ -41,17 +47,17 @@ type Server struct {
 	reconnInfoMap     sync.Map
 }
 
-func NewServer(newFunc NewSessionHandlerFunc, options ...common.Option) *Server {
+func NewServer(newFunc NewSessionHandlerFunc, ops ...options.Option) *Server {
 	s := &Server{
 		newHandlerFunc: newFunc,
 		sessMap:        make(map[uint64]*common.Session),
 		endLoopCh:      make(chan struct{}),
 	}
-	s.initWith(options...)
+	s.initWith(ops...)
 	return s
 }
 
-func NewServerWithHandler(handler common.ISessionEventHandler, options ...common.Option) *Server {
+func NewServerWithHandler(handler common.ISessionEventHandler, options ...options.Option) *Server {
 	rf := reflect.TypeOf(handler)
 	s := &Server{
 		sessHandlerType: rf,
@@ -62,7 +68,7 @@ func NewServerWithHandler(handler common.ISessionEventHandler, options ...common
 	return s
 }
 
-func NewServerWithOptions(newFunc NewSessionHandlerFunc, options *ServerOptions) *Server {
+func NewServerWithOptions(newFunc NewSessionHandlerFunc, options *options.ServerOptions) *Server {
 	s := &Server{
 		newHandlerFunc: newFunc,
 		options:        *options,
@@ -73,7 +79,7 @@ func NewServerWithOptions(newFunc NewSessionHandlerFunc, options *ServerOptions)
 	return s
 }
 
-func (s *Server) initWith(options ...common.Option) {
+func (s *Server) initWith(options ...options.Option) {
 	for _, option := range options {
 		option(&s.options.Options)
 	}
@@ -94,7 +100,15 @@ func (s *Server) init() {
 		s.options.SetPacketPool(packet.GetDefaultPacketPool())
 	}
 
-	s.acceptor = NewAcceptor(s.options)
+	var netProto = s.options.GetNetProto()
+	switch netProto {
+	case options.NetProtoTCP, options.NetProtoTCP4, options.NetProtoTCP6:
+		s.acceptor = NewAcceptor(s.options)
+	case options.NetProtoUDP, options.NetProtoUDP4, options.NetProtoUDP6:
+		s.acceptor = kcp.NewAcceptor(s.options)
+	default:
+		panic(fmt.Sprintf("not supported network protocol %v", netProto))
+	}
 	s.sessCloseInfoChan = make(chan *sessionCloseInfo, s.options.GetErrChanLen())
 	s.ctx, s.cancel = context.WithCancel(context.Background())
 }
@@ -215,16 +229,27 @@ func (s *Server) handleConn(c net.Conn) {
 		packetCodec   *common.PacketCodec
 	)
 
+	var netProto = s.options.GetNetProto()
+
 	// 创建连接
-	switch s.options.GetConnDataType() {
-	case 1:
-		conn = common.NewSimpleConn(c, s.options.Options)
-	case 2:
+	switch netProto {
+	case options.NetProtoTCP, options.NetProtoTCP4, options.NetProtoTCP6:
+		switch s.options.GetConnDataType() {
+		case 1:
+			conn = common.NewSimpleConn(c, s.options.Options)
+		case 2:
+			packetCodec = common.NewPacketCodec(&s.options.Options)
+			conn = common.NewBConn(c, packetCodec, &s.options.Options)
+		default:
+			packetBuilder = common.NewPacketBuilder(&s.options.Options)
+			conn = common.NewConn(c, packetBuilder, &s.options.Options)
+		}
+	case options.NetProtoUDP, options.NetProtoUDP4, options.NetProtoUDP6:
 		packetCodec = common.NewPacketCodec(&s.options.Options)
-		conn = common.NewKConn(c, packetCodec, &s.options.Options)
+		conn = kcp.NewKConn(c, packetCodec, &s.options.Options)
 	default:
-		packetBuilder = common.NewPacketBuilder(&s.options.Options)
-		conn = common.NewConn(c, packetBuilder, &s.options.Options)
+		log.Infof("gsnet: unsupported network protocol")
+		return
 	}
 
 	// 创建包创建器参数获取者

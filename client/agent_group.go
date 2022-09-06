@@ -7,6 +7,7 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 )
 
@@ -44,7 +45,7 @@ func NewAgentGroup(id int32) *AgentGroup {
 
 func (ag *AgentGroup) DialAsync(addressList []string, timeout time.Duration, callback func(error)) {
 	for i := 0; i < len(addressList); i++ {
-		agent := NewAgentClient(common.WithAutoReconnect(true))
+		agent := NewAgentClient(options.WithAutoReconnect(true))
 		agent.SetConnectHandle(func(sess common.ISession) {
 			connGetter, o := sess.(common.IConnGetter)
 			if o {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/server"
 )
@@ -168,16 +169,16 @@ func (h *testClientHandler) OnError(err error) {
 
 func createTestClient(t *testing.T, state int32, userData any) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientHandler(t, state, userData), common.WithTickSpan(time.Millisecond*10), common.WithConnDataType(connDataType))
+	return client.NewClient(newTestClientHandler(t, state, userData), options.WithTickSpan(time.Millisecond*10), options.WithConnDataType(connDataType))
 }
 
 func createTestClient2(t *testing.T, state int32, userData any) *client.Client {
 	h := newTestClientHandler(t, state, userData)
-	return client.NewClient(h, common.WithConnDataType(connDataType))
+	return client.NewClient(h, options.WithConnDataType(connDataType))
 }
 
 func createBenchmarkClient(b *testing.B, state int32, userData any) *client.Client {
-	return client.NewClient(newTestClientHandler(b, state, userData), common.WithConnDataType(connDataType))
+	return client.NewClient(newTestClientHandler(b, state, userData), options.WithConnDataType(connDataType))
 }
 
 type testServerHandler struct {
@@ -258,12 +259,12 @@ func (h *testServerHandler) OnError(err error) {
 
 func createTestServer(t *testing.T, state int32, connType int) *server.Server {
 	return server.NewServer(newTestServerHandler,
-		server.WithNewSessionHandlerFuncArgs(t, state),
-		common.WithReadBuffSize(10*4096),
-		common.WithWriteBuffSize(5*4096),
-		common.WithConnDataType(connType),
-		common.WithPacketCompressType(packet.CompressSnappy),
-		common.WithPacketEncryptionType(packet.EncryptionDes),
+		options.WithNewSessionHandlerFuncArgs(t, state),
+		options.WithReadBuffSize(10*4096),
+		options.WithWriteBuffSize(5*4096),
+		options.WithConnDataType(connType),
+		options.WithPacketCompressType(packet.CompressSnappy),
+		options.WithPacketEncryptionType(packet.EncryptionDes),
 	)
 }
 
@@ -271,7 +272,7 @@ func createTestServerWithHandler(t *testing.T, state int32) *server.Server {
 	return server.NewServerWithHandler(&testServerHandler{
 		t:     t,
 		state: state,
-	}, common.WithConnDataType(connDataType))
+	}, options.WithConnDataType(connDataType))
 }
 
 func createTestServerWithReusePort(t *testing.T, state int32) []*server.Server {
@@ -279,11 +280,11 @@ func createTestServerWithReusePort(t *testing.T, state int32) []*server.Server {
 		server.NewServerWithHandler(&testServerHandler{
 			t:     t,
 			state: state,
-		}, server.WithReuseAddr(true), common.WithConnDataType(connDataType)),
+		}, options.WithReuseAddr(true), options.WithConnDataType(connDataType)),
 		server.NewServerWithHandler(&testServerHandler{
 			t:     t,
 			state: state,
-		}, server.WithReuseAddr(true), common.WithConnDataType(connDataType)),
+		}, options.WithReuseAddr(true), options.WithConnDataType(connDataType)),
 	}
 }
 
@@ -291,7 +292,7 @@ func createBenchmarkServerWithHandler(b *testing.B, state int32) *server.Server 
 	return server.NewServerWithHandler(&testServerHandler{
 		b:     b,
 		state: state,
-	}, common.WithConnDataType(connDataType))
+	}, options.WithConnDataType(connDataType))
 }
 
 var letters = []byte("abcdefghijklmnopqrstuvwxyz01234567890~!@#$%^&*()_+-={}[]|:;'<>?/.,")

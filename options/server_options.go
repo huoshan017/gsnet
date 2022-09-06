@@ -1,18 +1,16 @@
-package server
+package options
 
 import (
 	"time"
 	"unsafe"
-
-	"github.com/huoshan017/gsnet/common"
 )
 
 // 会话处理器函数类型
-type NewSessionHandlerFunc func(args ...any) common.ISessionEventHandler
+//type NewSessionHandlerFunc func(args ...any) common.ISessionEventHandler
 
 // 服务选项结构
 type ServerOptions struct {
-	common.Options
+	Options
 	connMaxCount          int           // 連接最大數
 	connChanLen           int           // 連接通道長度
 	createHandlerFuncArgs []any         // 会话处理器创建函数参数列表
@@ -78,50 +76,50 @@ func (options *ServerOptions) SetSessionHandleTick(tick time.Duration) {
 	options.sessionHandleTick = tick
 }
 
-func WithConnMaxCount(count int) common.Option {
-	return func(options *common.Options) {
+func WithConnMaxCount(count int) Option {
+	return func(options *Options) {
 		p := (*ServerOptions)(unsafe.Pointer(options))
 		p.SetConnMaxCount(count)
 	}
 }
 
-func WithConnChanLen(chanLen int) common.Option {
-	return func(options *common.Options) {
+func WithConnChanLen(chanLen int) Option {
+	return func(options *Options) {
 		p := (*ServerOptions)(unsafe.Pointer(options))
 		p.SetConnChanLen(chanLen)
 	}
 }
 
-func WithNewSessionHandlerFuncArgs(args ...any) common.Option {
-	return func(options *common.Options) {
+func WithNewSessionHandlerFuncArgs(args ...any) Option {
+	return func(options *Options) {
 		p := (*ServerOptions)(unsafe.Pointer(options))
 		p.SetNewSessionHandlerFuncArgs(args...)
 	}
 }
 
-func WithReuseAddr(enable bool) common.Option {
-	return func(options *common.Options) {
+func WithReuseAddr(enable bool) Option {
+	return func(options *Options) {
 		p := (*ServerOptions)(unsafe.Pointer(options))
 		p.SetReuseAddr(enable)
 	}
 }
 
-func WithReusePort(enable bool) common.Option {
-	return func(options *common.Options) {
+func WithReusePort(enable bool) Option {
+	return func(options *Options) {
 		p := (*ServerOptions)(unsafe.Pointer(options))
 		p.SetReusePort(enable)
 	}
 }
 
-func WithErrChanLen(length int) common.Option {
-	return func(options *common.Options) {
+func WithErrChanLen(length int) Option {
+	return func(options *Options) {
 		p := (*ServerOptions)(unsafe.Pointer(options))
 		p.SetErrChanLen(length)
 	}
 }
 
-func WithSessionHandleTick(tick time.Duration) common.Option {
-	return func(options *common.Options) {
+func WithSessionHandleTick(tick time.Duration) Option {
+	return func(options *Options) {
 		p := (*ServerOptions)(unsafe.Pointer(options))
 		p.SetSessionHandleTick(tick)
 	}

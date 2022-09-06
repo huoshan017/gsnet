@@ -5,9 +5,9 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/msg"
+	"github.com/huoshan017/gsnet/options"
 
 	fc "github.com/huoshan017/gsnet/example/framework/common"
 	tproto "github.com/huoshan017/gsnet/test/tproto"
@@ -60,7 +60,7 @@ func (h *msgAgentServerHandler) OnError(err error) {
 }
 
 func createMsgAgentServer(address string) *msg.MsgAgentServer {
-	s := msg.NewProtobufMsgAgentServer(newMsgAgentServerHandler, nil, fc.IdMsgMapper, common.WithTickSpan(time.Millisecond*10))
+	s := msg.NewProtobufMsgAgentServer(newMsgAgentServerHandler, nil, fc.IdMsgMapper, options.WithTickSpan(time.Millisecond*10))
 	if err := s.Listen(address); err != nil {
 		log.Infof("agent server listen and serve err %v", err)
 		return nil

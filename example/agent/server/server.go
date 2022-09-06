@@ -7,6 +7,7 @@ import (
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/server"
 
@@ -16,7 +17,7 @@ import (
 )
 
 func createAgentClient() (*client.AgentClient, error) {
-	c := client.NewAgentClient(common.WithSendListMode(ecommon.SendListMode))
+	c := client.NewAgentClient(options.WithSendListMode(ecommon.SendListMode))
 	if err := c.Dial(ecommon.AgentServerAddress); err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func createServerUseAgentClient(address string) *server.Server {
 		log.Fatalf("create agent client err %v", err)
 		return nil
 	}
-	s := server.NewServer(newServerSessionHandlerUseAgentClient, server.WithNewSessionHandlerFuncArgs(agentClient), common.WithTickSpan(100*time.Millisecond), common.WithSendListMode(ecommon.SendListMode))
+	s := server.NewServer(newServerSessionHandlerUseAgentClient, options.WithNewSessionHandlerFuncArgs(agentClient), options.WithTickSpan(100*time.Millisecond), options.WithSendListMode(ecommon.SendListMode))
 	if err = s.Listen(address); err != nil {
 		log.Infof("test server listen err %v", err)
 		return nil

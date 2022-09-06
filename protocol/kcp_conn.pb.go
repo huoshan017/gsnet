@@ -63,6 +63,7 @@ var xxx_messageInfo_KcpSendSyn proto.InternalMessageInfo
 
 type KcpSendSynAck struct {
 	Conversation         uint32   `protobuf:"varint,1,opt,name=Conversation,proto3" json:"Conversation,omitempty"`
+	Token                int64    `protobuf:"varint,2,opt,name=Token,proto3" json:"Token,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -108,8 +109,16 @@ func (m *KcpSendSynAck) GetConversation() uint32 {
 	return 0
 }
 
+func (m *KcpSendSynAck) GetToken() int64 {
+	if m != nil {
+		return m.Token
+	}
+	return 0
+}
+
 type KcpSendAck struct {
 	Conversation         uint32   `protobuf:"varint,1,opt,name=Conversation,proto3" json:"Conversation,omitempty"`
+	Token                int64    `protobuf:"varint,2,opt,name=Token,proto3" json:"Token,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -155,6 +164,13 @@ func (m *KcpSendAck) GetConversation() uint32 {
 	return 0
 }
 
+func (m *KcpSendAck) GetToken() int64 {
+	if m != nil {
+		return m.Token
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterType((*KcpSendSyn)(nil), "protocol.KcpSendSyn")
 	proto.RegisterType((*KcpSendSynAck)(nil), "protocol.KcpSendSynAck")
@@ -164,16 +180,17 @@ func init() {
 func init() { proto.RegisterFile("kcp_conn.proto", fileDescriptor_078b82bf60e113b8) }
 
 var fileDescriptor_078b82bf60e113b8 = []byte{
-	// 132 bytes of a gzipped FileDescriptorProto
+	// 150 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0xcb, 0x4e, 0x2e, 0x88,
 	0x4f, 0xce, 0xcf, 0xcb, 0xd3, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2, 0x00, 0x53, 0xc9, 0xf9,
 	0x39, 0x4a, 0x3c, 0x5c, 0x5c, 0xde, 0xc9, 0x05, 0xc1, 0xa9, 0x79, 0x29, 0xc1, 0x95, 0x79, 0x4a,
-	0xc6, 0x5c, 0xbc, 0x08, 0x9e, 0x63, 0x72, 0xb6, 0x90, 0x12, 0x17, 0x8f, 0x73, 0x7e, 0x5e, 0x59,
+	0x9e, 0x5c, 0xbc, 0x08, 0x9e, 0x63, 0x72, 0xb6, 0x90, 0x12, 0x17, 0x8f, 0x73, 0x7e, 0x5e, 0x59,
 	0x6a, 0x51, 0x71, 0x62, 0x49, 0x66, 0x7e, 0x9e, 0x04, 0xa3, 0x02, 0xa3, 0x06, 0x6f, 0x10, 0x8a,
-	0x98, 0x92, 0x01, 0xdc, 0x08, 0x22, 0x75, 0x38, 0xc9, 0x9e, 0x78, 0x24, 0xc7, 0x78, 0xe1, 0x91,
-	0x1c, 0xe3, 0x83, 0x47, 0x72, 0x8c, 0x33, 0x1e, 0xcb, 0x31, 0x44, 0x71, 0xeb, 0xe9, 0xe9, 0xc3,
-	0xdc, 0x94, 0xc4, 0x06, 0x66, 0x19, 0x03, 0x02, 0x00, 0x00, 0xff, 0xff, 0x12, 0x19, 0x4e, 0xa6,
-	0xb6, 0x00, 0x00, 0x00,
+	0x98, 0x90, 0x08, 0x17, 0x6b, 0x48, 0x7e, 0x76, 0x6a, 0x9e, 0x04, 0x93, 0x02, 0xa3, 0x06, 0x73,
+	0x10, 0x84, 0xa3, 0xe4, 0x06, 0x37, 0x98, 0x22, 0x73, 0x9c, 0x64, 0x4f, 0x3c, 0x92, 0x63, 0xbc,
+	0xf0, 0x48, 0x8e, 0xf1, 0xc1, 0x23, 0x39, 0xc6, 0x19, 0x8f, 0xe5, 0x18, 0xa2, 0xb8, 0xf5, 0xf4,
+	0xf4, 0x61, 0xee, 0x4f, 0x62, 0x03, 0xb3, 0x8c, 0x01, 0x01, 0x00, 0x00, 0xff, 0xff, 0xd9, 0x3c,
+	0x59, 0xac, 0xe2, 0x00, 0x00, 0x00,
 }
 
 func (m *KcpSendSyn) Marshal() (dAtA []byte, err error) {
@@ -227,6 +244,11 @@ func (m *KcpSendSynAck) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
+	if m.Token != 0 {
+		i = encodeVarintKcpConn(dAtA, i, uint64(m.Token))
+		i--
+		dAtA[i] = 0x10
+	}
 	if m.Conversation != 0 {
 		i = encodeVarintKcpConn(dAtA, i, uint64(m.Conversation))
 		i--
@@ -258,6 +280,11 @@ func (m *KcpSendAck) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.XXX_unrecognized != nil {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if m.Token != 0 {
+		i = encodeVarintKcpConn(dAtA, i, uint64(m.Token))
+		i--
+		dAtA[i] = 0x10
 	}
 	if m.Conversation != 0 {
 		i = encodeVarintKcpConn(dAtA, i, uint64(m.Conversation))
@@ -299,6 +326,9 @@ func (m *KcpSendSynAck) Size() (n int) {
 	if m.Conversation != 0 {
 		n += 1 + sovKcpConn(uint64(m.Conversation))
 	}
+	if m.Token != 0 {
+		n += 1 + sovKcpConn(uint64(m.Token))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -313,6 +343,9 @@ func (m *KcpSendAck) Size() (n int) {
 	_ = l
 	if m.Conversation != 0 {
 		n += 1 + sovKcpConn(uint64(m.Conversation))
+	}
+	if m.Token != 0 {
+		n += 1 + sovKcpConn(uint64(m.Token))
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -425,6 +458,25 @@ func (m *KcpSendSynAck) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Token", wireType)
+			}
+			m.Token = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowKcpConn
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Token |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skipKcpConn(dAtA[iNdEx:])
@@ -491,6 +543,25 @@ func (m *KcpSendAck) Unmarshal(dAtA []byte) error {
 				b := dAtA[iNdEx]
 				iNdEx++
 				m.Conversation |= uint32(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Token", wireType)
+			}
+			m.Token = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowKcpConn
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Token |= int64(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

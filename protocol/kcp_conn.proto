@@ -8,8 +8,10 @@ message KcpSendSyn {
 
 message KcpSendSynAck {
     uint32 Conversation = 1;
+    int64 Token = 2;
 }
 
 message KcpSendAck {
     uint32 Conversation = 1;
+    int64 Token = 2;
 }

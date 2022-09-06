@@ -7,6 +7,7 @@ import (
 	"github.com/huoshan017/gsnet/common"
 	ex_packet_common "github.com/huoshan017/gsnet/example/packet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/server"
 )
@@ -51,10 +52,10 @@ func (h *testServerHandler) OnError(err error) {
 
 func createTestServer() *server.Server {
 	return server.NewServer(newTestServerHandler,
-		common.WithReadBuffSize(10*4096),
-		common.WithWriteBuffSize(5*4096),
-		common.WithPacketCompressType(packet.CompressSnappy),
-		common.WithPacketEncryptionType(packet.EncryptionAes),
+		options.WithReadBuffSize(10*4096),
+		options.WithWriteBuffSize(5*4096),
+		options.WithPacketCompressType(packet.CompressSnappy),
+		options.WithPacketEncryptionType(packet.EncryptionAes),
 	)
 }
 

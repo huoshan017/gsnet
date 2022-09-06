@@ -5,6 +5,7 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/server"
 
@@ -47,7 +48,7 @@ func (h *agentServerHandler) OnError(err error) {
 }
 
 func createAgentServer(address string) *server.AgentServer {
-	s := server.NewAgentServer(newAgentServerHandler, common.WithSendListMode(ecommon.SendListMode))
+	s := server.NewAgentServer(newAgentServerHandler, options.WithSendListMode(ecommon.SendListMode))
 	if err := s.Listen(address); err != nil {
 		log.Infof("agent server listen and serve err %v", err)
 		return nil

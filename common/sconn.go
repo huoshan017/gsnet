@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 )
 
@@ -67,7 +68,7 @@ func (p DefaultDataProto) Decrypt(data []byte) ([]byte, bool) {
 
 type SimpleConn struct {
 	conn       net.Conn
-	options    Options
+	options    options.Options
 	writer     *bufio.Writer
 	reader     *bufio.Reader
 	recvCh     chan packet.IPacket // 缓存从网络接收的数据，对应一个接收者一个发送者
@@ -81,55 +82,55 @@ type SimpleConn struct {
 }
 
 // 创建新连接
-func NewSimpleConn(conn net.Conn, options Options) *SimpleConn {
+func NewSimpleConn(conn net.Conn, ops options.Options) *SimpleConn {
 	c := &SimpleConn{
 		conn:       conn,
-		options:    options,
+		options:    ops,
 		closeCh:    make(chan struct{}),
 		errCh:      make(chan error, 1),
 		errWriteCh: make(chan error, 1),
 	}
 
-	if c.options.writeBuffSize <= 0 {
+	if c.options.GetWriteBuffSize() <= 0 {
 		c.writer = bufio.NewWriter(conn)
 	} else {
-		c.writer = bufio.NewWriterSize(conn, c.options.writeBuffSize)
+		c.writer = bufio.NewWriterSize(conn, c.options.GetWriteBuffSize())
 	}
 
-	if c.options.readBuffSize <= 0 {
+	if c.options.GetReadBuffSize() <= 0 {
 		c.reader = bufio.NewReader(conn)
 	} else {
-		c.reader = bufio.NewReaderSize(conn, c.options.readBuffSize)
+		c.reader = bufio.NewReaderSize(conn, c.options.GetReadBuffSize())
 	}
 
-	if c.options.recvListLen <= 0 {
-		c.options.recvListLen = DefaultConnRecvListLen
+	if c.options.GetRecvListLen() <= 0 {
+		c.options.SetRecvListLen(DefaultConnRecvListLen)
 	}
-	c.recvCh = make(chan packet.IPacket, c.options.recvListLen)
+	c.recvCh = make(chan packet.IPacket, c.options.GetRecvListLen())
 
-	if c.options.sendListLen <= 0 {
-		c.options.sendListLen = DefaultConnSendListLen
+	if c.options.GetSendListLen() <= 0 {
+		c.options.SetSendListLen(DefaultConnSendListLen)
 	}
-	c.sendCh = make(chan []byte, c.options.sendListLen)
+	c.sendCh = make(chan []byte, c.options.GetSendListLen())
 
 	if c.dataProto == nil {
 		c.dataProto = &DefaultDataProto{}
 	}
 
 	if tcpConn, ok := c.conn.(*net.TCPConn); ok {
-		if c.options.noDelay {
-			tcpConn.SetNoDelay(c.options.noDelay)
+		if c.options.GetNodelay() {
+			tcpConn.SetNoDelay(c.options.GetNodelay())
 		}
-		if c.options.keepAlived {
-			tcpConn.SetKeepAlive(c.options.keepAlived)
+		if c.options.GetKeepAlived() {
+			tcpConn.SetKeepAlive(c.options.GetKeepAlived())
 		}
-		if c.options.keepAlivedPeriod > 0 {
-			tcpConn.SetKeepAlivePeriod(c.options.keepAlivedPeriod)
+		if c.options.GetKeepAlivedPeriod() > 0 {
+			tcpConn.SetKeepAlivePeriod(c.options.GetKeepAlivedPeriod())
 		}
 	}
 
-	if c.options.tickSpan > 0 && c.options.tickSpan < MinConnTick {
-		c.options.tickSpan = MinConnTick
+	if c.options.GetTickSpan() > 0 && c.options.GetTickSpan() < MinConnTick {
+		c.options.SetTickSpan(MinConnTick)
 	}
 
 	return c
@@ -201,8 +202,8 @@ func (c *SimpleConn) readBytes(data []byte) (err error) {
 		return
 	}
 
-	if c.options.readTimeout != 0 {
-		c.conn.SetReadDeadline(time.Now().Add(c.options.readTimeout))
+	if c.options.GetReadTimeout() != 0 {
+		c.conn.SetReadDeadline(time.Now().Add(c.options.GetReadTimeout()))
 	}
 
 	_, err = io.ReadFull(c.reader, data)
@@ -233,8 +234,8 @@ func (c *SimpleConn) writeLoop() {
 		}
 		// 数据还在缓冲
 		if c.writer.Buffered() > 0 {
-			if c.options.writeTimeout != 0 {
-				c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+			if c.options.GetWriteTimeout() != 0 {
+				c.conn.SetWriteDeadline(time.Now().Add(c.options.GetWriteTimeout()))
 			}
 			err = c.writer.Flush()
 			if err != nil {
@@ -259,8 +260,8 @@ func (c *SimpleConn) writeBytes(data []byte) (err error) {
 	default:
 	}
 
-	if c.options.writeTimeout != 0 {
-		c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+	if c.options.GetWriteTimeout() != 0 {
+		c.conn.SetWriteDeadline(time.Now().Add(c.options.GetWriteTimeout()))
 	}
 
 	_, err = c.writer.Write(data)
@@ -419,8 +420,8 @@ func (c *SimpleConn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.
 		return nil, 0, ErrConnClosed
 	}
 
-	if c.ticker == nil && c.options.tickSpan > 0 {
-		c.ticker = time.NewTicker(c.options.tickSpan)
+	if c.ticker == nil && c.options.GetTickSpan() > 0 {
+		c.ticker = time.NewTicker(c.options.GetTickSpan())
 	}
 
 	var (

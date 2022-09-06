@@ -7,6 +7,7 @@ import (
 
 var (
 	ErrNoError             = errors.New("no error")
+	ErrUnknownNetwork      = errors.New("unknown network")
 	ErrConnClosed          = errors.New("connetion is closed")
 	ErrSendListFull        = errors.New("send list full")
 	ErrRecvListEmpty       = errors.New("recv list empty")

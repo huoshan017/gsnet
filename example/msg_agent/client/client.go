@@ -8,10 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/huoshan017/gsnet/client"
-	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/msg"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/test/tproto"
 
 	acommon "github.com/huoshan017/gsnet/example/msg_agent/common"
@@ -120,7 +119,7 @@ func (h *testMsgClientUseUpdateHandler) OnError(err error) {
 func createMsgClientUseUpdate(userData any, count int32) *msg.MsgClient {
 	// 启用tick处理
 	handler := newTestMsgClientUseUpdateHandler(userData, count)
-	c := msg.NewProtobufMsgClient(acommon.IdMsgMapper, client.WithRunMode(client.RunModeOnlyUpdate), common.WithSendListMode(acommon.SendListMode))
+	c := msg.NewProtobufMsgClient(acommon.IdMsgMapper, options.WithRunMode(options.RunModeOnlyUpdate), options.WithSendListMode(acommon.SendListMode))
 	c.SetConnectHandle(handler.OnConnected)
 	c.SetReadyHandle(handler.OnReady)
 	c.SetDisconnectHandle(handler.OnDisconnected)

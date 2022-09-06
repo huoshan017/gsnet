@@ -7,6 +7,7 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 )
 
@@ -112,7 +113,7 @@ type AgentClient struct {
 	pakChans sync.Map
 }
 
-func NewAgentClient(options ...common.Option) *AgentClient {
+func NewAgentClient(options ...options.Option) *AgentClient {
 	c := &AgentClient{id: getNextAgentClientId()}
 	c.handler = newClientHandler(c)
 	c.c = NewClient(c.handler, options...)
@@ -253,7 +254,7 @@ func NewAgentClientManager() *AgentClientManager {
 	}
 }
 
-func (m *AgentClientManager) NewClient(name string, options ...common.Option) *AgentClient {
+func (m *AgentClientManager) NewClient(name string, options ...options.Option) *AgentClient {
 	client := NewAgentClient(options...)
 	m.addClient(name, client)
 	return client

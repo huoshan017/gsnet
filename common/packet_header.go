@@ -1,11 +1,10 @@
 package common
 
 import (
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/protocol"
 )
-
-type CreatePacketHeaderFunc func(*Options) packet.IPacketHeader
 
 type DefaultPacketHeader struct {
 	packet.CommonPacketHeader
@@ -15,12 +14,12 @@ const (
 	usePB = false
 )
 
-func NewDefaultPacketHeader(options *Options) packet.IPacketHeader {
+func NewDefaultPacketHeader(ops *options.Options) packet.IPacketHeader {
 	header := &DefaultPacketHeader{
 		CommonPacketHeader: packet.CommonPacketHeader{},
 	}
-	header.SetCompressType(options.GetPacketCompressType())
-	header.SetEncryptionType(options.GetPacketEncryptionType())
+	header.SetCompressType(ops.GetPacketCompressType())
+	header.SetEncryptionType(ops.GetPacketEncryptionType())
 	return header
 }
 

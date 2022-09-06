@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/msg"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/test/tproto"
 
 	_ "net/http/pprof"
@@ -15,7 +15,7 @@ import (
 )
 
 func createMsgAgentClient() (*msg.MsgAgentClient, error) {
-	c := msg.NewProtobufMsgAgentClient(acommon.IdMsgMapper, common.WithSendListMode(acommon.SendListMode))
+	c := msg.NewProtobufMsgAgentClient(acommon.IdMsgMapper, options.WithSendListMode(acommon.SendListMode))
 	if err := c.Dial(acommon.MsgAgentServerAddress); err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func createServerUseMsgAgentClient(address string) *msg.MsgServer {
 		log.Fatalf("create agent client err %v", err)
 		return nil
 	}
-	s := msg.NewProtobufMsgServer(newServerHandlerUseMsgAgentClient, []any{msgAgentClient}, acommon.IdMsgMapper, common.WithSendListMode(acommon.SendListMode))
+	s := msg.NewProtobufMsgServer(newServerHandlerUseMsgAgentClient, []any{msgAgentClient}, acommon.IdMsgMapper, options.WithSendListMode(acommon.SendListMode))
 	if err = s.Listen(address); err != nil {
 		log.Infof("test server listen err %v", err)
 		return nil

@@ -9,6 +9,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/protocol"
 )
@@ -78,7 +79,7 @@ type DefaultBasePacketHandler struct {
 	packetEventHandler IPacketEventHandler
 	argsGetter         IPacketArgsGetter
 	resendEventHandler common.IResendEventHandler
-	options            *common.Options
+	options            *options.Options
 	lastTime           time.Time
 	state              HandlerState
 	reconnInfo         *common.ReconnectInfo
@@ -90,7 +91,7 @@ func NewDefaultBasePacketHandler4Client(
 	sess common.ISession,
 	packetEventHandler IPacketEventHandler,
 	resendEventHandler common.IResendEventHandler,
-	options *common.Options) *DefaultBasePacketHandler {
+	options *options.Options) *DefaultBasePacketHandler {
 	var conn common.IConn
 	connGetter, o := sess.(common.IConnGetter)
 	if o {
@@ -112,7 +113,7 @@ func NewDefaultBasePacketHandler4Server(
 	sess common.ISession,
 	argsGetter IPacketArgsGetter,
 	resendEventHandler common.IResendEventHandler,
-	options *common.Options,
+	options *options.Options,
 	reconnInfoMap sync.Map) *DefaultBasePacketHandler {
 	var conn common.IConn
 	connGetter, o := sess.(common.IConnGetter)
@@ -290,7 +291,7 @@ func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 			// heartbeat timeout to disconnect
 			disconnectTimeout := h.options.GetDisconnectHeartbeatTimeout()
 			if disconnectTimeout <= 0 {
-				disconnectTimeout = common.DefaultDisconnectHeartbeatTimeout
+				disconnectTimeout = options.DefaultDisconnectHeartbeatTimeout
 			}
 			duration := time.Since(h.lastTime)
 			if duration >= disconnectTimeout {
@@ -300,12 +301,12 @@ func (h *DefaultBasePacketHandler) OnUpdateHandle() error {
 
 			// heartbeat timespan
 			minSpan := h.options.GetMinHeartbeatTimeSpan()
-			if minSpan < common.DefaultMinimumHeartbeatTimeSpan {
-				minSpan = common.DefaultMinimumHeartbeatTimeSpan
+			if minSpan < options.DefaultMinimumHeartbeatTimeSpan {
+				minSpan = options.DefaultMinimumHeartbeatTimeSpan
 			}
 			span := h.options.GetHeartbeatTimeSpan()
 			if span <= 0 {
-				span = common.DefaultHeartbeatTimeSpan
+				span = options.DefaultHeartbeatTimeSpan
 			} else if span < minSpan {
 				span = minSpan
 			}

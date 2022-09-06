@@ -8,6 +8,7 @@ import (
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/server"
 )
@@ -355,12 +356,12 @@ type Gate struct {
 	agentGroup *client.AgentGroup
 }
 
-func NewGate(goptions *GateOptions, options ...common.Option) *Gate {
+func NewGate(goptions *GateOptions, ops ...options.Option) *Gate {
 	var gate = &Gate{
 		options:    goptions,
 		agentGroup: client.NewAgentGroup(getNextAgentGroupId()),
 	}
-	gate.serv = server.NewServer(newGateSessionHandler, server.WithNewSessionHandlerFuncArgs(gate.agentGroup, goptions.routeType), common.WithAutoReconnect(true), common.WithTickSpan(DefaultCheckCacheDataTick))
+	gate.serv = server.NewServer(newGateSessionHandler, options.WithNewSessionHandlerFuncArgs(gate.agentGroup, goptions.routeType), options.WithAutoReconnect(true), options.WithTickSpan(DefaultCheckCacheDataTick))
 	return gate
 }
 

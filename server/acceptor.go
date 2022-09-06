@@ -6,12 +6,20 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/control"
+	"github.com/huoshan017/gsnet/options"
 )
+
+type IAcceptor interface {
+	Listen(string) error
+	Serve() error
+	GetNewConnChan() chan net.Conn
+	Close()
+}
 
 type Acceptor struct {
 	listener net.Listener
 	connCh   chan net.Conn
-	options  ServerOptions
+	options  options.ServerOptions
 	closeCh  chan struct{}
 	closed   bool
 }
@@ -20,9 +28,9 @@ const (
 	DefaultConnChanLen = 100
 )
 
-func NewAcceptor(options ServerOptions) *Acceptor {
+func NewAcceptor(ops options.ServerOptions) *Acceptor {
 	a := &Acceptor{
-		options: options,
+		options: ops,
 		closeCh: make(chan struct{}),
 	}
 	if a.options.GetConnChanLen() <= 0 {

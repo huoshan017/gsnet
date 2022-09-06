@@ -3,9 +3,7 @@ package msg
 import (
 	"unsafe"
 
-	"github.com/huoshan017/gsnet/client"
-	"github.com/huoshan017/gsnet/common"
-	"github.com/huoshan017/gsnet/server"
+	"github.com/huoshan017/gsnet/options"
 )
 
 type MsgHeaderFormatFunc func(MsgIdType, []byte) error
@@ -57,17 +55,17 @@ func (options *MsgOptions) GetCustomData(key string) any {
 }
 
 type MsgClientOptions struct {
-	client.ClientOptions
+	options.ClientOptions
 	MsgOptions
 }
 
 type MsgServerOptions struct {
-	server.ServerOptions
+	options.ServerOptions
 	MsgOptions
 }
 
-func WithHeaderLength(length uint8) common.Option {
-	return func(options *common.Options) {
+func WithHeaderLength(length uint8) options.Option {
+	return func(options *options.Options) {
 		withMsgOptionValue(options, func(mcp *MsgClientOptions, msp *MsgServerOptions) {
 			if mcp != nil {
 				mcp.SetHeaderLength(length)
@@ -78,8 +76,8 @@ func WithHeaderLength(length uint8) common.Option {
 	}
 }
 
-func WithHeaderFormatFunc(fn MsgHeaderFormatFunc) common.Option {
-	return func(options *common.Options) {
+func WithHeaderFormatFunc(fn MsgHeaderFormatFunc) options.Option {
+	return func(options *options.Options) {
 		withMsgOptionValue(options, func(mcp *MsgClientOptions, msp *MsgServerOptions) {
 			if mcp != nil {
 				mcp.SetHeaderFormatFunc(fn)
@@ -90,8 +88,8 @@ func WithHeaderFormatFunc(fn MsgHeaderFormatFunc) common.Option {
 	}
 }
 
-func WithHeaderUnformatFunc(fn MsgHeaderUnformatFunc) common.Option {
-	return func(options *common.Options) {
+func WithHeaderUnformatFunc(fn MsgHeaderUnformatFunc) options.Option {
+	return func(options *options.Options) {
 		withMsgOptionValue(options, func(mcp *MsgClientOptions, msp *MsgServerOptions) {
 			if mcp != nil {
 				mcp.SetHeaderUnformatFunc(fn)
@@ -102,8 +100,8 @@ func WithHeaderUnformatFunc(fn MsgHeaderUnformatFunc) common.Option {
 	}
 }
 
-func withMsgOptionValue(options *common.Options, setValue func(*MsgClientOptions, *MsgServerOptions)) {
-	cp := (*client.ClientOptions)(unsafe.Pointer(options))
+func withMsgOptionValue(ops *options.Options, setValue func(*MsgClientOptions, *MsgServerOptions)) {
+	cp := (*options.ClientOptions)(unsafe.Pointer(ops))
 	if cp != nil {
 		mcp := (*MsgClientOptions)(unsafe.Pointer(cp))
 		if mcp == nil {
@@ -111,7 +109,7 @@ func withMsgOptionValue(options *common.Options, setValue func(*MsgClientOptions
 		}
 		setValue(mcp, nil)
 	} else {
-		sp := (*server.ServerOptions)(unsafe.Pointer(options))
+		sp := (*options.ServerOptions)(unsafe.Pointer(ops))
 		if sp == nil {
 			msp := (*MsgServerOptions)(unsafe.Pointer(sp))
 			if msp == nil {

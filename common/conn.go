@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/pool"
 )
@@ -22,7 +23,7 @@ type ISenderWithResend interface {
 // Conn struct
 type Conn struct {
 	conn          net.Conn
-	options       *Options
+	options       *options.Options
 	writer        *bufio.Writer
 	reader        *bufio.Reader
 	recvCh        chan packet.IPacket  // 缓存从网络接收的数据，对应一个接收者一个发送者
@@ -37,51 +38,51 @@ type Conn struct {
 }
 
 // NewConn create Conn instance use resend
-func NewConn(conn net.Conn, packetBuilder IPacketBuilder, options *Options) *Conn {
+func NewConn(conn net.Conn, packetBuilder IPacketBuilder, ops *options.Options) *Conn {
 	c := &Conn{
 		conn:          conn,
-		options:       options,
+		options:       ops,
 		closeCh:       make(chan struct{}),
 		errCh:         make(chan error, 1),
 		errWriteCh:    make(chan error, 1),
 		packetBuilder: packetBuilder,
 	}
 
-	if c.options.writeBuffSize <= 0 {
+	if c.options.GetWriteBuffSize() <= 0 {
 		c.writer = bufio.NewWriter(conn)
 	} else {
-		c.writer = bufio.NewWriterSize(conn, c.options.writeBuffSize)
+		c.writer = bufio.NewWriterSize(conn, c.options.GetWriteBuffSize())
 	}
 
-	if c.options.readBuffSize <= 0 {
+	if c.options.GetReadBuffSize() <= 0 {
 		c.reader = bufio.NewReader(conn)
 	} else {
-		c.reader = bufio.NewReaderSize(conn, c.options.readBuffSize)
+		c.reader = bufio.NewReaderSize(conn, c.options.GetReadBuffSize())
 	}
 
 	if c.options.GetRecvListLen() <= 0 {
 		c.options.SetRecvListLen(DefaultConnRecvListLen)
 	}
-	c.recvCh = make(chan packet.IPacket, c.options.recvListLen)
+	c.recvCh = make(chan packet.IPacket, c.options.GetRecvListLen())
 
 	if c.options.GetSendListMode() >= 0 {
-		c.csendList = newSendListFuncMap[c.options.GetSendListMode()](int32(c.options.sendListLen))
+		c.csendList = newSendListFuncMap[c.options.GetSendListMode()](int32(c.options.GetSendListLen()))
 	} else {
 		if c.options.GetSendListLen() <= 0 {
 			c.options.SetSendListLen(DefaultConnSendListLen)
 		}
-		c.sendCh = make(chan wrapperSendData, c.options.sendListLen)
+		c.sendCh = make(chan wrapperSendData, c.options.GetSendListLen())
 	}
 
 	if tcpConn, ok := c.conn.(*net.TCPConn); ok {
-		if c.options.noDelay {
-			tcpConn.SetNoDelay(c.options.noDelay)
+		if c.options.GetNodelay() {
+			tcpConn.SetNoDelay(c.options.GetNodelay())
 		}
-		if c.options.keepAlived {
-			tcpConn.SetKeepAlive(c.options.keepAlived)
+		if c.options.GetKeepAlived() {
+			tcpConn.SetKeepAlive(c.options.GetKeepAlived())
 		}
-		if c.options.keepAlivedPeriod > 0 {
-			tcpConn.SetKeepAlivePeriod(c.options.keepAlivedPeriod)
+		if c.options.GetKeepAlivedPeriod() > 0 {
+			tcpConn.SetKeepAlivePeriod(c.options.GetKeepAlivedPeriod())
 		}
 	}
 
@@ -135,8 +136,8 @@ func (c *Conn) readLoop() {
 		err error
 	)
 	for err == nil {
-		if c.options.readTimeout != 0 {
-			err = c.conn.SetReadDeadline(time.Now().Add(c.options.readTimeout))
+		if c.options.GetReadTimeout() != 0 {
+			err = c.conn.SetReadDeadline(time.Now().Add(c.options.GetReadTimeout()))
 			if err != nil {
 				break
 			}
@@ -167,8 +168,8 @@ func (c *Conn) realSend(d *wrapperSendData) error {
 	}
 
 	var err error
-	if c.options.writeTimeout != 0 {
-		if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout)); err != nil {
+	if c.options.GetWriteTimeout() != 0 {
+		if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.GetWriteTimeout())); err != nil {
 			return err
 		}
 	}
@@ -189,8 +190,8 @@ func (c *Conn) realSend(d *wrapperSendData) error {
 	if err == nil {
 		// have data in buffer
 		if c.writer.Buffered() > 0 {
-			if c.options.writeTimeout != 0 {
-				err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+			if c.options.GetWriteTimeout() != 0 {
+				err = c.conn.SetWriteDeadline(time.Now().Add(c.options.GetWriteTimeout()))
 			}
 			if err == nil {
 				err = c.writer.Flush()
@@ -397,30 +398,6 @@ func (c *Conn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyD
 	return err
 }
 
-// Conn.SendNonblock send data no bloacked (非阻塞发送)
-func (c *Conn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) error {
-	if atomic.LoadInt32(&c.closed) > 0 {
-		return c.genErrConnClosed()
-	}
-	var err error
-	select {
-	case err = <-c.errCh:
-		if err == nil {
-			err = c.genErrConnClosed()
-		}
-	case err = <-c.errWriteCh:
-		if err == nil {
-			err = c.genErrConnClosed()
-		}
-	case <-c.closeCh:
-		err = c.genErrConnClosed()
-	case c.sendCh <- getWrapperSendBytes(pt, data, copyData, false):
-	default:
-		err = ErrSendListFull
-	}
-	return err
-}
-
 // Conn.Recv recv packet (接收数据)
 func (c *Conn) Recv() (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
@@ -499,8 +476,8 @@ func (c *Conn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacke
 		tickerCh <-chan time.Time
 	)
 
-	if c.ticker == nil && c.options.tickSpan > 0 {
-		c.ticker = time.NewTicker(c.options.tickSpan)
+	if c.ticker == nil && c.options.GetTickSpan() > 0 {
+		c.ticker = time.NewTicker(c.options.GetTickSpan())
 	}
 
 	if c.ticker != nil {

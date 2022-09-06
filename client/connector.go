@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/kcp"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 )
 
 const (
@@ -18,7 +20,7 @@ const (
 
 type Connector struct {
 	conn          net.Conn
-	options       *common.Options
+	options       *options.Options
 	asyncResultCh chan struct {
 		conn net.Conn
 		err  error
@@ -28,7 +30,7 @@ type Connector struct {
 }
 
 // 创建连接器
-func NewConnector(options *common.Options) *Connector {
+func NewConnector(options *options.Options) *Connector {
 	c := &Connector{
 		options: options,
 		asyncResultCh: make(chan struct {
@@ -140,12 +142,39 @@ func (c *Connector) GetState() int32 {
 
 // 内部连接函数
 func (c *Connector) connect(address string, timeout time.Duration) (net.Conn, error) {
-	var conn net.Conn
-	var err error
-	if timeout > 0 {
-		conn, err = net.DialTimeout("tcp", address, timeout)
-	} else {
-		conn, err = net.Dial("tcp", address)
+	var (
+		conn net.Conn
+		err  error
+	)
+
+	var netProto = c.options.GetNetProto()
+	switch netProto {
+	case options.NetProtoTCP:
+		if timeout > 0 {
+			conn, err = net.DialTimeout("tcp", address, timeout)
+		} else {
+			conn, err = net.Dial("tcp", address)
+		}
+	case options.NetProtoTCP4:
+		if timeout > 0 {
+			conn, err = net.DialTimeout("tcp4", address, timeout)
+		} else {
+			conn, err = net.Dial("tcp4", address)
+		}
+	case options.NetProtoTCP6:
+		if timeout > 0 {
+			conn, err = net.DialTimeout("tcp6", address, timeout)
+		} else {
+			conn, err = net.Dial("tcp6", address)
+		}
+	case options.NetProtoUDP:
+		conn, err = kcp.DialUDP("udp", address)
+	case options.NetProtoUDP4:
+		conn, err = kcp.DialUDP("udp4", address)
+	case options.NetProtoUDP6:
+		conn, err = kcp.DialUDP("udp6", address)
+	default:
+		err = common.ErrUnknownNetwork
 	}
 	if err != nil {
 		return nil, err

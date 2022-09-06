@@ -1,9 +1,7 @@
-package client
+package options
 
 import (
 	"unsafe"
-
-	"github.com/huoshan017/gsnet/common"
 )
 
 type RunMode int32
@@ -15,7 +13,7 @@ const (
 
 // 客户端选项结构
 type ClientOptions struct {
-	common.Options
+	Options
 	runMode RunMode
 }
 
@@ -27,8 +25,8 @@ func (options *ClientOptions) SetRunMode(mode RunMode) {
 	options.runMode = mode
 }
 
-func WithRunMode(mode RunMode) common.Option {
-	return func(options *common.Options) {
+func WithRunMode(mode RunMode) Option {
+	return func(options *Options) {
 		p := (*ClientOptions)(unsafe.Pointer(options))
 		p.SetRunMode(mode)
 	}

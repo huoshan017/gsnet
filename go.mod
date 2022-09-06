@@ -6,6 +6,8 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
+	github.com/huoshan017/kcpgo v0.0.0-20220815084010-ea08260ba16b
+	github.com/huoshan017/ponu v0.0.0-20220903170659-e823376653ee
 	github.com/orcaman/concurrent-map v0.0.0-20210501183033-44dafcb38ecc
 	github.com/pkg/errors v0.9.1
 	github.com/thrift-iterator/go v0.0.0-20190402154806-9b5a67519118
@@ -15,8 +17,6 @@ require (
 
 require (
 	github.com/google/go-cmp v0.5.7 // indirect
-	github.com/huoshan017/kcpgo v0.0.0-20220724123157-bf77f0c8c09b // indirect
-	github.com/huoshan017/ponu v0.0.0-20220625105549-0934e1dcaecd // indirect
 	github.com/v2pro/plz v0.0.0-20200805122259-422184e41b6e // indirect
 	github.com/v2pro/quokka v0.0.0-20171201153428-382cb39c6ee6 // indirect
 	github.com/v2pro/wombat v0.0.0-20180402055224-a56dbdcddef2 // indirect

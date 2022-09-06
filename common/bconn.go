@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/pool"
 )
@@ -51,10 +52,10 @@ func putChunk(c *chunk) {
 	chunkPool.Put(c)
 }
 
-// KConn struct
-type KConn struct {
+// BConn struct
+type BConn struct {
 	conn        net.Conn
-	options     *Options
+	options     *options.Options
 	writer      *bufio.Writer
 	recvCh      chan *chunk // 缓存从网络接收的数据，对应一个接收者一个发送者
 	blist       packet.BytesList
@@ -69,46 +70,46 @@ type KConn struct {
 }
 
 // NewConn create Conn instance use resend
-func NewKConn(conn net.Conn, packetCodec IPacketCodec, options *Options) *KConn {
-	c := &KConn{
+func NewBConn(conn net.Conn, packetCodec IPacketCodec, ops *options.Options) *BConn {
+	c := &BConn{
 		conn:        conn,
-		options:     options,
+		options:     ops,
 		closeCh:     make(chan struct{}),
 		errCh:       make(chan error, 1),
 		errWriteCh:  make(chan error, 1),
 		packetCodec: packetCodec,
 	}
 
-	if c.options.writeBuffSize <= 0 {
+	if c.options.GetWriteBuffSize() <= 0 {
 		c.writer = bufio.NewWriter(conn)
 	} else {
-		c.writer = bufio.NewWriterSize(conn, c.options.writeBuffSize)
+		c.writer = bufio.NewWriterSize(conn, c.options.GetWriteBuffSize())
 	}
 
 	if c.options.GetRecvListLen() <= 0 {
 		c.options.SetRecvListLen(DefaultConnRecvListLen)
 	}
-	c.recvCh = make(chan *chunk, c.options.recvListLen)
+	c.recvCh = make(chan *chunk, c.options.GetRecvListLen())
 	c.blist = packet.NewBytesList((packet.MaxPacketLength + chunkBufferDefaultLength - 1) / chunkBufferDefaultLength)
 
 	if c.options.GetSendListMode() >= 0 {
-		c.csendList = newSendListFuncMap[c.options.GetSendListMode()](int32(c.options.sendListLen))
+		c.csendList = newSendListFuncMap[c.options.GetSendListMode()](int32(c.options.GetSendListLen()))
 	} else {
 		if c.options.GetSendListLen() <= 0 {
 			c.options.SetSendListLen(DefaultConnSendListLen)
 		}
-		c.sendCh = make(chan wrapperSendData, c.options.sendListLen)
+		c.sendCh = make(chan wrapperSendData, c.options.GetSendListLen())
 	}
 
 	if tcpConn, ok := c.conn.(*net.TCPConn); ok {
-		if c.options.noDelay {
-			tcpConn.SetNoDelay(c.options.noDelay)
+		if c.options.GetNodelay() {
+			tcpConn.SetNoDelay(c.options.GetNodelay())
 		}
-		if c.options.keepAlived {
-			tcpConn.SetKeepAlive(c.options.keepAlived)
+		if c.options.GetKeepAlived() {
+			tcpConn.SetKeepAlive(c.options.GetKeepAlived())
 		}
-		if c.options.keepAlivedPeriod > 0 {
-			tcpConn.SetKeepAlivePeriod(c.options.keepAlivedPeriod)
+		if c.options.GetKeepAlivedPeriod() > 0 {
+			tcpConn.SetKeepAlivePeriod(c.options.GetKeepAlivedPeriod())
 		}
 	}
 
@@ -130,17 +131,17 @@ func NewKConn(conn net.Conn, packetCodec IPacketCodec, options *Options) *KConn 
 }
 
 // Conn.LocalAddr get local address for connection
-func (c *KConn) LocalAddr() net.Addr {
+func (c *BConn) LocalAddr() net.Addr {
 	return c.conn.LocalAddr()
 }
 
 // Conn.RemoteAddr get remote address for connection
-func (c *KConn) RemoteAddr() net.Addr {
+func (c *BConn) RemoteAddr() net.Addr {
 	return c.conn.RemoteAddr()
 }
 
 // Conn.Run read loop and write loop runing in goroutine
-func (c *KConn) Run() {
+func (c *BConn) Run() {
 	go c.readLoop()
 	if c.options.GetSendListMode() >= 0 {
 		go c.newWriteLoop()
@@ -150,7 +151,7 @@ func (c *KConn) Run() {
 }
 
 // Conn.readLoop read loop goroutine
-func (c *KConn) readLoop() {
+func (c *BConn) readLoop() {
 	defer func() {
 		if err := recover(); err != nil {
 			log.WithStack(err)
@@ -164,8 +165,8 @@ func (c *KConn) readLoop() {
 		err    error
 	)
 	for err == nil {
-		if c.options.readTimeout != 0 {
-			err = c.conn.SetReadDeadline(time.Now().Add(c.options.readTimeout))
+		if c.options.GetReadTimeout() != 0 {
+			err = c.conn.SetReadDeadline(time.Now().Add(c.options.GetReadTimeout()))
 			if err != nil {
 				break
 			}
@@ -210,7 +211,7 @@ func (c *KConn) readLoop() {
 	close(c.recvCh)
 }
 
-func (c *KConn) realSend(d *wrapperSendData) error {
+func (c *BConn) realSend(d *wrapperSendData) error {
 	if d.data == nil {
 		panic("gsnet: wrapper send data nil")
 	}
@@ -235,8 +236,8 @@ func (c *KConn) realSend(d *wrapperSendData) error {
 	}
 
 	if err == nil {
-		if c.options.writeTimeout != 0 {
-			if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout)); err != nil {
+		if c.options.GetWriteTimeout() != 0 {
+			if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.GetWriteTimeout())); err != nil {
 				return err
 			}
 		}
@@ -247,16 +248,16 @@ func (c *KConn) realSend(d *wrapperSendData) error {
 
 		if data != nil {
 			var err error
-			if c.options.writeTimeout != 0 {
-				if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout)); err != nil {
+			if c.options.GetWriteTimeout() != 0 {
+				if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.GetWriteTimeout())); err != nil {
 					return err
 				}
 			}
 			_, err = c.writer.Write(data)
 		} else if datas != nil {
 			var err error
-			if c.options.writeTimeout != 0 {
-				if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout)); err != nil {
+			if c.options.GetWriteTimeout() != 0 {
+				if err = c.conn.SetWriteDeadline(time.Now().Add(c.options.GetWriteTimeout())); err != nil {
 					return err
 				}
 			}
@@ -269,8 +270,8 @@ func (c *KConn) realSend(d *wrapperSendData) error {
 		}
 		// have data in buffer
 		if err == nil && c.writer.Buffered() > 0 {
-			if c.options.writeTimeout != 0 {
-				err = c.conn.SetWriteDeadline(time.Now().Add(c.options.writeTimeout))
+			if c.options.GetWriteTimeout() != 0 {
+				err = c.conn.SetWriteDeadline(time.Now().Add(c.options.GetWriteTimeout()))
 			}
 			if err == nil {
 				err = c.writer.Flush()
@@ -287,7 +288,7 @@ func (c *KConn) realSend(d *wrapperSendData) error {
 }
 
 // Conn.newWriteLoop new write loop goroutine
-func (c *KConn) newWriteLoop() {
+func (c *BConn) newWriteLoop() {
 	defer func() {
 		c.csendList.Finalize()
 		if err := recover(); err != nil {
@@ -312,7 +313,7 @@ func (c *KConn) newWriteLoop() {
 }
 
 // Conn.writeLoop write loop goroutine
-func (c *KConn) writeLoop() {
+func (c *BConn) writeLoop() {
 	defer func() {
 		// 退出时回收内存池分配的内存
 		for d := range c.sendCh {
@@ -337,17 +338,17 @@ func (c *KConn) writeLoop() {
 }
 
 // Conn.Close close connection
-func (c *KConn) Close() error {
+func (c *BConn) Close() error {
 	return c.closeWait(0)
 }
 
 // Conn.CloseWait close connection wait seconds
-func (c *KConn) CloseWait(secs int) error {
+func (c *BConn) CloseWait(secs int) error {
 	return c.closeWait(secs)
 }
 
 // Conn.closeWait implementation for close connection
-func (c *KConn) closeWait(secs int) error {
+func (c *BConn) closeWait(secs int) error {
 	defer func() {
 		// 清理接收通道内存池分配的内存
 		for d := range c.recvCh {
@@ -381,52 +382,52 @@ func (c *KConn) closeWait(secs int) error {
 }
 
 // Conn.IsClosed the connection is closed
-func (c *KConn) IsClosed() bool {
+func (c *BConn) IsClosed() bool {
 	return atomic.LoadInt32(&c.closed) > 0
 }
 
 // Conn.Send send bytes data (发送数据，必須與Close函數在同一goroutine調用)
-func (c *KConn) Send(pt packet.PacketType, data []byte, copyData bool) error {
+func (c *BConn) Send(pt packet.PacketType, data []byte, copyData bool) error {
 	return c.sendData(pt, data, nil, copyData, nil, nil, packet.MemoryManagementNone, nil)
 }
 
 // Conn.SendPoolBuffer send buffer data with pool allocated (发送内存池缓存)
-func (c *KConn) SendPoolBuffer(pt packet.PacketType, pData *[]byte, mmType packet.MemoryManagementType) error {
+func (c *BConn) SendPoolBuffer(pt packet.PacketType, pData *[]byte, mmType packet.MemoryManagementType) error {
 	return c.sendData(pt, nil, nil, false, pData, nil, mmType, nil)
 }
 
 // Conn.SendBytesArray send bytes array data (发送缓冲数组)
-func (c *KConn) SendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool) error {
+func (c *BConn) SendBytesArray(pt packet.PacketType, datas [][]byte, copyData bool) error {
 	return c.sendData(pt, nil, datas, copyData, nil, nil, packet.MemoryManagementNone, nil)
 }
 
 // Conn.SendPoolBufferArray send buffer array data with pool allocated (发送内存池缓存数组)
-func (c *KConn) SendPoolBufferArray(pt packet.PacketType, pDatas []*[]byte, mmType packet.MemoryManagementType) error {
+func (c *BConn) SendPoolBufferArray(pt packet.PacketType, pDatas []*[]byte, mmType packet.MemoryManagementType) error {
 	return c.sendData(pt, nil, nil, false, nil, pDatas, mmType, nil)
 }
 
 // Conn.send
-func (c *KConn) send(data []byte, copyData bool, resendEventHandler IResendEventHandler) error {
+func (c *BConn) send(data []byte, copyData bool, resendEventHandler IResendEventHandler) error {
 	return c.sendData(packet.PacketNormalData, data, nil, copyData, nil, nil, packet.MemoryManagementNone, resendEventHandler)
 }
 
 // Conn.sendBytesArray
-func (c *KConn) sendBytesArray(datas [][]byte, copyData bool, resendEventHandler IResendEventHandler) error {
+func (c *BConn) sendBytesArray(datas [][]byte, copyData bool, resendEventHandler IResendEventHandler) error {
 	return c.sendData(packet.PacketNormalData, nil, datas, copyData, nil, nil, packet.MemoryManagementNone, resendEventHandler)
 }
 
 // Conn.sendPoolBuffer
-func (c *KConn) sendPoolBuffer(pData *[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
+func (c *BConn) sendPoolBuffer(pData *[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
 	return c.sendData(packet.PacketNormalData, nil, nil, false, pData, nil, mmType, resendEventHandler)
 }
 
 // Conn.sendPoolBufferArray
-func (c *KConn) sendPoolBufferArray(pDatas []*[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
+func (c *BConn) sendPoolBufferArray(pDatas []*[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
 	return c.sendData(packet.PacketNormalData, nil, nil, false, nil, pDatas, mmType, resendEventHandler)
 }
 
 // Conn.sendData
-func (c *KConn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyData bool, pData *[]byte, pDataArray []*[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
+func (c *BConn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copyData bool, pData *[]byte, pDataArray []*[]byte, mmType packet.MemoryManagementType, resendEventHandler IResendEventHandler) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
 	}
@@ -478,7 +479,7 @@ func (c *KConn) sendData(pt packet.PacketType, data []byte, datas [][]byte, copy
 }
 
 // Conn.SendNonblock send data no bloacked (非阻塞发送)
-func (c *KConn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) error {
+func (c *BConn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) error {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return c.genErrConnClosed()
 	}
@@ -502,7 +503,7 @@ func (c *KConn) SendNonblock(pt packet.PacketType, data []byte, copyData bool) e
 }
 
 // Conn.Recv recv packet (接收数据)
-func (c *KConn) Recv() (packet.IPacket, error) {
+func (c *BConn) Recv() (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, c.genErrConnClosed()
 	}
@@ -531,7 +532,7 @@ func (c *KConn) Recv() (packet.IPacket, error) {
 }
 
 // Conn.RecvNonblock recv packet no blocked (非阻塞接收数据)
-func (c *KConn) RecvNonblock() (packet.IPacket, error) {
+func (c *BConn) RecvNonblock() (packet.IPacket, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, ErrConnClosed
 	}
@@ -565,12 +566,12 @@ func (c *KConn) RecvNonblock() (packet.IPacket, error) {
 }
 
 // Conn.genErrConnClosed generate connection closed error
-func (c *KConn) genErrConnClosed() error {
+func (c *BConn) genErrConnClosed() error {
 	return ErrConnClosed
 }
 
 // Conn.Wait wait packet or timer (等待选择结果)
-func (c *KConn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacket, int32, error) {
+func (c *BConn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacket, int32, error) {
 	if atomic.LoadInt32(&c.closed) > 0 {
 		return nil, 0, ErrConnClosed
 	}
@@ -583,8 +584,8 @@ func (c *KConn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPack
 		loop     bool = true
 	)
 
-	if c.ticker == nil && c.options.tickSpan > 0 {
-		c.ticker = time.NewTicker(c.options.tickSpan)
+	if c.ticker == nil && c.options.GetTickSpan() > 0 {
+		c.ticker = time.NewTicker(c.options.GetTickSpan())
 	}
 
 	if c.ticker != nil {
@@ -625,7 +626,7 @@ func (c *KConn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPack
 	return p, id, err
 }
 
-func (c *KConn) recvChunk(chk *chunk) (packet.IPacket, error) {
+func (c *BConn) recvChunk(chk *chunk) (packet.IPacket, error) {
 	if !c.blist.PushBytes(chk.rawbuf, chk.datalen) {
 		panic(fmt.Sprintf("!!!!! bl.PushBytes chk.rawbuf(%p) chk.datalen(%v) failed, BytesList %+v", chk.rawbuf, chk.datalen, c.blist))
 	}

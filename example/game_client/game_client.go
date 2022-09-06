@@ -7,9 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/example/game_proto"
 	"github.com/huoshan017/gsnet/msg"
+	"github.com/huoshan017/gsnet/options"
 )
 
 const (
@@ -118,7 +118,7 @@ func (c *GameClient) GetNet() *msg.MsgClient {
 
 func (c *GameClient) Init(conf *config) error {
 	var idMsgMapper = msg.CreateIdMsgMapper()
-	net := msg.NewGobMsgClient(idMsgMapper, common.WithTickSpan(time.Millisecond))
+	net := msg.NewGobMsgClient(idMsgMapper, options.WithTickSpan(time.Millisecond))
 	err := net.Connect(conf.addr)
 	if err != nil {
 		fmt.Println("connect ", conf.addr, " failed")

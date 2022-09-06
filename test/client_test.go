@@ -9,6 +9,7 @@ import (
 
 	"github.com/huoshan017/gsnet/client"
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 )
 
@@ -108,7 +109,7 @@ func (h *testClientUseRunHandler) OnError(err error) {
 
 func createTestClientUseRun(t *testing.T, totalNum int32) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseRunHandler(t, totalNum), common.WithTickSpan(time.Second), common.WithConnDataType(connDataType))
+	return client.NewClient(newTestClientUseRunHandler(t, totalNum), options.WithTickSpan(time.Second), options.WithConnDataType(connDataType))
 }
 
 func TestClientUseRun(t *testing.T) {
@@ -224,7 +225,7 @@ func (h *testClientUseUpdateHandler) OnError(err error) {
 
 func createTestClientUseUpdate(t *testing.T, state int32, userData any, count int32, connType int) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseUpdateHandler(t, state, userData, count), client.WithRunMode(client.RunModeOnlyUpdate), common.WithConnDataType(connType))
+	return client.NewClient(newTestClientUseUpdateHandler(t, state, userData, count), options.WithRunMode(options.RunModeOnlyUpdate), options.WithConnDataType(connType))
 }
 
 func testClientUseUpdate(t *testing.T, connType int) {
@@ -417,7 +418,7 @@ func TestNilChannel(t *testing.T) {
 
 func createTestClientUseReconnect(t *testing.T, totalNum int32) *client.Client {
 	// 启用tick处理
-	return client.NewClient(newTestClientUseRunHandler(t, totalNum), common.WithAutoReconnect(true), common.WithTickSpan(time.Second))
+	return client.NewClient(newTestClientUseRunHandler(t, totalNum), options.WithAutoReconnect(true), options.WithTickSpan(time.Second))
 }
 
 func TestClientReconnect(t *testing.T) {

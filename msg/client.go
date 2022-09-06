@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/huoshan017/gsnet/client"
-	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/msg/codec"
+	"github.com/huoshan017/gsnet/options"
 )
 
 // MsgClient struct
@@ -16,11 +16,11 @@ type MsgClient struct {
 }
 
 // NewMsgClient create a message client
-func NewMsgClient(msgCodec IMsgCodec, idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+func NewMsgClient(msgCodec IMsgCodec, idMsgMapper *IdMsgMapper, ops ...options.Option) *MsgClient {
 	c := &MsgClient{}
 	c.handler = newMsgHandlerClient(msgCodec, idMsgMapper, &c.options.MsgOptions)
-	for i := 0; i < len(options); i++ {
-		options[i](&c.options.Options)
+	for i := 0; i < len(ops); i++ {
+		ops[i](&c.options.Options)
 	}
 	c.Client = client.NewClientWithOptions(c.handler, &c.options.ClientOptions)
 	return c
@@ -62,26 +62,26 @@ func (c *MsgClient) Send(msgid MsgIdType, msg any) error {
 }
 
 // NewProtobufMsgClient create protobuf message client
-func NewProtobufMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+func NewProtobufMsgClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgClient {
 	return NewMsgClient(&codec.ProtobufCodec{}, idMsgMapper, options...)
 }
 
 // NewJsonMsgClient create json message client
-func NewJsonMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+func NewJsonMsgClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgClient {
 	return NewMsgClient(&codec.JsonCodec{}, idMsgMapper, options...)
 }
 
 // NewGobMsgClient create gob message client
-func NewGobMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+func NewGobMsgClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgClient {
 	return NewMsgClient(&codec.GobCodec{}, idMsgMapper, options...)
 }
 
 // NewThriftMsgClient create thrift message client
-func NewThriftMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+func NewThriftMsgClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgClient {
 	return NewMsgClient(&codec.ThriftCodec{}, idMsgMapper, options...)
 }
 
 // NewMsgpackMsgClient create msgpack message client
-func NewMsgpackMsgClient(idMsgMapper *IdMsgMapper, options ...common.Option) *MsgClient {
+func NewMsgpackMsgClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgClient {
 	return NewMsgClient(&codec.MsgpackCodec{}, idMsgMapper, options...)
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/log"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/server"
 
@@ -45,7 +46,7 @@ func (h *serverHandler) OnError(err error) {
 }
 
 func createServer(address string) *server.Server {
-	s := server.NewServer(newServerHandlerUseAgentClient, common.WithTickSpan(100*time.Millisecond))
+	s := server.NewServer(newServerHandlerUseAgentClient, options.WithTickSpan(100*time.Millisecond))
 	if err := s.Listen(address); err != nil {
 		log.Infof("test server listen err %v", err)
 		return nil

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/msg"
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 
 	"github.com/huoshan017/gsnet/test/tproto"
@@ -45,17 +45,17 @@ func init() {
 
 func newPBMsgClient(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error) {
 	var c *msg.MsgClient
-	var options = []common.Option{
-		common.WithTickSpan(10 * time.Millisecond),
+	var ops = []options.Option{
+		options.WithTickSpan(10 * time.Millisecond),
 	}
 	if config.useResend {
-		options = append(options, common.WithResendConfig(&common.ResendConfig{}))
+		ops = append(ops, options.WithResendConfig(&options.ResendConfig{}))
 	}
 	if config.useHeartbeat {
-		options = append(options, common.WithUseHeartbeat(true))
+		ops = append(ops, options.WithUseHeartbeat(true))
 	}
 
-	c = msg.NewProtobufMsgClient(idMsgMapper, options...)
+	c = msg.NewProtobufMsgClient(idMsgMapper, ops...)
 
 	c.SetConnectHandle(func(sess *msg.MsgSession) {
 		t.Logf("connected")
@@ -159,14 +159,14 @@ func newTestPBMsgHandler(args ...any) msg.IMsgSessionEventHandler {
 
 func newPBMsgServer(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error) {
 	var s *msg.MsgServer
-	var options = []common.Option{}
+	var ops = []options.Option{}
 	if config.useResend {
-		options = append(options, common.WithResendConfig(&common.ResendConfig{}))
+		ops = append(ops, options.WithResendConfig(&options.ResendConfig{}))
 	}
 	if config.useHeartbeat {
-		options = append(options, common.WithUseHeartbeat(true))
+		ops = append(ops, options.WithUseHeartbeat(true))
 	}
-	s = msg.NewProtobufMsgServer(newTestPBMsgHandler, []any{t}, idMsgMapper, options...)
+	s = msg.NewProtobufMsgServer(newTestPBMsgHandler, []any{t}, idMsgMapper, ops...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err
@@ -231,16 +231,16 @@ func (h *testPBMsgClientHandler) OnError(err error) {
 
 func newPBMsgClient2(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error) {
 	var c *msg.MsgClient
-	var options = []common.Option{
-		common.WithTickSpan(10 * time.Millisecond),
+	var ops = []options.Option{
+		options.WithTickSpan(10 * time.Millisecond),
 	}
 	if config.useResend {
-		options = append(options, common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
+		ops = append(ops, options.WithResendConfig(&options.ResendConfig{UseLockFree: true}))
 	}
 	if config.useHeartbeat {
-		options = append(options, common.WithUseHeartbeat(true))
+		ops = append(ops, options.WithUseHeartbeat(true))
 	}
-	c = msg.NewProtobufMsgClient(idMsgMapper, options...)
+	c = msg.NewProtobufMsgClient(idMsgMapper, ops...)
 
 	handler := newTestPBMsgClientHandler(t, c)
 	c.SetConnectHandle(handler.OnConnect)
@@ -305,21 +305,21 @@ func newTestPBMsgHandler2(args ...any) msg.IMsgSessionEventHandler {
 
 func newPBMsgServer2(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error) {
 	var s *msg.MsgServer
-	var options = []common.Option{}
+	var ops = []options.Option{}
 	if config.useResend {
-		options = append(options, common.WithResendConfig(&common.ResendConfig{UseLockFree: true}))
+		ops = append(ops, options.WithResendConfig(&options.ResendConfig{UseLockFree: true}))
 	}
 	if config.useSnappyCompress {
-		options = append(options, common.WithPacketCompressType(packet.CompressSnappy))
+		ops = append(ops, options.WithPacketCompressType(packet.CompressSnappy))
 	}
 	if config.useAesCrypto {
-		options = append(options, common.WithPacketEncryptionType(packet.EncryptionAes))
+		ops = append(ops, options.WithPacketEncryptionType(packet.EncryptionAes))
 	}
 	if config.useHeartbeat {
-		options = append(options, common.WithUseHeartbeat(true))
+		ops = append(ops, options.WithUseHeartbeat(true))
 	}
-	options = append(options, msg.WithHeaderFormatFunc(msg.DefaultMsgHeaderFormat), msg.WithHeaderUnformatFunc(msg.DefaultMsgHeaderUnformat))
-	s = msg.NewProtobufMsgServer(newTestPBMsgHandler2, []any{t}, idMsgMapper, options...)
+	ops = append(ops, msg.WithHeaderFormatFunc(msg.DefaultMsgHeaderFormat), msg.WithHeaderUnformatFunc(msg.DefaultMsgHeaderUnformat))
+	s = msg.NewProtobufMsgServer(newTestPBMsgHandler2, []any{t}, idMsgMapper, ops...)
 	err := s.Listen(testAddress)
 	if err != nil {
 		return nil, err

@@ -3,7 +3,7 @@ package msg
 import (
 	"testing"
 
-	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/options"
 )
 
 type testData4ServerOptions struct {
@@ -14,13 +14,13 @@ type testData4ClientOptions struct {
 	options MsgClientOptions
 }
 
-func (d *testData4ServerOptions) check(options ...common.Option) {
+func (d *testData4ServerOptions) check(options ...options.Option) {
 	for i := 0; i < len(options); i++ {
 		options[i](&d.options.Options)
 	}
 }
 
-func (d *testData4ClientOptions) check(options ...common.Option) {
+func (d *testData4ClientOptions) check(options ...options.Option) {
 	for i := 0; i < len(options); i++ {
 		options[i](&d.options.Options)
 	}

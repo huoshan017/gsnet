@@ -34,7 +34,6 @@ type IConn interface {
 	Close() error
 	CloseWait(int) error
 	IsClosed() bool
-	Recv() (packet.IPacket, error)
 	RecvNonblock() (packet.IPacket, error)
 	Send(packet.PacketType, []byte, bool) error
 	SendPoolBuffer(packet.PacketType, *[]byte, packet.MemoryManagementType) error
@@ -47,7 +46,6 @@ type IConn interface {
 type ISession interface {
 	GetId() uint64
 	GetKey() uint64
-	//Conn() IConn
 	Send([]byte, bool) error
 	SendBytesArray([][]byte, bool) error
 	SendPoolBuffer(*[]byte) error

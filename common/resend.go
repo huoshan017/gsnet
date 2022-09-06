@@ -7,6 +7,8 @@ import (
 	"unsafe"
 
 	"github.com/gogo/protobuf/proto"
+
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/protocol"
 )
@@ -98,16 +100,9 @@ func cas(p *unsafe.Pointer, old, new *sendNode) (ok bool) {
 	return atomic.CompareAndSwapPointer(p, unsafe.Pointer(old), unsafe.Pointer(new))
 }
 
-type ResendConfig struct {
-	SentListLength int32
-	AckSentSpan    time.Duration
-	AckSentNum     int32
-	UseLockFree    bool
-}
-
 // 重传数据类
 type ResendData struct {
-	config           ResendConfig
+	config           options.ResendConfig
 	sentList         *SendList
 	ackTotalNum      int32 // 已确认自己发送数据包的总数量
 	peerRecvTotalNum int32 // 对面已接收自己发送数据包的总数量，对方的确认包中带来的
@@ -117,7 +112,7 @@ type ResendData struct {
 	disposed         bool
 }
 
-func NewResendData(config *ResendConfig) *ResendData {
+func NewResendData(config *options.ResendConfig) *ResendData {
 	return &ResendData{
 		sentList: newSendList(),
 		config:   *config,
