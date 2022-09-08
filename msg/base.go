@@ -1,6 +1,8 @@
 package msg
 
-import "time"
+import (
+	"time"
+)
 
 // MsgIdType message id type
 type MsgIdType uint32

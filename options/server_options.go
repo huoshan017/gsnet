@@ -5,9 +5,6 @@ import (
 	"unsafe"
 )
 
-// 会话处理器函数类型
-//type NewSessionHandlerFunc func(args ...any) common.ISessionEventHandler
-
 // 服务选项结构
 type ServerOptions struct {
 	Options

@@ -131,9 +131,9 @@ type msgHandlerClient struct {
 	handleMap map[MsgIdType]func(*MsgSession, any) error
 }
 
-func newMsgHandlerClient(codec IMsgCodec, mapper *IdMsgMapper, options *MsgOptions) *msgHandlerClient {
+func newMsgHandlerClient(codec IMsgCodec, mapper *IdMsgMapper, ops *MsgOptions) *msgHandlerClient {
 	return &msgHandlerClient{
-		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper, options),
+		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper, ops),
 		handleMap:        make(map[MsgIdType]func(*MsgSession, any) error),
 	}
 }
@@ -163,9 +163,9 @@ type msgHandlerServer struct {
 	msgHandle      func(*MsgSession, MsgIdType, any) error
 }
 
-func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper, options *MsgOptions) *msgHandlerServer {
+func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper, ops *MsgOptions) *msgHandlerServer {
 	server := &msgHandlerServer{
-		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper, options),
+		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper, ops),
 		sessionHandler:   sessionHandler,
 	}
 	server.msgHandlerCommon.SetConnectHandle(sessionHandler.OnConnected)
