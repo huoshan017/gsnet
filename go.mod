@@ -7,7 +7,7 @@ require (
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.4
 	github.com/huoshan017/kcpgo v0.0.0-20220815084010-ea08260ba16b
-	github.com/huoshan017/ponu v0.0.0-20220907125450-45489884e5eb
+	github.com/huoshan017/ponu v0.0.0-20220911011151-16c5617bde57
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/thrift-iterator/go v0.0.0-20190402154806-9b5a67519118

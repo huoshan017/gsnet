@@ -16,7 +16,9 @@ import (
 	kcp "github.com/huoshan017/kcpgo"
 )
 
-const ()
+const (
+	defaultTickSpan = 50 * time.Millisecond
+)
 
 // KConn struct
 type KConn struct {
@@ -46,8 +48,6 @@ func NewKConn(conn net.Conn, packetCodec common.IPacketCodec, options *options.O
 		packetCodec: packetCodec,
 	}
 
-	c.kcpCB = kcp.NewWithOptions(kconn.convId, nil, c.outputData, options.GetKcpOptions())
-
 	if c.options.GetWriteBuffSize() <= 0 {
 		c.writer = bufio.NewWriter(conn)
 	} else {
@@ -58,7 +58,7 @@ func NewKConn(conn net.Conn, packetCodec common.IPacketCodec, options *options.O
 		c.options.SetRecvListLen(common.DefaultConnRecvListLen)
 	}
 
-	c.blist = packet.NewBytesList(1024)
+	c.blist = packet.NewBytesList(128)
 
 	if c.options.GetSendListLen() <= 0 {
 		c.options.SetSendListLen(common.DefaultConnSendListLen)
@@ -68,6 +68,8 @@ func NewKConn(conn net.Conn, packetCodec common.IPacketCodec, options *options.O
 	var tickSpan = c.options.GetTickSpan()
 	if tickSpan > 0 && tickSpan < common.MinConnTick {
 		c.options.SetTickSpan(common.MinConnTick)
+	} else if tickSpan == 0 {
+		c.options.SetTickSpan(defaultTickSpan)
 	}
 
 	// resend config
@@ -78,6 +80,12 @@ func NewKConn(conn net.Conn, packetCodec common.IPacketCodec, options *options.O
 			c.options.SetTickSpan(tickSpan)
 		}
 	}
+
+	var mtu int32 = options.GetKcpMtu()
+	if mtu == 0 {
+		mtu = defaultMtu
+	}
+	c.kcpCB = kcp.New(kconn.convId, nil, c.outputData, kcp.WithMtu(mtu), kcp.WithStream(true), kcp.WithInterval(int32(c.options.GetTickSpan().Milliseconds())), kcp.WithUserFreeOutputBuf(true))
 
 	return c
 }
@@ -94,101 +102,6 @@ func (c *KConn) RemoteAddr() net.Addr {
 
 // Conn.Run read loop and write loop runing in goroutine
 func (c *KConn) Run() {
-	//go c.readLoop()
-	go c.writeLoop()
-}
-
-// Conn.readLoop read loop goroutine
-/*func (c *KConn) readLoop() {
-	defer func() {
-		if err := recover(); err != nil {
-			log.WithStack(err)
-		}
-	}()
-
-	var (
-		buf  *[]byte
-		used int32
-		r    int
-		err  error
-	)
-	for err == nil {
-		if c.options.GetReadTimeout() != 0 {
-			err = c.conn.SetReadDeadline(time.Now().Add(c.options.GetReadTimeout()))
-			if err != nil {
-				break
-			}
-		}
-		if buf == nil {
-			buf = pool.GetBuffPool().Alloc(chunkBufferDefaultLength)
-			used = 0
-		}
-		r, err = c.conn.Read((*buf)[used:])
-		if err == nil {
-			used += int32(r)
-			isend := len(*buf)-int(used) < int(c.options.GetKcpMtu())
-			select {
-			case <-c.closeCh:
-				err = c.genErrConnClosed()
-			case c.recvCh <- func() *chunk {
-				chunk := getChunk()
-				chunk.rawbuf = buf
-				chunk.offset = int16(used)
-				chunk.datalen = int16(r)
-				chunk.isend = isend
-				return chunk
-			}():
-				if isend {
-					buf = nil
-				}
-			}
-		} else if common.IsTimeoutError(err) {
-			err = nil
-		}
-	}
-	if buf != nil && used == 0 {
-		pool.GetBuffPool().Free(buf)
-	}
-	// 错误写入通道
-	if err != nil {
-		c.errCh <- err
-	}
-	// 关闭错误通道
-	close(c.errCh)
-	// 关闭接收通道
-	close(c.recvCh)
-}*/
-
-// Conn.newWriteLoop new write loop goroutine
-func (c *KConn) writeLoop() {
-	defer func() {
-		for s := range c.sendCh {
-			if s != nil {
-				kcp.RecycleOutputBuffer(s)
-			}
-		}
-	}()
-	var err error
-	for s := range c.sendCh {
-		if s == nil {
-			break
-		}
-		if c.options.GetWriteTimeout() != 0 {
-			err = c.conn.SetWriteDeadline(time.Now().Add(c.options.GetWriteTimeout()))
-			if err != nil {
-				break
-			}
-		}
-		if _, err = c.conn.Write(s); err != nil {
-			break
-		}
-		kcp.RecycleOutputBuffer(s)
-	}
-	if err != nil {
-		c.errWriteCh <- err
-	}
-	// 关闭写错误通道
-	close(c.errWriteCh)
 }
 
 // Conn.Close close connection
@@ -335,7 +248,6 @@ func (c *KConn) Wait(ctx context.Context, chPak chan common.IdWithPacket) (packe
 		id       int32
 		err      error
 		tickerCh <-chan time.Time
-		loop     bool = true
 		ok       bool
 	)
 
@@ -349,11 +261,11 @@ func (c *KConn) Wait(ctx context.Context, chPak chan common.IdWithPacket) (packe
 
 	// decode first, if get packet or error then return
 	p, err = c.packetCodec.Decode(&c.blist)
-	if err != nil || p != nil {
-		return p, 0, err
+	if err != nil {
+		return nil, 0, err
 	}
 
-	for loop {
+	if p == nil {
 		select {
 		case <-ctx.Done():
 			err = common.ErrCancelWait
@@ -364,10 +276,11 @@ func (c *KConn) Wait(ctx context.Context, chPak chan common.IdWithPacket) (packe
 			}
 			p, err = c.recvMBufferSlice(slice)
 		case <-tickerCh:
-			loop = false
 			c.kcpCB.Update(currMs())
+			id = -1
 		case pak, o := <-chPak:
 			if o {
+				p = pak.GetPak()
 				id = pak.GetId()
 			} else {
 				log.Infof("gsnet: inbound channel is closed")
@@ -381,21 +294,18 @@ func (c *KConn) Wait(ctx context.Context, chPak chan common.IdWithPacket) (packe
 				err = common.ErrConnClosed
 			}
 		}
-		if err != nil || p != nil || id > 0 {
-			loop = false
-		}
 	}
+
 	return p, id, err
 }
 
 func (c *KConn) outputData(data []byte, user any) int32 {
-	select {
-	case c.sendCh <- data:
-	default:
-		// 不阻塞，直接丢失
-		kcp.RecycleOutputBuffer(data)
+	n, err := c.conn.Write(data)
+	if err != nil {
+		log.Infof("gsnet: KConn.outputData err: %v", err)
+		return -1
 	}
-	return 0
+	return int32(n)
 }
 
 func (c *KConn) recvMBufferSlice(slice mBufferSlice) (packet.IPacket, error) {

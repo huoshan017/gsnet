@@ -5,6 +5,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/huoshan017/gsnet/common"
 	"github.com/huoshan017/gsnet/control"
 	"github.com/huoshan017/gsnet/options"
 )
@@ -19,7 +20,7 @@ type IAcceptor interface {
 type Acceptor struct {
 	listener net.Listener
 	connCh   chan net.Conn
-	options  options.ServerOptions
+	options  *options.ServerOptions
 	closeCh  chan struct{}
 	closed   bool
 }
@@ -28,7 +29,7 @@ const (
 	DefaultConnChanLen = 100
 )
 
-func NewAcceptor(ops options.ServerOptions) *Acceptor {
+func NewAcceptor(ops *options.ServerOptions) *Acceptor {
 	a := &Acceptor{
 		options: ops,
 		closeCh: make(chan struct{}),
@@ -51,7 +52,8 @@ func (s *Acceptor) Listen(addr string) error {
 	var lc = net.ListenConfig{
 		Control: control.GetControl(ctrlOptions),
 	}
-	listener, err := lc.Listen(context.Background(), "tcp", addr)
+	var network string = common.NetProto2Network(s.options.GetNetProto())
+	listener, err := lc.Listen(context.Background(), network, addr)
 	if err != nil {
 		return err
 	}

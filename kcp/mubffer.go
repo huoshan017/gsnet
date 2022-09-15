@@ -1,6 +1,7 @@
 package kcp
 
 import (
+	"io"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -8,11 +9,17 @@ import (
 	"github.com/huoshan017/gsnet/pool"
 )
 
+const (
+	mBufferStateFree       = iota
+	mBufferStateUsing      = 1
+	mBufferStateCanRecycle = 2
+)
+
 type mBuffer struct {
-	buf     *[]byte
-	used    int32
-	ref     int32
-	recycle int32
+	buf   *[]byte
+	used  int32
+	ref   int32
+	state int32
 }
 
 func (b mBuffer) buffer() []byte {
@@ -28,6 +35,22 @@ func (b *mBuffer) use(n int32) bool {
 	return true
 }
 
+func (b *mBuffer) lastSlice() (mBufferSlice, bool) {
+	left := b.left()
+	if left <= 0 {
+		return mBufferSlice{}, false
+	}
+	return mBufferSlice{slice: nil, buffer: b}, true
+}
+
+func (b *mBuffer) finish() bool {
+	// 引用计数和可回收标记标记判断
+	if atomic.AddInt32(&b.ref, -1) == 0 && b.canRecycle() {
+		return true
+	}
+	return false
+}
+
 func (b *mBuffer) left() int32 {
 	return int32(len(*b.buf)) - b.used
 }
@@ -36,15 +59,15 @@ func (b *mBuffer) clear() {
 	b.buf = nil
 	b.used = 0
 	b.ref = 0
-	b.recycle = 0
+	b.state = mBufferStateFree
 }
 
 func (b *mBuffer) canRecycle() bool {
-	return atomic.LoadInt32(&b.recycle) > 0
+	return atomic.LoadInt32(&b.state) == mBufferStateCanRecycle
 }
 
 func (b *mBuffer) markRecycle() {
-	atomic.StoreInt32(&b.recycle, 1)
+	atomic.StoreInt32(&b.state, mBufferStateCanRecycle)
 }
 
 type mBufferSlice struct {
@@ -56,7 +79,7 @@ func (s mBufferSlice) getData() []byte {
 	return s.slice
 }
 
-func (s *mBufferSlice) skip(n int32) bool {
+/*func (s *mBufferSlice) skip(n int32) bool {
 	if n > int32(len(s.slice)) {
 		return false
 	}
@@ -64,33 +87,31 @@ func (s *mBufferSlice) skip(n int32) bool {
 	return true
 }
 
-/*func (s *mBufferSlice) read(buf []byte) int32 {
+func (s *mBufferSlice) read(buf []byte) int32 {
 	n := int32(copy(s.slice, buf))
 	s.slice = s.slice[n:]
 	return n
 }*/
 
 func (s mBufferSlice) finish(recycle func(*mBuffer)) {
-	// 引用计数和可回收标记标记判断
-	if atomic.AddInt32(&s.buffer.ref, -1) == 0 && s.buffer.canRecycle() && recycle != nil {
+	if s.buffer.finish() && recycle != nil {
 		recycle(s.buffer)
 	}
 }
 
-/*func Read2MBuffer(reader io.Reader, buf *mBuffer) (mBufferSlice, error) {
-	n, e := reader.Read((*buf.buf)[buf.used:])
+func Read2MBuffer(reader io.Reader, buf *mBuffer) (mBufferSlice, error) {
+	b := buf.buffer()
+	n, e := reader.Read(buf.buffer())
 	if e != nil {
 		return mBufferSlice{}, e
 	}
-	oldUsed := (*buf).used
-	buf.used += int32(n)
-	atomic.AddInt32(&buf.ref, 1)
-	return mBufferSlice{slice: (*buf.buf)[oldUsed:buf.used], buffer: buf}, nil
-}*/
+	buf.use(int32(n))
+	return mBufferSlice{slice: b[:n], buffer: buf}, nil
+}
 
-func ReadFromUDP2MBuffer(conn *net.UDPConn, buf *mBuffer) (mBufferSlice, *net.UDPAddr, error) {
+func ReadFrom2MBuffer(conn net.PacketConn, buf *mBuffer) (mBufferSlice, net.Addr, error) {
 	b := buf.buffer()
-	n, addr, e := conn.ReadFromUDP(buf.buffer())
+	n, addr, e := conn.ReadFrom(buf.buffer())
 	if e != nil {
 		return mBufferSlice{}, nil, e
 	}
@@ -136,9 +157,10 @@ func getMBuffer() *mBuffer {
 }*/
 
 func putMBuffer(buf *mBuffer) {
-	pool.GetBuffPool().Free(buf.buf)
+	pbuf := buf.buf
 	buf.clear()
 	mbufferPool.Put(buf)
+	pool.GetBuffPool().Free(pbuf)
 }
 
 func SetMBufferSize(size int32) {

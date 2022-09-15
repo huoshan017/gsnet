@@ -1,8 +1,10 @@
 package common
 
 import (
+	"fmt"
 	"net"
 
+	"github.com/huoshan017/gsnet/options"
 	"github.com/huoshan017/gsnet/packet"
 	"github.com/huoshan017/gsnet/pool"
 )
@@ -113,4 +115,23 @@ func IsTimeoutError(err error) bool {
 		return true
 	}
 	return false
+}
+
+func NetProto2Network(proto options.NetProto) string {
+	switch proto {
+	case options.NetProtoTCP:
+		return "tcp"
+	case options.NetProtoTCP4:
+		return "tcp4"
+	case options.NetProtoTCP6:
+		return "tcp6"
+	case options.NetProtoUDP:
+		return "udp"
+	case options.NetProtoUDP4:
+		return "udp4"
+	case options.NetProtoUDP6:
+		return "udp6"
+	default:
+		panic(fmt.Sprintf("gsnet: unsupported network protocol %v", proto))
+	}
 }

@@ -149,30 +149,14 @@ func (c *Connector) connect(address string, timeout time.Duration) (net.Conn, er
 
 	var netProto = c.options.GetNetProto()
 	switch netProto {
-	case options.NetProtoTCP:
+	case options.NetProtoTCP, options.NetProtoTCP4, options.NetProtoTCP6:
 		if timeout > 0 {
-			conn, err = net.DialTimeout("tcp", address, timeout)
+			conn, err = net.DialTimeout(common.NetProto2Network(netProto), address, timeout)
 		} else {
-			conn, err = net.Dial("tcp", address)
+			conn, err = net.Dial(common.NetProto2Network(netProto), address)
 		}
-	case options.NetProtoTCP4:
-		if timeout > 0 {
-			conn, err = net.DialTimeout("tcp4", address, timeout)
-		} else {
-			conn, err = net.Dial("tcp4", address)
-		}
-	case options.NetProtoTCP6:
-		if timeout > 0 {
-			conn, err = net.DialTimeout("tcp6", address, timeout)
-		} else {
-			conn, err = net.Dial("tcp6", address)
-		}
-	case options.NetProtoUDP:
-		conn, err = kcp.DialUDP("udp", address)
-	case options.NetProtoUDP4:
-		conn, err = kcp.DialUDP("udp4", address)
-	case options.NetProtoUDP6:
-		conn, err = kcp.DialUDP("udp6", address)
+	case options.NetProtoUDP, options.NetProtoUDP4, options.NetProtoUDP6:
+		conn, err = kcp.DialUDP(address, c.options)
 	default:
 		err = common.ErrUnknownNetwork
 	}

@@ -9,6 +9,7 @@ import (
 type ServerOptions struct {
 	Options
 	connMaxCount          int           // 連接最大數
+	backlogLength         int32         // backlog长度
 	connChanLen           int           // 連接通道長度
 	createHandlerFuncArgs []any         // 会话处理器创建函数参数列表
 	reusePort             bool          // 重用端口
@@ -23,6 +24,14 @@ func (options *ServerOptions) GetConnMaxCount() int {
 
 func (options *ServerOptions) SetConnMaxCount(count int) {
 	options.connMaxCount = count
+}
+
+func (options ServerOptions) GetBacklogLength() int32 {
+	return options.backlogLength
+}
+
+func (options *ServerOptions) SetBacklogLength(length int32) {
+	options.backlogLength = length
 }
 
 func (options *ServerOptions) GetConnChanLen() int {
@@ -77,6 +86,13 @@ func WithConnMaxCount(count int) Option {
 	return func(options *Options) {
 		p := (*ServerOptions)(unsafe.Pointer(options))
 		p.SetConnMaxCount(count)
+	}
+}
+
+func WithBacklogLength(length int32) Option {
+	return func(options *Options) {
+		p := (*ServerOptions)(unsafe.Pointer(options))
+		p.SetBacklogLength(length)
 	}
 }
 

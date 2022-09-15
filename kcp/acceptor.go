@@ -1,68 +1,85 @@
 package kcp
 
 import (
+	"context"
+	"math/rand"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/control"
 	"github.com/huoshan017/gsnet/log"
 	"github.com/huoshan017/gsnet/options"
+	kcp "github.com/huoshan017/kcpgo"
+	plist "github.com/huoshan017/ponu/list"
 	pt "github.com/huoshan017/ponu/time"
 )
 
 const (
-	FRAME_SYN     = 0
-	FRAME_SYN_ACK = 1
-	FRAME_ACK     = 2
-	FRAME_FIN     = 3
-	FRAME_PAYLOAD = 4
-)
-
-const (
-	STATE_CLOSED      int32 = 0
-	STATE_LISTENING   int32 = 1
-	STATE_SYN_RECV    int32 = 2
-	STATE_SYN_SEND    int32 = 3
-	STATE_ESTABLISHED int32 = 4
-)
-
-const (
-	defaultConnChanLen = 4096
+	defaultConnChanLen     = 4096
+	defaultReqListLength   = 2048
+	maxWriteChanCount      = 20
+	writeChanCount         = 5
+	defaultWriteListLength = 2048
 )
 
 type reqInfo struct {
 	slice mBufferSlice
-	addr  *net.UDPAddr
+	addr  net.Addr
 }
 
 type Acceptor struct {
-	listenConn    *net.UDPConn
-	options       options.ServerOptions
+	listenConn    net.PacketConn //*net.UDPConn
+	options       *options.ServerOptions
+	network       string
+	localAddress  *net.UDPAddr
+	state         int32
 	connMap       sync.Map
 	stateMap      sync.Map
 	convIdCounter uint32
 	tokenCounter  int64
 	mtu           int32
 	reqCh         chan reqInfo
-	tw            *pt.Wheel
 	connCh        chan net.Conn
-	closeCh       chan struct{}
+	writeChArray  [maxWriteChanCount]chan struct {
+		raddr *net.UDPAddr
+		data  []byte
+	}
+	tw      *pt.Wheel
+	ran     *rand.Rand
+	closeCh chan struct{}
 }
 
-func NewAcceptor(ops options.ServerOptions) *Acceptor {
+func NewAcceptor(ops *options.ServerOptions) *Acceptor {
 	currToken := time.Now().UnixMilli()
 	a := &Acceptor{
-		options:      ops,
-		reqCh:        make(chan reqInfo, 4096),
 		closeCh:      make(chan struct{}),
 		tokenCounter: currToken,
+		ran:          rand.New(rand.NewSource(time.Now().UnixMilli())),
 	}
+	a.options = ops
 	if a.options.GetConnChanLen() <= 0 {
 		a.options.SetConnChanLen(defaultConnChanLen)
 		a.connCh = make(chan net.Conn, a.options.GetConnChanLen())
 	}
 	if a.options.GetKcpMtu() <= 0 {
+		a.options.SetKcpMtu(defaultMtu)
 		a.mtu = defaultMtu
+	}
+	if a.options.GetBacklogLength() <= 0 {
+		a.options.SetBacklogLength(defaultReqListLength)
+		a.reqCh = make(chan reqInfo, a.options.GetBacklogLength())
+	}
+	if a.options.GetSendListLen() <= 0 {
+		a.options.SetSendListLen(defaultWriteListLength)
+		for i := 0; i < writeChanCount; i++ {
+			a.writeChArray[i] = make(chan struct {
+				raddr *net.UDPAddr
+				data  []byte
+			}, a.options.GetSendListLen())
+		}
 	}
 	return a
 }
@@ -72,27 +89,43 @@ func (a *Acceptor) Listen(addr string) error {
 		laddr *net.UDPAddr
 		err   error
 	)
-	laddr, err = net.ResolveUDPAddr("udp", addr)
+	a.network = common.NetProto2Network(a.options.GetNetProto())
+	if !strings.Contains(a.network, "udp") {
+		a.network = "udp"
+	}
+	laddr, err = net.ResolveUDPAddr(a.network, addr)
 	if err != nil {
 		return err
 	}
-	var c *net.UDPConn
-	c, err = net.ListenUDP("udp", laddr)
+	a.localAddress = laddr
+	var ctrlOptions control.CtrlOptions
+	if a.options.GetReuseAddr() {
+		ctrlOptions.ReuseAddr = 1
+	}
+	if a.options.GetReusePort() {
+		ctrlOptions.ReusePort = 1
+	}
+	var lc = net.ListenConfig{
+		Control: control.GetControl(ctrlOptions),
+	}
+	listener, err := lc.ListenPacket(context.Background(), a.network, addr)
+	/*var c *net.UDPConn
+	c, err = net.ListenUDP(network, laddr)*/
 	if err != nil {
 		return err
 	}
-	a.listenConn = c
+	a.listenConn = listener
+	a.state = STATE_LISTENING
 	return nil
 }
 
 func (a *Acceptor) Serve() error {
-	// receive new connection
 	var (
-		mbuf   *mBuffer = getMBuffer()
-		slice  mBufferSlice
-		raddr  *net.UDPAddr
-		err    error
-		header frameHeader
+		mbuf  *mBuffer = getMBuffer()
+		slice mBufferSlice
+		o     bool
+		raddr net.Addr
+		err   error
 	)
 
 	// timer run
@@ -100,38 +133,45 @@ func (a *Acceptor) Serve() error {
 	defer a.tw.Stop()
 
 	go a.handleConnectRequest()
+	a.writeLoop()
 
 	for err == nil {
 		if mbuf == nil {
 			mbuf = getMBuffer()
 		}
-		slice, raddr, err = ReadFromUDP2MBuffer(a.listenConn, mbuf)
+		slice, raddr, err = ReadFrom2MBuffer(a.listenConn, mbuf)
 		// 小于mtu标记为可回收，等后续引用计数为0后就能回收到对象池
 		if mbuf.left() < a.mtu {
 			mbuf.markRecycle()
 			mbuf = nil
 		}
-		if err == nil {
-			c, o := a.connMap.Load(raddr.String())
-			if !o {
-				a.reqCh <- reqInfo{slice: slice, addr: raddr}
-			} else {
-				cnt := decodeFrameHeader(slice.getData(), &header)
-				if slice.skip(cnt) {
-					if header.frm == FRAME_PAYLOAD {
-						conn := c.(*uConn)
-						if conn.recvList == nil {
-							conn.recvList = make(chan mBufferSlice, 4096)
-						}
-						if conn.convId == header.convId && conn.token == header.token {
-							conn.recvList <- slice
-							continue
-						}
-					}
+
+		if err != nil {
+			if mbuf != nil {
+				slice, o = mbuf.lastSlice()
+				if o {
+					mbuf.markRecycle()
 				}
-				slice.finish(putMBuffer)
 			}
+			continue
 		}
+
+		c, o := a.connMap.Load(raddr.String())
+		if !o { // receive new connection
+			a.reqCh <- reqInfo{slice: slice, addr: raddr}
+		} else {
+			conn := c.(*uConn)
+			if conn.recvList == nil {
+				if conn.options.GetRecvListLen() <= 0 {
+					conn.options.SetRecvListLen(common.DefaultConnRecvListLen)
+				}
+				conn.recvList = make(chan mBufferSlice, conn.options.GetRecvListLen())
+			}
+			conn.recvList <- slice
+		}
+	}
+	if o {
+		slice.finish(putMBuffer)
 	}
 	return err
 }
@@ -151,9 +191,10 @@ func (a *Acceptor) handleConnectRequest() {
 		}
 	}()
 	var (
-		loop   = true
-		err    error
-		header frameHeader
+		writeIndex = a.ran.Int31n(writeChanCount)
+		loop       = true
+		err        error
+		header     frameHeader
 	)
 	for loop {
 		select {
@@ -165,25 +206,32 @@ func (a *Acceptor) handleConnectRequest() {
 			addrStr := info.addr.String()
 			switch header.frm {
 			case FRAME_SYN: // 第一次握手
-				conn := getStreamConn()
+				conn := getUConn(&a.options.Options)
 				conn.state = STATE_SYN_RECV
+				conn.writeCh = a.writeChArray[writeIndex]
+				conn.raddr = info.addr.(*net.UDPAddr)
 				if _, o := a.stateMap.LoadOrStore(addrStr, conn); o {
+					putUConn(conn)
 					break
 				}
 				a.convIdCounter += 1
 				a.tokenCounter += 1
-				if err = sendSynAck(a.listenConn, info.addr, a.convIdCounter, a.tokenCounter); err != nil {
+				if err = sendSynAck(conn, a.convIdCounter, a.tokenCounter); err != nil {
+					a.stateMap.Delete(addrStr)
+					putUConn(conn)
 					log.Infof("gsnet: kcp connection send synack err %v", err)
 					break
 				}
 				tid := a.tw.Add(3*time.Second, func(args []any) {
 					if conn.cn >= 2 { // 超出重试次数
-						a.stateMap.LoadAndDelete(info.addr.String())
+						a.stateMap.Delete(info.addr.String())
+						putUConn(conn)
 						return
 					}
 					conn.cn += 1 // timeout once
-					if err = sendSynAck(a.listenConn, info.addr, a.convIdCounter, a.tokenCounter); err != nil {
+					if err = sendSynAck(conn, a.convIdCounter, a.tokenCounter); err != nil {
 						a.stateMap.Delete(addrStr)
+						putUConn(conn)
 						log.Infof("gsnet: kcp connetion send synack err %v with resend %v", err, conn.cn)
 					}
 				}, nil)
@@ -191,7 +239,7 @@ func (a *Acceptor) handleConnectRequest() {
 				conn.tid = tid
 				conn.convId = a.convIdCounter
 				conn.token = a.tokenCounter
-				log.Infof("gsnet: acceptor receive syn on handshake, conversation(%v) token(%v)", a.convIdCounter, a.tokenCounter)
+				//log.Infof("gsnet: acceptor receive syn on handshake, conversation(%v) token(%v)", a.convIdCounter, a.tokenCounter)
 			case FRAME_ACK: // 第三次握手
 				c, o := a.stateMap.Load(addrStr)
 				if !o {
@@ -199,20 +247,32 @@ func (a *Acceptor) handleConnectRequest() {
 					break
 				}
 				conn := c.(*uConn)
-				if err := checkAck(conn, header.convId, header.token); err != nil {
-					log.Infof("%v", err)
+				if conn.state == STATE_ESTABLISHED {
 					break
 				}
 				a.stateMap.Delete(addrStr)
-				conn.state = STATE_ESTABLISHED
-				conn.conn = a.listenConn
-				conn.raddr = info.addr
-				a.connMap.Store(addrStr, conn)
+				if err := checkAck(conn, header.convId, header.token); err != nil {
+					putUConn(conn)
+					break
+				}
 				if conn.tid > 0 {
 					a.tw.Remove(conn.tid)
 				}
+				conn.state = STATE_ESTABLISHED
+				if a.options.GetReusePort() {
+					// todo 新建连接绑定到监听端口
+					conn.conn, err = net.DialUDP(a.network, a.localAddress, conn.raddr)
+					if err != nil {
+						putUConn(conn)
+						log.Infof("gsnet: kcp acceptor new connection err: %v", err)
+						break
+					}
+				} else {
+					conn.conn = a.listenConn.(*net.UDPConn)
+				}
 				a.connCh <- conn
-				log.Infof("gsnet: acceptor receive ack on handshake, new kcp conversation(%v) established", conn.convId)
+				a.connMap.Store(addrStr, conn)
+				//log.Infof("gsnet: acceptor receive ack on handshake, new kcp conversation(%v) established", conn.convId)
 			default:
 				log.Infof("gsnet: kcp connection received unexpected frame with type %v", header.frm)
 			}
@@ -225,6 +285,58 @@ func (a *Acceptor) handleConnectRequest() {
 			loop = false
 		}
 	}
+}
+
+func (a *Acceptor) writeLoop() {
+	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				log.WithStack(err)
+			}
+		}()
+		var (
+			v struct {
+				raddr *net.UDPAddr
+				data  []byte
+			}
+			o   bool
+			run = true
+		)
+		for run {
+			select {
+			case v, o = <-a.writeChArray[0]:
+			case v, o = <-a.writeChArray[1]:
+			case v, o = <-a.writeChArray[2]:
+			case v, o = <-a.writeChArray[3]:
+			case v, o = <-a.writeChArray[4]:
+			case v, o = <-a.writeChArray[5]:
+			case v, o = <-a.writeChArray[6]:
+			case v, o = <-a.writeChArray[7]:
+			case v, o = <-a.writeChArray[8]:
+			case v, o = <-a.writeChArray[9]:
+			case v, o = <-a.writeChArray[10]:
+			case v, o = <-a.writeChArray[11]:
+			case v, o = <-a.writeChArray[12]:
+			case v, o = <-a.writeChArray[13]:
+			case v, o = <-a.writeChArray[14]:
+			case v, o = <-a.writeChArray[15]:
+			case v, o = <-a.writeChArray[16]:
+			case v, o = <-a.writeChArray[17]:
+			case v, o = <-a.writeChArray[18]:
+			case v, o = <-a.writeChArray[19]:
+			case <-a.closeCh:
+				run = false
+			}
+			if run && o {
+				_, err := a.listenConn.WriteTo(v.data, v.raddr)
+				if err != nil {
+					log.Infof("gsnet: kcp Acceptor WriteToUDP to listen socket err: %v", err)
+				}
+				kcp.RecycleOutputBuffer(v.data)
+			}
+			o = false
+		}
+	}()
 }
 
 func sendSyn(conn *net.UDPConn, header *frameHeader) error {
@@ -252,6 +364,7 @@ func recvSynAck(conn *net.UDPConn, timeout time.Duration, header *frameHeader) e
 	if err != nil {
 		return err
 	}
+	conn.SetReadDeadline(time.Time{})
 
 	decodeFrameHeader(buf[:n], header)
 	if header.frm != FRAME_SYN_ACK {
@@ -260,20 +373,16 @@ func recvSynAck(conn *net.UDPConn, timeout time.Duration, header *frameHeader) e
 	return nil
 }
 
-func sendSynAck(conn *net.UDPConn, remoteAddr *net.UDPAddr, conversation uint32, token int64) error {
+func sendSynAck(conn *uConn, conversation uint32, token int64) error {
 	var (
 		buf    [maxFrameHeaderLength]byte
 		header frameHeader
-		err    error
 	)
 	header.frm = FRAME_SYN_ACK
 	header.convId = conversation
 	header.token = token
 	cnt := encodeFrameHeader(&header, buf[:])
-	_, err = conn.WriteToUDP(buf[:cnt], remoteAddr)
-	if err != nil {
-		return err
-	}
+	conn.Write(buf[:cnt])
 	return nil
 }
 
@@ -302,24 +411,31 @@ func sendAck(conn *net.UDPConn, conversation uint32, token int64) error {
 }
 
 var (
-	streamConnPool sync.Pool
+	uconnList *plist.List
+	uconnMap  map[*uConn]bool
 )
 
 func init() {
-	streamConnPool = sync.Pool{
-		New: func() any {
-			return newUConn()
-		},
+	uconnList = plist.New()
+	uconnMap = make(map[*uConn]bool, 100)
+}
+
+func getUConn(ops *options.Options) *uConn {
+	var uconn *uConn
+	v, o := uconnList.PopFront()
+	if !o {
+		uconn = newUConn(ops)
+	} else {
+		uconn = v.(*uConn)
 	}
+	delete(uconnMap, uconn)
+	return uconn
 }
 
-func getStreamConn() *uConn {
-	return streamConnPool.Get().(*uConn)
-}
-
-func putStreamConn(conn *uConn) {
-	conn.conn = nil
-	conn.convId = 0
-	conn.state = 0
-	streamConnPool.Put(conn)
+func putUConn(uconn *uConn) {
+	if _, o := uconnMap[uconn]; !o {
+		return
+	}
+	uconn.reset()
+	uconnList.PushBack(uconn)
 }

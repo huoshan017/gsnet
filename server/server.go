@@ -103,9 +103,9 @@ func (s *Server) init() {
 	var netProto = s.options.GetNetProto()
 	switch netProto {
 	case options.NetProtoTCP, options.NetProtoTCP4, options.NetProtoTCP6:
-		s.acceptor = NewAcceptor(s.options)
+		s.acceptor = NewAcceptor(&s.options)
 	case options.NetProtoUDP, options.NetProtoUDP4, options.NetProtoUDP6:
-		s.acceptor = kcp.NewAcceptor(s.options)
+		s.acceptor = kcp.NewAcceptor(&s.options)
 	default:
 		panic(fmt.Sprintf("not supported network protocol %v", netProto))
 	}
