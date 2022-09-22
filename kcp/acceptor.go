@@ -129,11 +129,12 @@ func (a *Acceptor) Serve() error {
 	)
 
 	// timer run
-	a.tw = pt.NewWheel(100*time.Millisecond, time.Hour)
+	a.tw = pt.NewWheel(time.Hour, pt.WithInterval(100*time.Millisecond))
 	defer a.tw.Stop()
+	go a.tw.Run()
 
 	go a.handleConnectRequest()
-	a.writeLoop()
+	go a.writeLoop()
 
 	for err == nil {
 		if mbuf == nil {
@@ -148,8 +149,7 @@ func (a *Acceptor) Serve() error {
 
 		if err != nil {
 			if mbuf != nil {
-				slice, o = mbuf.lastSlice()
-				if o {
+				if slice, o = mbuf.lastSlice(); o {
 					mbuf.markRecycle()
 				}
 			}
@@ -256,7 +256,7 @@ func (a *Acceptor) handleConnectRequest() {
 					break
 				}
 				if conn.tid > 0 {
-					a.tw.Remove(conn.tid)
+					a.tw.Cancel(conn.tid)
 				}
 				conn.state = STATE_ESTABLISHED
 				if a.options.GetReusePort() {
@@ -288,55 +288,53 @@ func (a *Acceptor) handleConnectRequest() {
 }
 
 func (a *Acceptor) writeLoop() {
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				log.WithStack(err)
-			}
-		}()
-		var (
-			v struct {
-				raddr *net.UDPAddr
-				data  []byte
-			}
-			o   bool
-			run = true
-		)
-		for run {
-			select {
-			case v, o = <-a.writeChArray[0]:
-			case v, o = <-a.writeChArray[1]:
-			case v, o = <-a.writeChArray[2]:
-			case v, o = <-a.writeChArray[3]:
-			case v, o = <-a.writeChArray[4]:
-			case v, o = <-a.writeChArray[5]:
-			case v, o = <-a.writeChArray[6]:
-			case v, o = <-a.writeChArray[7]:
-			case v, o = <-a.writeChArray[8]:
-			case v, o = <-a.writeChArray[9]:
-			case v, o = <-a.writeChArray[10]:
-			case v, o = <-a.writeChArray[11]:
-			case v, o = <-a.writeChArray[12]:
-			case v, o = <-a.writeChArray[13]:
-			case v, o = <-a.writeChArray[14]:
-			case v, o = <-a.writeChArray[15]:
-			case v, o = <-a.writeChArray[16]:
-			case v, o = <-a.writeChArray[17]:
-			case v, o = <-a.writeChArray[18]:
-			case v, o = <-a.writeChArray[19]:
-			case <-a.closeCh:
-				run = false
-			}
-			if run && o {
-				_, err := a.listenConn.WriteTo(v.data, v.raddr)
-				if err != nil {
-					log.Infof("gsnet: kcp Acceptor WriteToUDP to listen socket err: %v", err)
-				}
-				kcp.RecycleOutputBuffer(v.data)
-			}
-			o = false
+	defer func() {
+		if err := recover(); err != nil {
+			log.WithStack(err)
 		}
 	}()
+	var (
+		v struct {
+			raddr *net.UDPAddr
+			data  []byte
+		}
+		o   bool
+		run = true
+	)
+	for run {
+		select {
+		case v, o = <-a.writeChArray[0]:
+		case v, o = <-a.writeChArray[1]:
+		case v, o = <-a.writeChArray[2]:
+		case v, o = <-a.writeChArray[3]:
+		case v, o = <-a.writeChArray[4]:
+		case v, o = <-a.writeChArray[5]:
+		case v, o = <-a.writeChArray[6]:
+		case v, o = <-a.writeChArray[7]:
+		case v, o = <-a.writeChArray[8]:
+		case v, o = <-a.writeChArray[9]:
+		case v, o = <-a.writeChArray[10]:
+		case v, o = <-a.writeChArray[11]:
+		case v, o = <-a.writeChArray[12]:
+		case v, o = <-a.writeChArray[13]:
+		case v, o = <-a.writeChArray[14]:
+		case v, o = <-a.writeChArray[15]:
+		case v, o = <-a.writeChArray[16]:
+		case v, o = <-a.writeChArray[17]:
+		case v, o = <-a.writeChArray[18]:
+		case v, o = <-a.writeChArray[19]:
+		case <-a.closeCh:
+			run = false
+		}
+		if run && o {
+			_, err := a.listenConn.WriteTo(v.data, v.raddr)
+			if err != nil {
+				log.Infof("gsnet: kcp Acceptor WriteToUDP to listen socket err: %v", err)
+			}
+			kcp.RecycleOutputBuffer(v.data)
+		}
+		o = false
+	}
 }
 
 func sendSyn(conn *net.UDPConn, header *frameHeader) error {
@@ -382,8 +380,8 @@ func sendSynAck(conn *uConn, conversation uint32, token int64) error {
 	header.convId = conversation
 	header.token = token
 	cnt := encodeFrameHeader(&header, buf[:])
-	conn.Write(buf[:cnt])
-	return nil
+	_, err := conn.Write(buf[:cnt])
+	return err
 }
 
 func checkAck(conn *uConn, conversation uint32, token int64) error {

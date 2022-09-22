@@ -352,7 +352,7 @@ func (bl *BytesList) ReadBytesTo(buf []byte, concurrent bool) bool {
 }
 
 func (bl *BytesList) ReadBytes(length int32, concurrent bool) (Bytes, bool) {
-	if bl.totalBytes < length {
+	if length == 0 || bl.totalBytes < length {
 		return nilBytes, false
 	}
 

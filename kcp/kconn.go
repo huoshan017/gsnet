@@ -1,7 +1,6 @@
 package kcp
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"net"
@@ -24,14 +23,10 @@ const (
 type KConn struct {
 	conn        *uConn
 	options     *options.Options
-	writer      *bufio.Writer
 	kcpCB       *kcp.KcpCB
 	blist       packet.BytesList
-	sendCh      chan []byte
 	closeCh     chan struct{}       // 关闭通道
 	closed      int32               // 是否关闭
-	errCh       chan error          // 错误通道
-	errWriteCh  chan error          // 写错误通道
 	ticker      *time.Ticker        // 定时器
 	packetCodec common.IPacketCodec // 包解码器
 }
@@ -43,15 +38,7 @@ func NewKConn(conn net.Conn, packetCodec common.IPacketCodec, options *options.O
 		conn:        kconn,
 		options:     options,
 		closeCh:     make(chan struct{}),
-		errCh:       make(chan error, 1),
-		errWriteCh:  make(chan error, 1),
 		packetCodec: packetCodec,
-	}
-
-	if c.options.GetWriteBuffSize() <= 0 {
-		c.writer = bufio.NewWriter(conn)
-	} else {
-		c.writer = bufio.NewWriterSize(conn, c.options.GetWriteBuffSize())
 	}
 
 	if c.options.GetRecvListLen() <= 0 {
@@ -63,7 +50,7 @@ func NewKConn(conn net.Conn, packetCodec common.IPacketCodec, options *options.O
 	if c.options.GetSendListLen() <= 0 {
 		c.options.SetSendListLen(common.DefaultConnSendListLen)
 	}
-	c.sendCh = make(chan []byte, c.options.GetSendListLen())
+	//c.sendCh = make(chan []byte, c.options.GetSendListLen())
 
 	var tickSpan = c.options.GetTickSpan()
 	if tickSpan > 0 && tickSpan < common.MinConnTick {
@@ -118,8 +105,8 @@ func (c *KConn) CloseWait(secs int) error {
 func (c *KConn) closeWait(secs int) error {
 	defer func() {
 		// 清理接收通道内存池分配的内存
-		for d := range c.conn.recvList {
-			d.finish(putMBuffer)
+		for slice := range c.conn.recvList {
+			slice.finish(putMBuffer)
 		}
 	}()
 
@@ -133,9 +120,9 @@ func (c *KConn) closeWait(secs int) error {
 		c.ticker.Stop()
 	}
 	close(c.closeCh)
-	if c.sendCh != nil {
-		close(c.sendCh)
-	}
+	//if c.sendCh != nil {
+	//	close(c.sendCh)
+	//}
 	return err
 }
 
@@ -214,14 +201,6 @@ func (c *KConn) RecvNonblock() (packet.IPacket, error) {
 	}
 
 	select {
-	case err = <-c.errCh:
-		if err == nil {
-			err = c.genErrConnClosed()
-		}
-	case err = <-c.errWriteCh:
-		if err == nil {
-			err = c.genErrConnClosed()
-		}
 	case <-c.closeCh:
 		err = c.genErrConnClosed()
 	case slice, ok = <-c.conn.recvList:
@@ -285,14 +264,8 @@ func (c *KConn) Wait(ctx context.Context, chPak chan common.IdWithPacket) (packe
 			} else {
 				log.Infof("gsnet: inbound channel is closed")
 			}
-		case err = <-c.errCh:
-			if err == nil {
-				err = common.ErrConnClosed
-			}
-		case err = <-c.errWriteCh:
-			if err == nil {
-				err = common.ErrConnClosed
-			}
+		case <-c.closeCh:
+			err = common.ErrConnClosed
 		}
 	}
 

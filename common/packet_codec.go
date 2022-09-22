@@ -57,7 +57,7 @@ func (pc *PacketCodec) Decode(bytesList packet.IBytesList) (packet.IPacket, erro
 
 	// read data
 	rbytes, ok := bytesList.ReadBytes(int32(dataLen), true)
-	if !ok {
+	if dataLen > 0 && !ok {
 		return nil, nil
 	}
 
@@ -72,7 +72,11 @@ func (pc *PacketCodec) Decode(bytesList packet.IBytesList) (packet.IPacket, erro
 		} else {
 			var p = pc.options.GetPacketPool().Get()
 			var ppak = p.(*packet.Packet)
-			ppak.Set(packetType, packet.MemoryManagementPoolFrameworkFree, rbytes.PData())
+			var pdata *[]byte
+			if ok {
+				pdata = rbytes.PData()
+			}
+			ppak.Set(packetType, packet.MemoryManagementPoolFrameworkFree, pdata)
 			pak = ppak
 		}
 	} else {

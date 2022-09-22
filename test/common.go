@@ -194,7 +194,9 @@ func newTestServerHandler(args ...any) common.ISessionEventHandler {
 	if !o {
 		h.b, _ = args[0].(*testing.B)
 	}
-	h.state = args[1].(int32)
+	if len(args) > 1 {
+		h.state = args[1].(int32)
+	}
 	return h
 }
 
@@ -266,6 +268,10 @@ func createTestServer(t *testing.T, state int32, connType int) *server.Server {
 		options.WithPacketCompressType(packet.CompressSnappy),
 		options.WithPacketEncryptionType(packet.EncryptionDes),
 	)
+}
+
+func createTestServerWithUDPKcp(t *testing.T) *server.Server {
+	return server.NewServer(newTestServerHandler, options.WithNewSessionHandlerFuncArgs(t), options.WithNetProto(options.NetProtoUDP))
 }
 
 func createTestServerWithHandler(t *testing.T, state int32) *server.Server {

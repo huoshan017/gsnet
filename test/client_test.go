@@ -112,6 +112,10 @@ func createTestClientUseRun(t *testing.T, totalNum int32) *client.Client {
 	return client.NewClient(newTestClientUseRunHandler(t, totalNum), options.WithTickSpan(time.Second), options.WithConnDataType(connDataType))
 }
 
+func createTestClientUseRunAndUDPKcp(t *testing.T, totalNum int32) *client.Client {
+	return client.NewClient(newTestClientUseRunHandler(t, totalNum), options.WithTickSpan(time.Second), options.WithNetProto(options.NetProtoUDP))
+}
+
 func TestClientUseRun(t *testing.T) {
 	ts := createTestServer(t, 1, 0)
 	err := ts.Listen(testAddress)
@@ -138,6 +142,34 @@ func TestClientUseRun(t *testing.T) {
 	tc.Run()
 
 	t.Logf("TestClientUseRun done")
+}
+
+func TestClientUseRunAndUDPKcp(t *testing.T) {
+	ts := createTestServerWithUDPKcp(t)
+	err := ts.Listen(testAddress)
+	if err != nil {
+		t.Errorf("server for TestClientUseRunAndUDPKcp listen err: %+v", err)
+		return
+	}
+	defer ts.End()
+
+	go ts.Serve()
+
+	t.Logf("server for TestClientUseRunAndUDPKcp running")
+
+	tc := createTestClientUseRunAndUDPKcp(t, 200)
+	err = tc.Connect(testAddress)
+	if err != nil {
+		t.Errorf("TestClientUseRunAnUDPKcp connect err: %+v", err)
+		return
+	}
+	defer tc.Close()
+
+	t.Logf("TestClientUseRunAndUDPKcp running")
+
+	tc.Run()
+
+	t.Logf("TestClientUseRunAndUDPKcp done")
 }
 
 type testClientUseUpdateHandler struct {
@@ -399,21 +431,6 @@ func BenchmarkClient(b *testing.B) {
 	}
 
 	b.Logf("benchmark done")
-}
-
-func TestNilChannel(t *testing.T) {
-	var (
-		nilCh chan struct{}
-		strCh = make(chan string)
-	)
-	for i := 0; i < 10; i++ {
-		select {
-		case <-nilCh:
-		case <-strCh:
-		default:
-			time.Sleep(time.Second)
-		}
-	}
 }
 
 func createTestClientUseReconnect(t *testing.T, totalNum int32) *client.Client {

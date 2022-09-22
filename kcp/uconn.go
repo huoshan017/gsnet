@@ -140,11 +140,16 @@ func (c *uConn) Write(data []byte) (int, error) {
 
 func (c *uConn) Close() error {
 	atomic.StoreInt32(&c.state, STATE_CLOSED)
-	//if c.raddr == nil {
-	//	return c.conn.Close()
-	//}
+	var err error
+	if c.raddr == nil {
+		err = c.conn.Close()
+	}
 	c.conn = nil
-	return nil
+	if c.recvList != nil {
+		close(c.recvList)
+		//c.recvList = nil
+	}
+	return err
 }
 
 func (c *uConn) LocalAddr() net.Addr {
@@ -209,10 +214,6 @@ func (c *uConn) readLoop() {
 		}
 		if o {
 			slice.finish(putMBuffer)
-		}
-		if c.recvList != nil {
-			close(c.recvList)
-			c.recvList = nil
 		}
 	}()
 }

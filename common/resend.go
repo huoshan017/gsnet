@@ -43,7 +43,7 @@ type SendList struct {
 }
 
 func newSendList() *SendList {
-	n := unsafe.Pointer(&wrapperSendData{})
+	n := unsafe.Pointer(&sendNode{})
 	return &SendList{head: n, tail: n}
 }
 

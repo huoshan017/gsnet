@@ -34,7 +34,7 @@ func newKConn(t *testing.T, cors bool, conn net.Conn, cidx int32, wg *sync.WaitG
 	go kconn.Run()
 
 	var (
-		totalNum int32 = 2000
+		totalNum int32 = 1000
 	)
 	go func() {
 		var (
@@ -57,7 +57,7 @@ func newKConn(t *testing.T, cors bool, conn net.Conn, cidx int32, wg *sync.WaitG
 				pak, id, err = kconn.Wait(ctx, nil)
 				if err != nil {
 					cm := atomic.AddInt32(completeNum, 1)
-					t.Errorf("client wait err: %v, client num %v", err, cm)
+					t.Logf("client wait err: %v, client num %v", err, cm)
 					continue
 				}
 				if pak != nil {
@@ -80,7 +80,7 @@ func newKConn(t *testing.T, cors bool, conn net.Conn, cidx int32, wg *sync.WaitG
 						err = kconn.Send(packet.PacketNormalData, buffer[:bnum], true)
 						if err != nil {
 							cm := atomic.AddInt32(completeNum, 1)
-							t.Errorf("client %v send data err: %v, client num %v", cidx, err, cm)
+							t.Logf("client %v send data err: %v, client num %v", cidx, err, cm)
 							continue
 						}
 						sendNum += 1
@@ -99,14 +99,14 @@ func newKConn(t *testing.T, cors bool, conn net.Conn, cidx int32, wg *sync.WaitG
 			for err == nil {
 				pak, _, err = kconn.Wait(ctx, nil)
 				if err != nil {
-					t.Errorf("server wait err: %v", err)
+					t.Logf("server wait err: %v", err)
 					continue
 				}
 				if err == nil && pak != nil {
 					recvNum += 1
 					err = kconn.Send(packet.PacketNormalData, pak.Data(), true)
 					if err != nil {
-						t.Errorf("server send(count:%v) data err: %v", recvNum, err)
+						t.Logf("server send(count:%v) data err: %v", recvNum, err)
 						continue
 					}
 				}
@@ -145,7 +145,7 @@ func testKConn(t *testing.T, reuseAddr, reusePort bool) {
 	}()
 
 	const (
-		clientNum = 1
+		clientNum = 4000
 	)
 	var (
 		closeCh = make(chan struct{})
@@ -179,7 +179,7 @@ func testKConn(t *testing.T, reuseAddr, reusePort bool) {
 		if err != nil {
 			wg.Done()
 			cm := atomic.AddInt32(&completeNum, 1)
-			t.Errorf("dial udp err: %v, client num %v", err, cm)
+			t.Logf("dial udp err: %v, client num %v", err, cm)
 			continue
 		}
 		t.Logf("client(%v) connected server", conn.LocalAddr())

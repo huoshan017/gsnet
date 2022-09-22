@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	_ "net/http/pprof"
 
 	"github.com/huoshan017/gsnet/msg"
 	"github.com/huoshan017/gsnet/options"
@@ -21,7 +24,7 @@ const (
 	MsgIdPing = msg.MsgIdType(1)
 	MsgIdPong = msg.MsgIdType(2)
 	sendCount = 5000
-	clientNum = 5000
+	clientNum = 5
 )
 
 var (
@@ -30,6 +33,7 @@ var (
 )
 
 type testMsgConfig struct {
+	useUDPKcp         bool
 	useHeartbeat      bool
 	useResend         bool
 	useSnappyCompress bool
@@ -47,6 +51,9 @@ func newPBMsgClient(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error)
 	var c *msg.MsgClient
 	var ops = []options.Option{
 		options.WithTickSpan(10 * time.Millisecond),
+	}
+	if config.useUDPKcp {
+		ops = append(ops, options.WithNetProto(options.NetProtoUDP))
 	}
 	if config.useResend {
 		ops = append(ops, options.WithResendConfig(&options.ResendConfig{}))
@@ -160,6 +167,9 @@ func newTestPBMsgHandler(args ...any) msg.IMsgSessionEventHandler {
 func newPBMsgServer(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error) {
 	var s *msg.MsgServer
 	var ops = []options.Option{}
+	if config.useUDPKcp {
+		ops = append(ops, options.WithNetProto(options.NetProtoUDP))
+	}
 	if config.useResend {
 		ops = append(ops, options.WithResendConfig(&options.ResendConfig{}))
 	}
@@ -234,6 +244,9 @@ func newPBMsgClient2(config *testMsgConfig, t *testing.T) (*msg.MsgClient, error
 	var ops = []options.Option{
 		options.WithTickSpan(10 * time.Millisecond),
 	}
+	if config.useUDPKcp {
+		ops = append(ops, options.WithNetProto(options.NetProtoUDP))
+	}
 	if config.useResend {
 		ops = append(ops, options.WithResendConfig(&options.ResendConfig{UseLockFree: true}))
 	}
@@ -306,6 +319,9 @@ func newTestPBMsgHandler2(args ...any) msg.IMsgSessionEventHandler {
 func newPBMsgServer2(config *testMsgConfig, t *testing.T) (*msg.MsgServer, error) {
 	var s *msg.MsgServer
 	var ops = []options.Option{}
+	if config.useUDPKcp {
+		ops = append(ops, options.WithNetProto(options.NetProtoUDP))
+	}
 	if config.useResend {
 		ops = append(ops, options.WithResendConfig(&options.ResendConfig{UseLockFree: true}))
 	}
@@ -356,8 +372,8 @@ func testPBMsgClient(useResend bool, t *testing.T) {
 	t.Logf("client end")
 }
 
-func testPBMsgServer(useResend bool, useSnappyCompress bool, useAesCrypto bool, t *testing.T) {
-	config := &testMsgConfig{useResend: useResend, useSnappyCompress: useSnappyCompress, useAesCrypto: useAesCrypto, useHeartbeat: false}
+func testPBMsgServer(useUDPKcp bool, useResend bool, useSnappyCompress bool, useAesCrypto bool, t *testing.T) {
+	config := &testMsgConfig{useUDPKcp: useUDPKcp, useResend: useResend, useSnappyCompress: useSnappyCompress, useAesCrypto: useAesCrypto, useHeartbeat: false}
 	s, err := newPBMsgServer2(config, t)
 	if err != nil {
 		t.Errorf("%v", err)
@@ -368,6 +384,10 @@ func testPBMsgServer(useResend bool, useSnappyCompress bool, useAesCrypto bool, 
 		t.Logf("server end")
 	}()
 	go s.Serve()
+
+	go func() {
+		http.ListenAndServe("0.0.0.0:6060", nil)
+	}()
 
 	t.Logf("server started")
 
@@ -404,17 +424,21 @@ func TestPBMsgClientUseResend(t *testing.T) {
 }
 
 func TestPBMsgServer(t *testing.T) {
-	testPBMsgServer(false, false, false, t)
+	testPBMsgServer(false, false, false, false, t)
 }
 
 func TestPBMsgServerUseCompressAndEncryption(t *testing.T) {
-	testPBMsgServer(false, true, true, t)
+	testPBMsgServer(false, false, true, true, t)
 }
 
 func TestPBMsgServerUseResend(t *testing.T) {
-	testPBMsgServer(true, false, false, t)
+	testPBMsgServer(false, true, false, false, t)
 }
 
 func TestPBMsgServerUseCompressEncryptionAndResend(t *testing.T) {
-	testPBMsgServer(true, true, true, t)
+	testPBMsgServer(false, true, true, true, t)
+}
+
+func TestPBMsgServerUseUDPKcp(t *testing.T) {
+	testPBMsgServer(true, false, false, false, t)
 }
