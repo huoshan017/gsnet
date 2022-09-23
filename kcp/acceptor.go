@@ -62,24 +62,24 @@ func NewAcceptor(ops *options.ServerOptions) *Acceptor {
 	a.options = ops
 	if a.options.GetConnChanLen() <= 0 {
 		a.options.SetConnChanLen(defaultConnChanLen)
-		a.connCh = make(chan net.Conn, a.options.GetConnChanLen())
 	}
+	a.connCh = make(chan net.Conn, a.options.GetConnChanLen())
 	if a.options.GetKcpMtu() <= 0 {
 		a.options.SetKcpMtu(defaultMtu)
-		a.mtu = defaultMtu
 	}
+	a.mtu = a.options.GetKcpMtu()
 	if a.options.GetBacklogLength() <= 0 {
 		a.options.SetBacklogLength(defaultReqListLength)
-		a.reqCh = make(chan reqInfo, a.options.GetBacklogLength())
 	}
+	a.reqCh = make(chan reqInfo, a.options.GetBacklogLength())
 	if a.options.GetSendListLen() <= 0 {
 		a.options.SetSendListLen(defaultWriteListLength)
-		for i := 0; i < writeChanCount; i++ {
-			a.writeChArray[i] = make(chan struct {
-				raddr *net.UDPAddr
-				data  []byte
-			}, a.options.GetSendListLen())
-		}
+	}
+	for i := 0; i < writeChanCount; i++ {
+		a.writeChArray[i] = make(chan struct {
+			raddr *net.UDPAddr
+			data  []byte
+		}, a.options.GetSendListLen())
 	}
 	return a
 }

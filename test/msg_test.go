@@ -23,8 +23,8 @@ import (
 const (
 	MsgIdPing = msg.MsgIdType(1)
 	MsgIdPong = msg.MsgIdType(2)
-	sendCount = 5000
-	clientNum = 5
+	sendCount = 500
+	clientNum = 1000
 )
 
 var (

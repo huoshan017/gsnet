@@ -36,8 +36,8 @@ func NewAcceptor(ops *options.ServerOptions) *Acceptor {
 	}
 	if a.options.GetConnChanLen() <= 0 {
 		a.options.SetConnChanLen(DefaultConnChanLen)
-		a.connCh = make(chan net.Conn, a.options.GetConnChanLen())
 	}
+	a.connCh = make(chan net.Conn, a.options.GetConnChanLen())
 	return a
 }
 

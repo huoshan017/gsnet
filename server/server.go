@@ -104,6 +104,7 @@ func (s *Server) init() {
 	switch netProto {
 	case options.NetProtoTCP, options.NetProtoTCP4, options.NetProtoTCP6:
 		s.acceptor = NewAcceptor(&s.options)
+		log.Infof("acceptor created")
 	case options.NetProtoUDP, options.NetProtoUDP4, options.NetProtoUDP6:
 		s.acceptor = kcp.NewAcceptor(&s.options)
 	default:
@@ -168,6 +169,7 @@ func (s *Server) Serve() {
 			if !o { // 已关闭
 				continue
 			}
+			log.Infof("new conn received")
 			s.handleConn(conn)
 		case <-tickerCh:
 			s.handleTick(&lastTime)
