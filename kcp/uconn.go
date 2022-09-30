@@ -59,27 +59,23 @@ func DialUDP(address string, ops *options.Options) (net.Conn, error) {
 	)
 
 	// 三次握手
-	for i := 0; i < 3; i++ {
+	for i := 0; i < len(timeoutSynAckTimeList); i++ {
 		// send syn
 		err = sendSyn(conn, &header)
 		if err != nil {
 			return nil, err
 		}
 
-		//log.Infof("gsnet: kcp conn send syn")
-
 		state = STATE_SYN_SEND
 
 		// recv synack
-		err = recvSynAck(conn, 3*time.Second, &header)
+		err = recvSynAck(conn, time.Duration(timeoutSynAckTimeList[i])*time.Second, &header)
 		if err != nil {
 			if common.IsTimeoutError(err) {
 				continue
 			}
 			return nil, err
 		}
-
-		//log.Infof("gsnet: kcp conn received synack, conversation(%v) token(%v)", header.convId, header.token)
 		break
 	}
 
@@ -113,6 +109,9 @@ func (c *uConn) Read(buf []byte) (int, error) {
 }
 
 func (c *uConn) Write(data []byte) (int, error) {
+	if atomic.LoadInt32(&c.state) == STATE_CLOSED {
+		return 0, common.ErrConnClosed
+	}
 	if c.writeCh != nil {
 		select {
 		case c.writeCh <- struct {
@@ -141,13 +140,12 @@ func (c *uConn) Write(data []byte) (int, error) {
 func (c *uConn) Close() error {
 	atomic.StoreInt32(&c.state, STATE_CLOSED)
 	var err error
-	if c.raddr == nil {
+	if c.raddr == nil { //  客户端连接
 		err = c.conn.Close()
-	}
-	c.conn = nil
-	if c.recvList != nil {
-		close(c.recvList)
-		//c.recvList = nil
+	} else { // 服务器连接
+		if c.recvList != nil {
+			close(c.recvList)
+		}
 	}
 	return err
 }
@@ -172,7 +170,20 @@ func (c *uConn) SetDeadline(t time.Time) error {
 	return c.conn.SetDeadline(t)
 }
 
-func (c *uConn) readLoop() {
+func (c *uConn) recv(slice mBufferSlice) {
+	if atomic.LoadInt32(&c.state) == STATE_CLOSED {
+		return
+	}
+	if c.recvList == nil {
+		if c.options.GetRecvListLen() == 0 {
+			c.options.SetRecvListLen(common.DefaultConnRecvListLen)
+		}
+		c.recvList = make(chan mBufferSlice, c.options.GetRecvListLen())
+	}
+	c.recvList <- slice
+}
+
+func (c *uConn) readLoop() { // 客户端连接的接收线程
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -186,34 +197,34 @@ func (c *uConn) readLoop() {
 			err   error
 		)
 		for err == nil {
-			if atomic.LoadInt32(&c.state) == STATE_CLOSED {
-				slice, o = getLastSlice(mbuf)
+			if atomic.LoadInt32(&c.state) == STATE_CLOSED { //
+				if mbuf != nil {
+					slice, o = getLastSlice(mbuf)
+				}
 				break
 			}
 			if mbuf == nil {
 				mbuf = getMBuffer()
 			}
 			slice, err = Read2MBuffer(c.conn, mbuf)
+			if err != nil {
+				slice, o = getLastSlice(mbuf)
+				mbuf = nil
+				log.Infof("gsnet: uConn.run Read2MBuffer err: %v", err)
+				continue
+			}
 			// 小于mtu标记为可回收，等后续引用计数为0后就能回收到对象池
 			if mbuf.left() < c.options.GetKcpMtu() {
 				mbuf.markRecycle()
 				mbuf = nil
 			}
-			if err != nil {
-				slice, o = getLastSlice(mbuf)
-				log.Infof("gsnet: uConn.run Read2MBuffer err: %v", err)
-				continue
-			}
-			if c.recvList == nil {
-				if c.options.GetRecvListLen() == 0 {
-					c.options.SetRecvListLen(common.DefaultConnRecvListLen)
-				}
-				c.recvList = make(chan mBufferSlice, c.options.GetRecvListLen())
-			}
-			c.recvList <- slice
+			c.recv(slice)
 		}
 		if o {
 			slice.finish(putMBuffer)
+		}
+		if c.recvList != nil {
+			close(c.recvList)
 		}
 	}()
 }
@@ -241,5 +252,5 @@ func (c *uConn) reset() {
 	c.state = 0
 	c.cn = 0
 	c.tid = 0
-	c.recvList = nil
+	close(c.recvList)
 }

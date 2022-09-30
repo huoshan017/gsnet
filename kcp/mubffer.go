@@ -40,6 +40,7 @@ func (b *mBuffer) lastSlice() (mBufferSlice, bool) {
 	if left <= 0 {
 		return mBufferSlice{}, false
 	}
+	atomic.AddInt32(&b.ref, 1)
 	return mBufferSlice{slice: nil, buffer: b}, true
 }
 
@@ -110,13 +111,13 @@ func Read2MBuffer(reader io.Reader, buf *mBuffer) (mBufferSlice, error) {
 }
 
 func ReadFrom2MBuffer(conn net.PacketConn, buf *mBuffer) (mBufferSlice, net.Addr, error) {
-	b := buf.buffer()
+	ob := buf.buffer()
 	n, addr, e := conn.ReadFrom(buf.buffer())
 	if e != nil {
 		return mBufferSlice{}, nil, e
 	}
 	buf.use(int32(n))
-	return mBufferSlice{slice: b[:n], buffer: buf}, addr, nil
+	return mBufferSlice{slice: ob[:n], buffer: buf}, addr, nil
 }
 
 const (

@@ -603,6 +603,7 @@ func (c *BConn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPack
 			}
 			p, err = c.recvChunk(chk)
 		case <-tickerCh:
+			id = -1
 			loop = false
 		case pak, o := <-chPak:
 			if o {

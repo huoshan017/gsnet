@@ -443,6 +443,7 @@ func (c *SimpleConn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.
 			err = ErrConnClosed
 		}
 	case <-chTicker:
+		id = -1
 	case pak, o := <-chPak:
 		if o {
 			d = pak.pak

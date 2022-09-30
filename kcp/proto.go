@@ -11,7 +11,7 @@ const (
 	FRAME_SYN_ACK = 1
 	FRAME_ACK     = 2
 	FRAME_FIN     = 3
-	FRAME_PAYLOAD = 4
+	FRAME_RST     = 4
 )
 
 const (
@@ -76,3 +76,8 @@ func decodeFrameHeader(buf []byte, header *frameHeader) int32 {
 	count += int32(len(frameSuffix))
 	return count
 }
+
+var (
+	timeoutSynAckTimeList []int32 = []int32{3, 7, 15}        // synack超时列表
+	timeoutAckTimeList    []int32 = []int32{20, 40, 80, 160} // ack超时列表
+)

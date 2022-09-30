@@ -492,6 +492,7 @@ func (c *Conn) Wait(ctx context.Context, chPak chan IdWithPacket) (packet.IPacke
 			err = ErrConnClosed
 		}
 	case <-tickerCh:
+		id = -1
 	case pak, o := <-chPak:
 		if o {
 			p = pak.pak

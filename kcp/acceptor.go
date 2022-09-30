@@ -30,6 +30,11 @@ type reqInfo struct {
 	addr  net.Addr
 }
 
+type dataInfo struct {
+	slice mBufferSlice
+	conn  *uConn
+}
+
 type Acceptor struct {
 	listenConn    net.PacketConn //*net.UDPConn
 	options       *options.ServerOptions
@@ -38,11 +43,13 @@ type Acceptor struct {
 	state         int32
 	connMap       sync.Map
 	stateMap      sync.Map
+	deletedMap    map[string]uint8
 	convIdCounter uint32
 	tokenCounter  int64
-	mtu           int32
 	reqCh         chan reqInfo
 	connCh        chan net.Conn
+	dataCh        chan dataInfo
+	discCh        chan string
 	writeChArray  [maxWriteChanCount]chan struct {
 		raddr *net.UDPAddr
 		data  []byte
@@ -67,20 +74,25 @@ func NewAcceptor(ops *options.ServerOptions) *Acceptor {
 	if a.options.GetKcpMtu() <= 0 {
 		a.options.SetKcpMtu(defaultMtu)
 	}
-	a.mtu = a.options.GetKcpMtu()
 	if a.options.GetBacklogLength() <= 0 {
 		a.options.SetBacklogLength(defaultReqListLength)
 	}
 	a.reqCh = make(chan reqInfo, a.options.GetBacklogLength())
+	if a.options.GetRecvListLen() <= 0 {
+		a.options.SetRecvListLen(common.DefaultConnRecvListLen)
+	}
+	a.dataCh = make(chan dataInfo, a.options.GetRecvListLen()*10)
 	if a.options.GetSendListLen() <= 0 {
 		a.options.SetSendListLen(defaultWriteListLength)
 	}
+	a.discCh = make(chan string, 256)
 	for i := 0; i < writeChanCount; i++ {
 		a.writeChArray[i] = make(chan struct {
 			raddr *net.UDPAddr
 			data  []byte
 		}, a.options.GetSendListLen())
 	}
+	a.deletedMap = make(map[string]uint8)
 	return a
 }
 
@@ -134,6 +146,7 @@ func (a *Acceptor) Serve() error {
 	go a.tw.Run()
 
 	go a.handleConnectRequest()
+	go a.handle()
 	go a.writeLoop()
 
 	for err == nil {
@@ -142,7 +155,7 @@ func (a *Acceptor) Serve() error {
 		}
 		slice, raddr, err = ReadFrom2MBuffer(a.listenConn, mbuf)
 		// 小于mtu标记为可回收，等后续引用计数为0后就能回收到对象池
-		if mbuf.left() < a.mtu {
+		if mbuf.left() < a.options.GetKcpMtu() {
 			mbuf.markRecycle()
 			mbuf = nil
 		}
@@ -160,14 +173,7 @@ func (a *Acceptor) Serve() error {
 		if !o { // receive new connection
 			a.reqCh <- reqInfo{slice: slice, addr: raddr}
 		} else {
-			conn := c.(*uConn)
-			if conn.recvList == nil {
-				if conn.options.GetRecvListLen() <= 0 {
-					conn.options.SetRecvListLen(common.DefaultConnRecvListLen)
-				}
-				conn.recvList = make(chan mBufferSlice, conn.options.GetRecvListLen())
-			}
-			conn.recvList <- slice
+			a.dataCh <- dataInfo{slice: slice, conn: c.(*uConn)}
 		}
 	}
 	if o {
@@ -193,6 +199,7 @@ func (a *Acceptor) handleConnectRequest() {
 	var (
 		writeIndex = a.ran.Int31n(writeChanCount)
 		loop       = true
+		tid        uint32
 		err        error
 		header     frameHeader
 	)
@@ -202,57 +209,53 @@ func (a *Acceptor) handleConnectRequest() {
 			if !o {
 				break
 			}
-			decodeFrameHeader(info.slice.getData(), &header)
 			addrStr := info.addr.String()
-			switch header.frm {
-			case FRAME_SYN: // 第一次握手
+			decodeFrameHeader(info.slice.getData(), &header)
+			info.slice.finish(putMBuffer)
+			if header.frm == FRAME_SYN { // 第一次握手
+				_, o := a.stateMap.Load(addrStr)
+				if o {
+					break
+				}
 				conn := getUConn(&a.options.Options)
 				conn.state = STATE_SYN_RECV
 				conn.writeCh = a.writeChArray[writeIndex]
 				conn.raddr = info.addr.(*net.UDPAddr)
-				if _, o := a.stateMap.LoadOrStore(addrStr, conn); o {
-					putUConn(conn)
-					break
-				}
+				a.stateMap.Store(addrStr, conn)
 				a.convIdCounter += 1
 				a.tokenCounter += 1
-				if err = sendSynAck(conn, a.convIdCounter, a.tokenCounter); err != nil {
-					a.stateMap.Delete(addrStr)
-					putUConn(conn)
-					log.Infof("gsnet: kcp connection send synack err %v", err)
+				tid, err = a.sendSynAckWithTimeout(conn, addrStr)
+				if tid == 0 || err != nil {
 					break
 				}
-				tid := a.tw.Add(3*time.Second, func(args []any) {
-					if conn.cn >= 2 { // 超出重试次数
-						a.stateMap.Delete(info.addr.String())
-						putUConn(conn)
-						return
-					}
-					conn.cn += 1 // timeout once
-					if err = sendSynAck(conn, a.convIdCounter, a.tokenCounter); err != nil {
-						a.stateMap.Delete(addrStr)
-						putUConn(conn)
-						log.Infof("gsnet: kcp connetion send synack err %v with resend %v", err, conn.cn)
-					}
-				}, nil)
 				conn.state = STATE_SYN_RECV
 				conn.tid = tid
 				conn.convId = a.convIdCounter
 				conn.token = a.tokenCounter
-				//log.Infof("gsnet: acceptor receive syn on handshake, conversation(%v) token(%v)", a.convIdCounter, a.tokenCounter)
-			case FRAME_ACK: // 第三次握手
-				c, o := a.stateMap.Load(addrStr)
+			} else if header.frm == FRAME_ACK { // 第三次握手
+				c, o := a.stateMap.Load(addrStr) // 找不到对应的连接
 				if !o {
-					log.Infof("gsnet: kcp connection not found state conn with frame ack received")
+					if _, o = a.connMap.Load(addrStr); !o { // 没有此连接，应该是synack三次超时没有回复后删掉了连接状态
+						var n uint8
+						if n, o = a.deletedMap[addrStr]; o {
+							log.Infof("gsnet: kcp connection from %v not found state on frame ack received, but found in deleted map value %v", addrStr, n)
+						} else {
+							log.Infof("gsnet: kcp connection from %v not found state on frame ack received, not found in deleted map", addrStr)
+						}
+						break
+					}
+					// 已经建立连接，正常情况不会跑到这里
 					break
 				}
 				conn := c.(*uConn)
-				if conn.state == STATE_ESTABLISHED {
+				if conn.state == STATE_ESTABLISHED { // 已经建立连接
 					break
 				}
 				a.stateMap.Delete(addrStr)
+				a.deletedMap[addrStr] = conn.cn
 				if err := checkAck(conn, header.convId, header.token); err != nil {
-					putUConn(conn)
+					sendRst(conn)
+					a.discCh <- addrStr
 					break
 				}
 				if conn.tid > 0 {
@@ -263,7 +266,8 @@ func (a *Acceptor) handleConnectRequest() {
 					// todo 新建连接绑定到监听端口
 					conn.conn, err = net.DialUDP(a.network, a.localAddress, conn.raddr)
 					if err != nil {
-						putUConn(conn)
+						sendRst(conn)
+						a.discCh <- addrStr
 						log.Infof("gsnet: kcp acceptor new connection err: %v", err)
 						break
 					}
@@ -272,14 +276,72 @@ func (a *Acceptor) handleConnectRequest() {
 				}
 				a.connCh <- conn
 				a.connMap.Store(addrStr, conn)
-				//log.Infof("gsnet: acceptor receive ack on handshake, new kcp conversation(%v) established", conn.convId)
-			default:
+			} else {
 				log.Infof("gsnet: kcp connection received unexpected frame with type %v", header.frm)
 			}
-			info.slice.finish(putMBuffer)
 		case t, o := <-a.tw.C:
 			if o {
 				t.ExecuteFunc()
+			}
+		case <-a.closeCh:
+			loop = false
+		}
+	}
+}
+
+func (a *Acceptor) sendSynAckWithTimeout(conn *uConn, addrStr string) (uint32, error) {
+	if int(conn.cn) >= len(timeoutAckTimeList) { // 超出重试次数
+		a.stateMap.Delete(addrStr)
+		a.discCh <- addrStr
+		//a.deletedMap[addrStr] = conn.cn
+		return 0, nil
+	}
+	var err error
+	if err = sendSynAck(conn, a.convIdCounter, a.tokenCounter); err != nil {
+		a.stateMap.Delete(addrStr)
+		a.discCh <- addrStr
+		//a.deletedMap[addrStr] = conn.cn
+		return 0, err
+	}
+	var tid uint32
+	tid = a.tw.Add(time.Duration(timeoutAckTimeList[conn.cn])*time.Second, func(args []any) {
+		conn.cn += 1 // timeout once
+		tid, err = a.sendSynAckWithTimeout(conn, addrStr)
+		if tid > 0 {
+			conn.tid = tid
+		} else {
+			a.stateMap.Delete(addrStr)
+			a.discCh <- addrStr
+			//a.deletedMap[addrStr] = conn.cn
+		}
+	}, nil)
+	return tid, nil
+}
+
+func (a *Acceptor) handle() {
+	defer func() {
+		if err := recover(); err != nil {
+			log.WithStack(err)
+		}
+	}()
+	var (
+		loop = true
+	)
+	for loop {
+		select {
+		case d, o := <-a.dataCh:
+			if o {
+				d.conn.recv(d.slice)
+			}
+		case addr, o := <-a.discCh:
+			if o {
+				var c any
+				c, o = a.stateMap.Load(addr)
+				if o {
+					conn := c.(*uConn)
+					conn.Close()
+					putUConn(conn)
+				}
 			}
 		case <-a.closeCh:
 			loop = false
@@ -400,6 +462,21 @@ func sendAck(conn *net.UDPConn, conversation uint32, token int64) error {
 	header.frm = FRAME_ACK
 	header.convId = conversation
 	header.token = token
+	cnt := encodeFrameHeader(&header, buf[:])
+	_, err = conn.Write(buf[:cnt])
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func sendRst(conn *uConn) error {
+	var (
+		buf    [maxFrameHeaderLength]byte
+		header frameHeader
+		err    error
+	)
+	header.frm = FRAME_RST
 	cnt := encodeFrameHeader(&header, buf[:])
 	_, err = conn.Write(buf[:cnt])
 	if err != nil {

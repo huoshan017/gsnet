@@ -196,21 +196,21 @@ func (c *KConn) RecvNonblock() (packet.IPacket, error) {
 	if err != nil {
 		return nil, err
 	}
-	if p != nil {
-		return p, nil
-	}
 
-	select {
-	case <-c.closeCh:
-		err = c.genErrConnClosed()
-	case slice, ok = <-c.conn.recvList:
-		if !ok {
+	if p == nil {
+		select {
+		case <-c.closeCh:
 			err = c.genErrConnClosed()
-			break
+		case slice, ok = <-c.conn.recvList:
+			if !ok {
+				err = c.genErrConnClosed()
+				break
+			}
+			p, err = c.recvMBufferSlice(slice)
+		default:
+			c.kcpCB.Update(currMs())
+			err = common.ErrRecvListEmpty
 		}
-		p, err = c.recvMBufferSlice(slice)
-	default:
-		err = common.ErrRecvListEmpty
 	}
 	return p, err
 }
@@ -255,6 +255,10 @@ func (c *KConn) Wait(ctx context.Context, chPak chan common.IdWithPacket) (packe
 			}
 			p, err = c.recvMBufferSlice(slice)
 		case <-tickerCh:
+			if c.kcpCB.IsDead() {
+				err = common.ErrConnClosed
+				break
+			}
 			c.kcpCB.Update(currMs())
 			id = -1
 		case pak, o := <-chPak:

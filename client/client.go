@@ -397,13 +397,13 @@ func (c *Client) handleReady(mode int32) (bool, error) {
 
 func (c *Client) handle(mode int32) error {
 	var (
-		pak packet.IPacket
-		res int32
-		err error
+		pak     packet.IPacket
+		res, id int32
+		err     error
 	)
 
 	if mode == 0 {
-		pak, _, err = c.conn.Wait(c.ctx, c.sess.GetPacketChannel())
+		pak, id, err = c.conn.Wait(c.ctx, c.sess.GetPacketChannel())
 	} else {
 		pak, err = c.conn.RecvNonblock()
 	}
@@ -415,7 +415,7 @@ func (c *Client) handle(mode int32) error {
 			}
 			c.basePacketHandler.OnPostHandle(pak)
 			c.options.GetPacketPool().Put(pak)
-		} else { // tick handle
+		} else if id < 0 { // tick handle
 			c.handleTick()
 			err = c.basePacketHandler.OnUpdateHandle()
 		}
