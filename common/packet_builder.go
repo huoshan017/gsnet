@@ -446,8 +446,6 @@ func (pc *PacketBuilder) DecodeReadFrom(reader io.Reader) (packet.IPacket, error
 		return nil, err
 	}
 
-	log.Infof("decodefrom: recv header %v", pc.recvHeaderBuff[:])
-
 	err = pc.recvHeaderPacket.UnformatFrom(pc.recvHeaderBuff[:])
 	if err != nil {
 		return nil, err
