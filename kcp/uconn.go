@@ -100,7 +100,7 @@ func DialUDP(address string, ops *options.Options) (net.Conn, error) {
 	c.convId = header.convId
 	c.token = header.token
 
-	c.readLoop()
+	go c.readLoop()
 	return c, nil
 }
 
@@ -184,49 +184,47 @@ func (c *uConn) recv(slice mBufferSlice) {
 }
 
 func (c *uConn) readLoop() { // 客户端连接的接收线程
-	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				log.WithStack(err)
-			}
-		}()
-		var (
-			mbuf  *mBuffer
-			slice mBufferSlice
-			o     bool
-			err   error
-		)
-		for err == nil {
-			if atomic.LoadInt32(&c.state) == STATE_CLOSED { //
-				if mbuf != nil {
-					slice, o = getLastSlice(mbuf)
-				}
-				break
-			}
-			if mbuf == nil {
-				mbuf = getMBuffer()
-			}
-			slice, err = Read2MBuffer(c.conn, mbuf)
-			if err != nil {
-				slice, o = getLastSlice(mbuf)
-				mbuf = nil
-				log.Infof("gsnet: uConn.run Read2MBuffer err: %v", err)
-				continue
-			}
-			// 小于mtu标记为可回收，等后续引用计数为0后就能回收到对象池
-			if mbuf.left() < c.options.GetKcpMtu() {
-				mbuf.markRecycle()
-				mbuf = nil
-			}
-			c.recv(slice)
-		}
-		if o {
-			slice.finish(putMBuffer)
-		}
-		if c.recvList != nil {
-			close(c.recvList)
+	defer func() {
+		if err := recover(); err != nil {
+			log.WithStack(err)
 		}
 	}()
+	var (
+		mbuf  *mBuffer
+		slice mBufferSlice
+		o     bool
+		err   error
+	)
+	for err == nil {
+		if atomic.LoadInt32(&c.state) == STATE_CLOSED { //
+			if mbuf != nil {
+				slice, o = getLastSlice(mbuf)
+			}
+			break
+		}
+		if mbuf == nil {
+			mbuf = getMBuffer()
+		}
+		slice, err = Read2MBuffer(c.conn, mbuf)
+		if err != nil {
+			slice, o = getLastSlice(mbuf)
+			mbuf = nil
+			log.Infof("gsnet: uConn.run Read2MBuffer err: %v", err)
+			continue
+		}
+		// 小于mtu标记为可回收，等后续引用计数为0后就能回收到对象池
+		if mbuf.left() < c.options.GetKcpMtu() {
+			mbuf.markRecycle()
+			mbuf = nil
+		}
+		c.recv(slice)
+	}
+	if o {
+		slice.finish(putMBuffer)
+	}
+	if c.recvList != nil {
+		close(c.recvList)
+	}
 }
 
 func getLastSlice(mbuf *mBuffer) (mBufferSlice, bool) {

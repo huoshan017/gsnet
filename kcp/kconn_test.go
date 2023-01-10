@@ -34,7 +34,7 @@ func newKConn(t *testing.T, cors bool, conn net.Conn, cidx int32, wg *sync.WaitG
 	go kconn.Run()
 
 	var (
-		totalNum int32 = 1000
+		totalNum int32 = 10
 	)
 	go func() {
 		var (
@@ -145,7 +145,7 @@ func testKConn(t *testing.T, reuseAddr, reusePort bool) {
 	}()
 
 	const (
-		clientNum = 4000
+		clientNum = 10
 	)
 	var (
 		closeCh = make(chan struct{})

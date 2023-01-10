@@ -8,7 +8,7 @@ import (
 	"github.com/huoshan017/gsnet/packet"
 )
 
-type commonHandler struct {
+type baseAgentHandler struct {
 	connectHandle    func(common.ISession)
 	readyHandle      func(common.ISession)
 	disconnectHandle func(common.ISession, error)
@@ -16,67 +16,67 @@ type commonHandler struct {
 	errorHandle      func(error)
 }
 
-func (h *commonHandler) setConnectHandle(handle func(common.ISession)) {
+func (h *baseAgentHandler) setConnectHandle(handle func(common.ISession)) {
 	h.connectHandle = handle
 }
 
-func (h *commonHandler) setReadyHandle(handle func(common.ISession)) {
+func (h *baseAgentHandler) setReadyHandle(handle func(common.ISession)) {
 	h.readyHandle = handle
 }
 
-func (h *commonHandler) setDisconnectHandle(handle func(common.ISession, error)) {
+func (h *baseAgentHandler) setDisconnectHandle(handle func(common.ISession, error)) {
 	h.disconnectHandle = handle
 }
 
-func (h *commonHandler) setTickHandle(handle func(common.ISession, time.Duration)) {
+func (h *baseAgentHandler) setTickHandle(handle func(common.ISession, time.Duration)) {
 	h.tickHandle = handle
 }
 
-func (h *commonHandler) setErrorHandle(handle func(error)) {
+func (h *baseAgentHandler) setErrorHandle(handle func(error)) {
 	h.errorHandle = handle
 }
 
-func (h *commonHandler) OnConnect(sess common.ISession) {
+func (h *baseAgentHandler) OnConnect(sess common.ISession) {
 	if h.connectHandle != nil {
 		h.connectHandle(sess)
 	}
 }
 
-func (h *commonHandler) OnReady(sess common.ISession) {
+func (h *baseAgentHandler) OnReady(sess common.ISession) {
 	if h.readyHandle != nil {
 		h.readyHandle(sess)
 	}
 }
 
-func (h *commonHandler) OnTick(sess common.ISession, tick time.Duration) {
+func (h *baseAgentHandler) OnTick(sess common.ISession, tick time.Duration) {
 	if h.tickHandle != nil {
 		h.tickHandle(sess, tick)
 	}
 }
 
-func (h *commonHandler) OnDisconnect(sess common.ISession, err error) {
+func (h *baseAgentHandler) OnDisconnect(sess common.ISession, err error) {
 	if h.disconnectHandle != nil {
 		h.disconnectHandle(sess, err)
 	}
 }
 
-func (h *commonHandler) OnError(err error) {
+func (h *baseAgentHandler) OnError(err error) {
 	if h.errorHandle != nil {
 		h.errorHandle(err)
 	}
 }
 
-type serverHandler struct {
-	commonHandler
+type agentServerHandler struct {
+	baseAgentHandler
 	packetHandle func(common.ISession, packet.IPacket) error
 	agentSess    *common.AgentSession
 }
 
-func (h *serverHandler) setPacketHandle(handle func(common.ISession, packet.IPacket) error) {
+func (h *agentServerHandler) setPacketHandle(handle func(common.ISession, packet.IPacket) error) {
 	h.packetHandle = handle
 }
 
-func (h *serverHandler) OnPacket(sess common.ISession, pak packet.IPacket) error {
+func (h *agentServerHandler) OnPacket(sess common.ISession, pak packet.IPacket) error {
 	agentId := common.BufferToUint32(pak.Data()[:4])
 	ppak, o := pak.(*packet.Packet)
 	if o {
@@ -97,8 +97,8 @@ func (h *serverHandler) OnPacket(sess common.ISession, pak packet.IPacket) error
 	return h.packetHandle(h.agentSess, pak)
 }
 
-func newServerHandler(handler common.ISessionEventHandler) *serverHandler {
-	sh := &serverHandler{}
+func newServerHandler(handler common.ISessionEventHandler) *agentServerHandler {
+	sh := &agentServerHandler{}
 	sh.setConnectHandle(handler.OnConnect)
 	sh.setReadyHandle(handler.OnReady)
 	sh.setDisconnectHandle(handler.OnDisconnect)
