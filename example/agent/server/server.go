@@ -44,7 +44,7 @@ type serverSessionHandlerUseAgentClient struct {
 	agentSess   *common.AgentSession
 }
 
-func newServerSessionHandlerUseAgentClient(args ...any) common.ISessionEventHandler {
+func newServerSessionHandlerUseAgentClient(args ...any) common.ISessionHandler {
 	agentClient := args[0].(*client.AgentClient)
 	return &serverSessionHandlerUseAgentClient{agentClient: agentClient}
 }

@@ -23,7 +23,7 @@ type testClientUseUpdateHandler struct {
 	compareNum   int32
 }
 
-func newTestClientUseUpdateHandler(args ...any) common.ISessionEventHandler {
+func newTestClientUseUpdateHandler(args ...any) common.ISessionHandler {
 	h := &testClientUseUpdateHandler{}
 	h.sendDataList, _ = args[0].(*ex_packet_common.SendDataInfo)
 	return h

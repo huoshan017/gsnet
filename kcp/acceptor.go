@@ -169,7 +169,8 @@ func (a *Acceptor) Serve() error {
 			continue
 		}
 
-		c, o := a.connMap.Load(raddr.String())
+		var c any
+		c, o = a.connMap.Load(raddr.String())
 		if !o { // receive new connection
 			a.reqCh <- reqInfo{slice: slice, addr: raddr}
 		} else {
@@ -213,7 +214,7 @@ func (a *Acceptor) handleConnectRequest() {
 			decodeFrameHeader(info.slice.getData(), &header)
 			info.slice.finish(putMBuffer)
 			if header.frm == FRAME_SYN { // 第一次握手
-				_, o := a.stateMap.Load(addrStr)
+				_, o = a.stateMap.Load(addrStr)
 				if o {
 					break
 				}
@@ -233,7 +234,8 @@ func (a *Acceptor) handleConnectRequest() {
 				conn.convId = a.convIdCounter
 				conn.token = a.tokenCounter
 			} else if header.frm == FRAME_ACK { // 第三次握手
-				c, o := a.stateMap.Load(addrStr) // 找不到对应的连接
+				var c any
+				c, o = a.stateMap.Load(addrStr) // 找不到对应的连接
 				if !o {
 					if _, o = a.connMap.Load(addrStr); !o { // 没有此连接，应该是synack三次超时没有回复后删掉了连接状态
 						var n uint8

@@ -16,17 +16,17 @@ type MsgServer struct {
 	options MsgServerOptions
 }
 
-func prepareMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCodec, mapper *IdMsgMapper, msgServerOptions *MsgServerOptions, options ...options.Option) func(args ...any) common.ISessionEventHandler {
+func prepareMsgServer(newFunc NewMsgSessionHandlerFunc, funcArgs []any, codec IMsgCodec, mapper *IdMsgMapper, msgServerOptions *MsgServerOptions, options ...options.Option) func(args ...any) common.ISessionHandler {
 	for i := 0; i < len(options); i++ {
 		options[i](&msgServerOptions.Options)
 	}
 	if len(funcArgs) > 0 {
 		msgServerOptions.SetNewSessionHandlerFuncArgs(funcArgs...)
 	}
-	var newSessionHandlerFunc server.NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
+	var newSessionHandlerFunc server.NewSessionHandlerFunc = func(args ...any) common.ISessionHandler {
 		msgSessionHandler := newFunc(args...)
 		ms := newMsgHandlerServer(msgSessionHandler, codec, mapper, &msgServerOptions.MsgOptions)
-		return common.ISessionEventHandler(ms)
+		return common.ISessionHandler(ms)
 	}
 	return newSessionHandlerFunc
 }

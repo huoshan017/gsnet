@@ -15,7 +15,7 @@ import (
 type testServerHandler struct {
 }
 
-func newTestServerHandler(args ...any) common.ISessionEventHandler {
+func newTestServerHandler(args ...any) common.ISessionHandler {
 	h := &testServerHandler{}
 	return h
 }

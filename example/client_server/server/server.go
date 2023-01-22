@@ -18,7 +18,7 @@ import (
 type serverHandler struct {
 }
 
-func newServerHandlerUseAgentClient(args ...any) common.ISessionEventHandler {
+func newServerHandlerUseAgentClient(args ...any) common.ISessionHandler {
 	return &serverHandler{}
 }
 

@@ -73,7 +73,7 @@ type IAgentSession interface {
 }
 
 // 会话处理器接口
-type ISessionEventHandler interface {
+type ISessionHandler interface {
 	OnConnect(ISession)
 	OnReady(ISession)
 	OnPacket(ISession, packet.IPacket) error

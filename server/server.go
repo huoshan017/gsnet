@@ -29,7 +29,7 @@ type sessionCloseInfo struct {
 }
 
 // 会话处理器函数类型
-type NewSessionHandlerFunc func(args ...any) common.ISessionEventHandler
+type NewSessionHandlerFunc func(args ...any) common.ISessionHandler
 
 // 服务器
 type Server struct {
@@ -57,7 +57,7 @@ func NewServer(newFunc NewSessionHandlerFunc, ops ...options.Option) *Server {
 	return s
 }
 
-func NewServerWithHandler(handler common.ISessionEventHandler, options ...options.Option) *Server {
+func NewServerWithHandler(handler common.ISessionHandler, options ...options.Option) *Server {
 	rf := reflect.TypeOf(handler)
 	s := &Server{
 		sessHandlerType: rf,
@@ -290,10 +290,10 @@ func (s *Server) handleConn(c net.Conn) {
 	basePacketHandler := handler.NewDefaultBasePacketHandler4Server(sess, argsGetter, resendEventHandler, &s.options.Options, s.reconnInfoMap)
 
 	// 创建會話處理器
-	var handler common.ISessionEventHandler
+	var handler common.ISessionHandler
 	if s.newHandlerFunc == nil {
 		v := reflect.New(s.sessHandlerType.Elem())
-		handler = v.Interface().(common.ISessionEventHandler)
+		handler = v.Interface().(common.ISessionHandler)
 	} else {
 		if s.options.GetNewSessionHandlerFuncArgs() == nil {
 			handler = s.newHandlerFunc()

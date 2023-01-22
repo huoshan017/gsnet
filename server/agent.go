@@ -97,7 +97,7 @@ func (h *agentServerHandler) OnPacket(sess common.ISession, pak packet.IPacket) 
 	return h.packetHandle(h.agentSess, pak)
 }
 
-func newServerHandler(handler common.ISessionEventHandler) *agentServerHandler {
+func newServerHandler(handler common.ISessionHandler) *agentServerHandler {
 	sh := &agentServerHandler{}
 	sh.setConnectHandle(handler.OnConnect)
 	sh.setReadyHandle(handler.OnReady)
@@ -113,7 +113,7 @@ type AgentServer struct {
 }
 
 func NewAgentServer(newFunc NewSessionHandlerFunc, options ...options.Option) *AgentServer {
-	var rewriteNewFunc NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
+	var rewriteNewFunc NewSessionHandlerFunc = func(args ...any) common.ISessionHandler {
 		handler := newFunc(args...)
 		return newServerHandler(handler)
 	}
@@ -123,7 +123,7 @@ func NewAgentServer(newFunc NewSessionHandlerFunc, options ...options.Option) *A
 }
 
 func NewAgentServerWithOptions(newFunc NewSessionHandlerFunc, options *options.ServerOptions) *AgentServer {
-	var rewriteNewFunc NewSessionHandlerFunc = func(args ...any) common.ISessionEventHandler {
+	var rewriteNewFunc NewSessionHandlerFunc = func(args ...any) common.ISessionHandler {
 		handler := newFunc(args...)
 		return newServerHandler(handler)
 	}

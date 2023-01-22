@@ -78,7 +78,7 @@ type testClientHandler struct {
 	ran          *rand.Rand
 }
 
-func newTestClientHandler(args ...any) common.ISessionEventHandler {
+func newTestClientHandler(args ...any) common.ISessionHandler {
 	if len(args) < 2 {
 		panic("At least need 2 arguments")
 	}
@@ -187,7 +187,7 @@ type testServerHandler struct {
 	state int32 // 1 表示服务器模式  2 表示客户端模式
 }
 
-func newTestServerHandler(args ...any) common.ISessionEventHandler {
+func newTestServerHandler(args ...any) common.ISessionHandler {
 	h := &testServerHandler{}
 	var o bool
 	h.t, o = args[0].(*testing.T)

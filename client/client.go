@@ -32,7 +32,7 @@ type Client struct {
 	connector         *Connector
 	conn              common.IConn
 	sess              *common.SessionEx
-	handler           common.ISessionEventHandler
+	handler           common.ISessionHandler
 	basePacketHandler handler.IBasePacketHandler
 	packetBuilder     *common.PacketBuilder
 	packetCodec       *common.PacketCodec
@@ -47,7 +47,7 @@ type Client struct {
 	reconnInfo        common.ReconnectInfo
 }
 
-func NewClient(handler common.ISessionEventHandler, ops ...options.Option) *Client {
+func NewClient(handler common.ISessionHandler, ops ...options.Option) *Client {
 	c := &Client{
 		handler: handler,
 		options: options.ClientOptions{Options: *options.NewOptions()},
@@ -59,7 +59,7 @@ func NewClient(handler common.ISessionEventHandler, ops ...options.Option) *Clie
 	return c
 }
 
-func NewClientWithOptions(handler common.ISessionEventHandler, options *options.ClientOptions) *Client {
+func NewClientWithOptions(handler common.ISessionHandler, options *options.ClientOptions) *Client {
 	c := &Client{
 		options: *options,
 		handler: handler,

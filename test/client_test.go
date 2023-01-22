@@ -23,7 +23,7 @@ type testClientUseRunHandler struct {
 	isReady    bool
 }
 
-func newTestClientUseRunHandler(args ...any) common.ISessionEventHandler {
+func newTestClientUseRunHandler(args ...any) common.ISessionHandler {
 	if len(args) < 2 {
 		panic("At least need 2 arguments")
 	}
@@ -180,7 +180,7 @@ type testClientUseUpdateHandler struct {
 	compareNum   int32
 }
 
-func newTestClientUseUpdateHandler(args ...any) common.ISessionEventHandler {
+func newTestClientUseUpdateHandler(args ...any) common.ISessionHandler {
 	if len(args) < 2 {
 		panic("At least need 2 arguments")
 	}

@@ -341,7 +341,7 @@ func (h *gateSessionHandler) checkSendCacheData(sess common.ISession) error {
 	return err
 }
 
-func newGateSessionHandler(args ...any) common.ISessionEventHandler {
+func newGateSessionHandler(args ...any) common.ISessionHandler {
 	agentGroup := args[0].(*client.AgentGroup)
 	routeType := args[1].(RouteType)
 	return &gateSessionHandler{
