@@ -157,7 +157,7 @@ func (h *testPBMsgHandler) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType
 	return nil
 }
 
-func newTestPBMsgHandler(args ...any) msg.IMsgSessionEventHandler {
+func newTestPBMsgHandler(args ...any) msg.IMsgSessionHandler {
 	handler := &testPBMsgHandler{
 		t: args[0].(*testing.T),
 	}
@@ -308,7 +308,7 @@ func (h *testPBMsgHandler2) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdTyp
 	return nil
 }
 
-func newTestPBMsgHandler2(args ...any) msg.IMsgSessionEventHandler {
+func newTestPBMsgHandler2(args ...any) msg.IMsgSessionHandler {
 	t := args[0].(*testing.T)
 	handler := &testPBMsgHandler2{
 		t: t,

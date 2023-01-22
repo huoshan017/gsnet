@@ -42,7 +42,7 @@ type serverHandlerUseMsgAgentClient struct {
 	agentSess      *msg.MsgAgentSession
 }
 
-func newServerHandlerUseMsgAgentClient(args ...any) msg.IMsgSessionEventHandler {
+func newServerHandlerUseMsgAgentClient(args ...any) msg.IMsgSessionHandler {
 	msgAgentClient := args[0].(*msg.MsgAgentClient)
 	return &serverHandlerUseMsgAgentClient{msgAgentClient: msgAgentClient}
 }

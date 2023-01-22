@@ -21,7 +21,7 @@ type msgAgentServerHandler struct {
 	rand *rand.Rand
 }
 
-func newMsgAgentServerHandler(args ...any) msg.IMsgSessionEventHandler {
+func newMsgAgentServerHandler(args ...any) msg.IMsgSessionHandler {
 	return &msgAgentServerHandler{}
 }
 

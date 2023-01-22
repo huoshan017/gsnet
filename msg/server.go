@@ -8,7 +8,7 @@ import (
 )
 
 // NewMsgSessionHandlerFunc function for creating interface IMsgSessionHandler instance
-type NewMsgSessionHandlerFunc func(args ...any) IMsgSessionEventHandler
+type NewMsgSessionHandlerFunc func(args ...any) IMsgSessionHandler
 
 // MsgServer struct
 type MsgServer struct {

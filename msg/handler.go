@@ -159,11 +159,11 @@ func (d *msgHandlerClient) OnPacket(s common.ISession, pak packet.IPacket) error
 
 type msgHandlerServer struct {
 	msgHandlerCommon
-	sessionHandler IMsgSessionEventHandler
+	sessionHandler IMsgSessionHandler
 	msgHandle      func(*MsgSession, MsgIdType, any) error
 }
 
-func newMsgHandlerServer(sessionHandler IMsgSessionEventHandler, codec IMsgCodec, mapper *IdMsgMapper, ops *MsgOptions) *msgHandlerServer {
+func newMsgHandlerServer(sessionHandler IMsgSessionHandler, codec IMsgCodec, mapper *IdMsgMapper, ops *MsgOptions) *msgHandlerServer {
 	server := &msgHandlerServer{
 		msgHandlerCommon: *newMsgHandlerCommon(codec, mapper, ops),
 		sessionHandler:   sessionHandler,

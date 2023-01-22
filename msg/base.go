@@ -14,7 +14,7 @@ type IMsgCodec interface {
 }
 
 // IMsgSessionHandler interface for message event handler
-type IMsgSessionEventHandler interface {
+type IMsgSessionHandler interface {
 	OnConnected(*MsgSession)
 	OnReady(*MsgSession)
 	OnDisconnected(*MsgSession, error)
