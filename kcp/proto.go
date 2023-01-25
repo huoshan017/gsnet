@@ -12,6 +12,7 @@ const (
 	FRAME_ACK     = 2
 	FRAME_FIN     = 3
 	FRAME_RST     = 4
+	FRAME_DATA    = 10
 )
 
 const (

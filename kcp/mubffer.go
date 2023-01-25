@@ -35,6 +35,7 @@ func (b *mBuffer) use(n int32) bool {
 	return true
 }
 
+// 最後一個slice，儅調用mBufferSlice.finish后mBuffer將被回收
 func (b *mBuffer) lastSlice() (mBufferSlice, bool) {
 	left := b.left()
 	if left <= 0 {
@@ -44,9 +45,10 @@ func (b *mBuffer) lastSlice() (mBufferSlice, bool) {
 	return mBufferSlice{slice: nil, buffer: b}, true
 }
 
+// 准備回收mBuffer
 func (b *mBuffer) finish() bool {
 	// 引用计数和可回收标记标记判断
-	if atomic.AddInt32(&b.ref, -1) == 0 && b.canRecycle() {
+	if atomic.AddInt32(&b.ref, -1) <= 0 && b.canRecycle() {
 		return true
 	}
 	return false
@@ -59,8 +61,8 @@ func (b *mBuffer) left() int32 {
 func (b *mBuffer) clear() {
 	b.buf = nil
 	b.used = 0
-	b.ref = 0
-	b.state = mBufferStateFree
+	atomic.StoreInt32(&b.ref, 0)
+	atomic.StoreInt32(&b.state, mBufferStateFree)
 }
 
 func (b *mBuffer) canRecycle() bool {
@@ -79,20 +81,6 @@ type mBufferSlice struct {
 func (s mBufferSlice) getData() []byte {
 	return s.slice
 }
-
-/*func (s *mBufferSlice) skip(n int32) bool {
-	if n > int32(len(s.slice)) {
-		return false
-	}
-	s.slice = s.slice[n:]
-	return true
-}
-
-func (s *mBufferSlice) read(buf []byte) int32 {
-	n := int32(copy(s.slice, buf))
-	s.slice = s.slice[n:]
-	return n
-}*/
 
 func (s mBufferSlice) finish(recycle func(*mBuffer)) {
 	if s.buffer.finish() && recycle != nil {
@@ -147,15 +135,6 @@ func getMBuffer() *mBuffer {
 	}
 	return buf
 }
-
-/*func getMBufferWithSize(size int32) *mBuffer {
-	if size < minMBufferSize {
-		size = minMBufferSize
-	}
-	buf := mbufferPool.Get().(*mBuffer)
-	buf.buf = pool.GetBuffPool().Alloc(size)
-	return buf
-}*/
 
 func putMBuffer(buf *mBuffer) {
 	pbuf := buf.buf

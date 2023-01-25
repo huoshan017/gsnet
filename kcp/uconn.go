@@ -198,7 +198,7 @@ func (c *uConn) readLoop() { // 客户端连接的接收线程
 	for err == nil {
 		if atomic.LoadInt32(&c.state) == STATE_CLOSED { //
 			if mbuf != nil {
-				slice, o = getLastSlice(mbuf)
+				slice, o = toLastSlice(mbuf)
 			}
 			break
 		}
@@ -207,7 +207,7 @@ func (c *uConn) readLoop() { // 客户端连接的接收线程
 		}
 		slice, err = Read2MBuffer(c.conn, mbuf)
 		if err != nil {
-			slice, o = getLastSlice(mbuf)
+			slice, o = toLastSlice(mbuf)
 			mbuf = nil
 			log.Infof("gsnet: uConn.run Read2MBuffer err: %v", err)
 			continue
@@ -227,7 +227,7 @@ func (c *uConn) readLoop() { // 客户端连接的接收线程
 	}
 }
 
-func getLastSlice(mbuf *mBuffer) (mBufferSlice, bool) {
+func toLastSlice(mbuf *mBuffer) (mBufferSlice, bool) {
 	var (
 		slice mBufferSlice
 		o     bool

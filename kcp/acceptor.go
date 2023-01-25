@@ -216,6 +216,7 @@ func (a *Acceptor) handleConnectRequest() {
 			if header.frm == FRAME_SYN { // 第一次握手
 				_, o = a.stateMap.Load(addrStr)
 				if o {
+					log.Infof("gsnet: kcp connection received duplicate syn frame for address %v", addrStr)
 					break
 				}
 				conn := getUConn(&a.options.Options)
