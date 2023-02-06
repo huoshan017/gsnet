@@ -2,8 +2,13 @@ package kcp
 
 import (
 	"bytes"
+	"fmt"
+	"reflect"
+	"sync"
+	"unsafe"
 
 	"github.com/huoshan017/gsnet/common"
+	"github.com/huoshan017/gsnet/log"
 )
 
 const (
@@ -29,13 +34,22 @@ const (
 )
 
 const (
-	defaultMtu           = 1400
-	maxFrameHeaderLength = 4 + 1 + 4 + 8 + 4
+	framePrefix                   = "0xbf"
+	frameSuffix                   = "0xef"
+	framePrefixAndHeaderLength    = len(framePrefix) + 1 + 4 + 8
+	frameSuffixLength             = len(frameSuffix)
+	framePrefixHeaderSuffixLength = len(framePrefix) + 1 + 4 + 8 + len(frameSuffix)
+	defaultMtu                    = 1400 - framePrefixHeaderSuffixLength // 減掉的長度是幀頭去掉會話ID
 )
 
 var (
-	framePrefix = []byte("0xbf")
-	frameSuffix = []byte("0xef")
+	framePrefixBytes = []byte(framePrefix)
+	frameSuffixBytes = []byte(frameSuffix)
+)
+
+var (
+	timeoutSynAckTimeList []int32 = []int32{3, 7, 15}        // synack超时列表
+	timeoutAckTimeList    []int32 = []int32{20, 40, 80, 160} // ack超时列表
 )
 
 type frameHeader struct {
@@ -44,7 +58,23 @@ type frameHeader struct {
 	token  int64
 }
 
-func encodeFrameHeader(header *frameHeader, buf []byte) int32 {
+func checkFrameValid(frm int) bool {
+	return frm == FRAME_SYN || frm == FRAME_ACK || frm == FRAME_SYN_ACK || frm == FRAME_FIN || frm == FRAME_RST || frm == FRAME_DATA
+}
+
+func isHandshakeFrame(frm int) bool {
+	return frm == FRAME_SYN || frm == FRAME_ACK || frm == FRAME_SYN_ACK
+}
+
+func isDisconnectFrame(frm int) bool {
+	return frm == FRAME_FIN
+}
+
+func isDataFrame(frm int) bool {
+	return frm == FRAME_DATA
+}
+
+func encodeFramePreffixHeader(header *frameHeader, buf []byte) {
 	var count int32
 	copy(buf, framePrefix)
 	count += int32(len(framePrefix))
@@ -54,31 +84,118 @@ func encodeFrameHeader(header *frameHeader, buf []byte) int32 {
 	count += 4
 	common.Int64ToBuffer(header.token, buf[count:])
 	count += 8
-	copy(buf[count:], frameSuffix)
-	count += int32(len(frameSuffix))
-	return count
 }
 
-func decodeFrameHeader(buf []byte, header *frameHeader) int32 {
+func encodeFrameHeader(header *frameHeader, buf []byte) int32 {
+	encodeFramePreffixHeader(header, buf)
+	copy(buf[framePrefixAndHeaderLength:], frameSuffixBytes)
+	return int32(framePrefixAndHeaderLength + len(frameSuffixBytes))
+}
+
+func decodeFramePreffixHeader(buf []byte, header *frameHeader) int32 {
 	var count int32
-	if !bytes.Equal(buf[:len(framePrefix)], framePrefix) {
+	if !bytes.Equal(buf[:len(framePrefixBytes)], framePrefixBytes) {
 		return -1
 	}
-	count += int32(len(framePrefix))
+	count += int32(len(framePrefixBytes))
 	header.frm = buf[count]
+	if !checkFrameValid(int(header.frm)) {
+		return -5
+	}
 	count += 1
 	header.convId = common.BufferToUint32(buf[count:])
 	count += 4
 	header.token = common.BufferToInt64(buf[count:])
 	count += 8
-	if !bytes.Equal(buf[count:count+int32(len(frameSuffix))], frameSuffix) {
-		return -2
-	}
-	count += int32(len(frameSuffix))
 	return count
 }
 
+func checkDecodeFrame(buf []byte, header *frameHeader) bool {
+	count := decodeFramePreffixHeader(buf, header)
+	if count < 0 {
+		return false
+	}
+	if !bytes.Equal(buf[len(buf)-len(frameSuffixBytes):], frameSuffixBytes) {
+		log.Infof("buf: %v   compare: %v ---- %v", buf, buf[count:count+int32(len(frameSuffixBytes))], frameSuffixBytes)
+		return false
+	}
+	return true
+}
+
+func encodeDataFrame(buf []byte, header *frameHeader) []byte {
+	dataLen := len(buf)
+	sh := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
+	sh.Data -= uintptr(framePrefixAndHeaderLength)
+	sh.Cap += framePrefixAndHeaderLength
+	sh.Len += framePrefixHeaderSuffixLength
+	// 前綴和幀頭
+	encodeFramePreffixHeader(header, buf)
+	// 後綴
+	copy(buf[framePrefixAndHeaderLength+dataLen:], frameSuffixBytes)
+	return buf
+}
+
 var (
-	timeoutSynAckTimeList []int32 = []int32{3, 7, 15}        // synack超时列表
-	timeoutAckTimeList    []int32 = []int32{20, 40, 80, 160} // ack超时列表
+	stepSize  = []int32{64, 128, 256, 384, 512, 768, 1024, 1280, 1536}
+	stepPools []*sync.Pool
+	stored    sync.Map
 )
+
+func init() {
+	stepPools = make([]*sync.Pool, len(stepSize))
+	for i := 0; i < len(stepSize); i++ {
+		s := stepSize[i]
+		stepPools[i] = &sync.Pool{
+			New: func() any {
+				buf := make([]byte, s)
+				return buf
+			},
+		}
+	}
+}
+
+func _getBuffer(s int32, store bool) []byte {
+	for i := 0; i < len(stepSize); i++ {
+		if stepSize[i] >= s {
+			b := stepPools[i].Get().([]byte)
+			if store {
+				pb := (*reflect.SliceHeader)(unsafe.Pointer(&b)).Data
+				stored.Store(pb, true)
+			}
+			return b
+		}
+	}
+	return nil
+}
+
+func _putBuffer(b []byte, store bool) {
+	c := cap(b)
+	found := false
+	for i := 0; i < len(stepSize); i++ {
+		if c == int(stepSize[i]) {
+			stepPools[i].Put(b)
+			found = true
+			break
+		}
+	}
+	if !found {
+		panic(fmt.Sprintf("gsnet(kcp): not found buffer %v", b))
+	} else if store {
+		pb := (*reflect.SliceHeader)(unsafe.Pointer(&b)).Data
+		if _, o := stored.LoadAndDelete(pb); !o {
+			panic(fmt.Sprintf("gsnet(kcp): not store buffer %v, cant put buffer", b))
+		}
+	}
+}
+
+func getKcpMtuBuffer(s int32) []byte {
+	b := _getBuffer(s+int32(framePrefixHeaderSuffixLength), true)
+	return b[framePrefixAndHeaderLength : int(s)+framePrefixAndHeaderLength]
+}
+
+func putKcpMtuBuffer(b []byte) {
+	sh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
+	sh.Data -= uintptr(framePrefixAndHeaderLength)
+	sh.Cap += framePrefixAndHeaderLength
+	_putBuffer(b, true)
+}

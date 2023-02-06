@@ -26,13 +26,22 @@ const (
 )
 
 type reqInfo struct {
-	slice mBufferSlice
-	addr  net.Addr
+	frm    uint8
+	convId uint32
+	token  int64
+	addr   net.Addr
 }
 
 type dataInfo struct {
 	slice mBufferSlice
 	conn  *uConn
+}
+
+type writeInfo struct {
+	raddr  *net.UDPAddr
+	data   []byte
+	convId uint32
+	token  int64
 }
 
 type Acceptor struct {
@@ -50,13 +59,10 @@ type Acceptor struct {
 	connCh        chan net.Conn
 	dataCh        chan dataInfo
 	discCh        chan string
-	writeChArray  [maxWriteChanCount]chan struct {
-		raddr *net.UDPAddr
-		data  []byte
-	}
-	tw      *pt.Wheel
-	ran     *rand.Rand
-	closeCh chan struct{}
+	writeChArray  [maxWriteChanCount]chan writeInfo
+	tw            *pt.Wheel
+	ran           *rand.Rand
+	closeCh       chan struct{}
 }
 
 func NewAcceptor(ops *options.ServerOptions) *Acceptor {
@@ -72,7 +78,7 @@ func NewAcceptor(ops *options.ServerOptions) *Acceptor {
 	}
 	a.connCh = make(chan net.Conn, a.options.GetConnChanLen())
 	if a.options.GetKcpMtu() <= 0 {
-		a.options.SetKcpMtu(defaultMtu)
+		a.options.SetKcpMtu(int32(defaultMtu))
 	}
 	if a.options.GetBacklogLength() <= 0 {
 		a.options.SetBacklogLength(defaultReqListLength)
@@ -87,10 +93,7 @@ func NewAcceptor(ops *options.ServerOptions) *Acceptor {
 	}
 	a.discCh = make(chan string, 256)
 	for i := 0; i < writeChanCount; i++ {
-		a.writeChArray[i] = make(chan struct {
-			raddr *net.UDPAddr
-			data  []byte
-		}, a.options.GetSendListLen())
+		a.writeChArray[i] = make(chan writeInfo, a.options.GetSendListLen())
 	}
 	a.deletedMap = make(map[string]uint8)
 	return a
@@ -169,12 +172,29 @@ func (a *Acceptor) Serve() error {
 			continue
 		}
 
-		var c any
-		c, o = a.connMap.Load(raddr.String())
-		if !o { // receive new connection
-			a.reqCh <- reqInfo{slice: slice, addr: raddr}
-		} else {
+		var header frameHeader
+		if !checkDecodeFrame(slice.getData(), &header) {
+			log.Infof("gsnet: decode frame header failed")
+			continue
+		}
+
+		if isHandshakeFrame(int(header.frm)) { // 握手幀
+			slice.finish(putMBuffer)
+			a.reqCh <- reqInfo{frm: header.frm, convId: header.convId, token: header.token, addr: raddr}
+		} else if isDataFrame(int(header.frm)) { // 數據幀
+			var c any
+			c, o = a.connMap.Load(raddr.String())
+			if !o {
+				// todo 如果之前的ack幀未收到，直接收到了data數據幀，這時連接還未建立，需要先創建連接
+				slice.finish(putMBuffer)
+				continue
+			}
 			a.dataCh <- dataInfo{slice: slice, conn: c.(*uConn)}
+		} else if isDisconnectFrame(int(header.frm)) { // 揮手幀
+
+		} else {
+			slice.finish(putMBuffer)
+			log.Infof("gsnet: invalid frame code %v", header.frm)
 		}
 	}
 	if o {
@@ -202,7 +222,6 @@ func (a *Acceptor) handleConnectRequest() {
 		loop       = true
 		tid        uint32
 		err        error
-		header     frameHeader
 	)
 	for loop {
 		select {
@@ -211,9 +230,7 @@ func (a *Acceptor) handleConnectRequest() {
 				break
 			}
 			addrStr := info.addr.String()
-			decodeFrameHeader(info.slice.getData(), &header)
-			info.slice.finish(putMBuffer)
-			if header.frm == FRAME_SYN { // 第一次握手
+			if info.frm == FRAME_SYN { // 第一次握手
 				_, o = a.stateMap.Load(addrStr)
 				if o {
 					log.Infof("gsnet: kcp connection received duplicate syn frame for address %v", addrStr)
@@ -226,6 +243,18 @@ func (a *Acceptor) handleConnectRequest() {
 				a.stateMap.Store(addrStr, conn)
 				a.convIdCounter += 1
 				a.tokenCounter += 1
+				if a.options.GetReusePort() {
+					// todo 新建连接绑定到监听端口
+					conn.conn, err = net.DialUDP(a.network, a.localAddress, conn.raddr)
+					if err != nil {
+						sendRst(conn)
+						a.discCh <- addrStr
+						log.Infof("gsnet: kcp acceptor new connection err: %v", err)
+						break
+					}
+				} else {
+					conn.conn = a.listenConn.(*net.UDPConn)
+				}
 				tid, err = a.sendSynAckWithTimeout(conn, addrStr)
 				if tid == 0 || err != nil {
 					break
@@ -234,7 +263,7 @@ func (a *Acceptor) handleConnectRequest() {
 				conn.tid = tid
 				conn.convId = a.convIdCounter
 				conn.token = a.tokenCounter
-			} else if header.frm == FRAME_ACK { // 第三次握手
+			} else if info.frm == FRAME_ACK { // 第三次握手
 				var c any
 				c, o = a.stateMap.Load(addrStr) // 找不到对应的连接
 				if !o {
@@ -256,7 +285,7 @@ func (a *Acceptor) handleConnectRequest() {
 				}
 				a.stateMap.Delete(addrStr)
 				a.deletedMap[addrStr] = conn.cn
-				if err := checkAck(conn, header.convId, header.token); err != nil {
+				if err := checkAck(conn, info.convId, info.token); err != nil {
 					sendRst(conn)
 					a.discCh <- addrStr
 					break
@@ -265,22 +294,10 @@ func (a *Acceptor) handleConnectRequest() {
 					a.tw.Cancel(conn.tid)
 				}
 				conn.state = STATE_ESTABLISHED
-				if a.options.GetReusePort() {
-					// todo 新建连接绑定到监听端口
-					conn.conn, err = net.DialUDP(a.network, a.localAddress, conn.raddr)
-					if err != nil {
-						sendRst(conn)
-						a.discCh <- addrStr
-						log.Infof("gsnet: kcp acceptor new connection err: %v", err)
-						break
-					}
-				} else {
-					conn.conn = a.listenConn.(*net.UDPConn)
-				}
 				a.connCh <- conn
 				a.connMap.Store(addrStr, conn)
 			} else {
-				log.Infof("gsnet: kcp connection received unexpected frame with type %v", header.frm)
+				log.Infof("gsnet: kcp connection received unexpected frame with type %v", info.frm)
 			}
 		case t, o := <-a.tw.C:
 			if o {
@@ -360,8 +377,10 @@ func (a *Acceptor) writeLoop() {
 	}()
 	var (
 		v struct {
-			raddr *net.UDPAddr
-			data  []byte
+			raddr  *net.UDPAddr
+			data   []byte
+			convId uint32
+			token  int64
 		}
 		o   bool
 		run = true
@@ -392,7 +411,10 @@ func (a *Acceptor) writeLoop() {
 			run = false
 		}
 		if run && o {
-			_, err := a.listenConn.WriteTo(v.data, v.raddr)
+			// 打包數據幀
+			var header = frameHeader{frm: FRAME_DATA, convId: v.convId, token: v.token}
+			var data = encodeDataFrame(v.data, &header)
+			_, err := a.listenConn.WriteTo(data, v.raddr)
 			if err != nil {
 				log.Infof("gsnet: kcp Acceptor WriteToUDP to listen socket err: %v", err)
 			}
@@ -404,7 +426,7 @@ func (a *Acceptor) writeLoop() {
 
 func sendSyn(conn *net.UDPConn, header *frameHeader) error {
 	var (
-		buf [maxFrameHeaderLength]byte
+		buf [framePrefixHeaderSuffixLength]byte
 		err error
 	)
 
@@ -419,7 +441,7 @@ func sendSyn(conn *net.UDPConn, header *frameHeader) error {
 
 func recvSynAck(conn *net.UDPConn, timeout time.Duration, header *frameHeader) error {
 	var (
-		buf [maxFrameHeaderLength]byte
+		buf [framePrefixHeaderSuffixLength]byte
 	)
 	// recv syn+ack
 	conn.SetReadDeadline(time.Now().Add(timeout))
@@ -429,7 +451,10 @@ func recvSynAck(conn *net.UDPConn, timeout time.Duration, header *frameHeader) e
 	}
 	conn.SetReadDeadline(time.Time{})
 
-	decodeFrameHeader(buf[:n], header)
+	if !checkDecodeFrame(buf[:n], header) {
+		return ErrDecodeFrameFailed
+	}
+
 	if header.frm != FRAME_SYN_ACK {
 		return ErrNeedSynAck
 	}
@@ -438,14 +463,15 @@ func recvSynAck(conn *net.UDPConn, timeout time.Duration, header *frameHeader) e
 
 func sendSynAck(conn *uConn, conversation uint32, token int64) error {
 	var (
-		buf    [maxFrameHeaderLength]byte
+		buf    [framePrefixHeaderSuffixLength]byte
 		header frameHeader
 	)
 	header.frm = FRAME_SYN_ACK
 	header.convId = conversation
 	header.token = token
 	cnt := encodeFrameHeader(&header, buf[:])
-	_, err := conn.Write(buf[:cnt])
+	// todo 這裏不要用conn.Write方法，用conn.writeDirectly
+	_, err := conn.writeDirectly(buf[:cnt])
 	return err
 }
 
@@ -458,7 +484,7 @@ func checkAck(conn *uConn, conversation uint32, token int64) error {
 
 func sendAck(conn *net.UDPConn, conversation uint32, token int64) error {
 	var (
-		buf    [maxFrameHeaderLength]byte
+		buf    [framePrefixHeaderSuffixLength]byte
 		header frameHeader
 		err    error
 	)
@@ -475,13 +501,13 @@ func sendAck(conn *net.UDPConn, conversation uint32, token int64) error {
 
 func sendRst(conn *uConn) error {
 	var (
-		buf    [maxFrameHeaderLength]byte
+		buf    [framePrefixHeaderSuffixLength]byte
 		header frameHeader
 		err    error
 	)
 	header.frm = FRAME_RST
 	cnt := encodeFrameHeader(&header, buf[:])
-	_, err = conn.Write(buf[:cnt])
+	_, err = conn.writeDirectly(buf[:cnt])
 	if err != nil {
 		return err
 	}

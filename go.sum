@@ -17,6 +17,8 @@ github.com/google/go-cmp v0.5.8/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeN
 github.com/google/gofuzz v1.0.0/go.mod h1:dBl0BpW6vV/+mYPU4Po3pmUjxk6FQPldtuIdl/M65Eg=
 github.com/huoshan017/kcpgo v0.0.0-20220815084010-ea08260ba16b h1:My5pU0AoXRtdfI/YDUcETiNaMD3PFfW9YTlI/LEp900=
 github.com/huoshan017/kcpgo v0.0.0-20220815084010-ea08260ba16b/go.mod h1:booP91Jin8qkq6OIy/ILolOeAG+5kbGc0966vRG1Qsc=
+github.com/huoshan017/kcpgo v0.0.0-20230128100735-d867ec97a18b h1:qxzRCOro9Ckgjn9eq970/TLOcjaAPDiseKmM8+pRKq8=
+github.com/huoshan017/kcpgo v0.0.0-20230128100735-d867ec97a18b/go.mod h1:1tcHSx+2PFSWHePsMrNeQ7a0Uw+pPCk8tYg1HMOX2gY=
 github.com/huoshan017/ponu v0.0.0-20220903170659-e823376653ee h1:Ho7IoUWr/zm+wuhIjzz6N66+uEWJUY4dYrHfAf6pwGA=
 github.com/huoshan017/ponu v0.0.0-20220903170659-e823376653ee/go.mod h1:tpk3wr8WXv+1wpOu00KOTRbctdvkQnhQmpB5ks/EX4I=
 github.com/huoshan017/ponu v0.0.0-20220904174303-a71a28057e27 h1:bkZ64nUE9krlCou9+K5x0Gkb7f49hb45sYTIrpX5mwo=

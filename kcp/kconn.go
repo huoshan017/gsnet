@@ -70,7 +70,7 @@ func NewKConn(conn net.Conn, packetCodec common.IPacketCodec, options *options.O
 
 	var mtu int32 = options.GetKcpMtu()
 	if mtu == 0 {
-		mtu = defaultMtu
+		mtu = int32(defaultMtu)
 	}
 	c.kcpCB = kcp.New(kconn.convId, nil, c.outputData, kcp.WithMtu(mtu), kcp.WithStream(true), kcp.WithInterval(int32(c.options.GetTickSpan().Milliseconds())), kcp.WithUserFreeOutputBuf(true))
 
@@ -105,8 +105,8 @@ func (c *KConn) CloseWait(secs int) error {
 func (c *KConn) closeWait(secs int) error {
 	defer func() {
 		// 清理接收通道内存池分配的内存
-		for slice := range c.conn.recvList {
-			slice.finish(putMBuffer)
+		for d := range c.conn.recvList {
+			d.buffer.finish(putMBuffer)
 		}
 	}()
 
@@ -185,10 +185,14 @@ func (c *KConn) RecvNonblock() (packet.IPacket, error) {
 	}
 
 	var (
-		slice mBufferSlice
-		p     packet.IPacket
-		ok    bool
-		err   error
+		d struct {
+			buffer     mBufferSlice
+			dataOffset int16
+			dataLen    int16
+		}
+		p   packet.IPacket
+		ok  bool
+		err error
 	)
 
 	// decode first, if get packet or error then return
@@ -201,12 +205,12 @@ func (c *KConn) RecvNonblock() (packet.IPacket, error) {
 		select {
 		case <-c.closeCh:
 			err = c.genErrConnClosed()
-		case slice, ok = <-c.conn.recvList:
+		case d, ok = <-c.conn.recvList:
 			if !ok {
 				err = c.genErrConnClosed()
 				break
 			}
-			p, err = c.recvMBufferSlice(slice)
+			p, err = c.recvMBufferSlice(d.buffer, d.dataOffset, d.dataLen)
 		default:
 			c.kcpCB.Update(currMs())
 			err = common.ErrRecvListEmpty
@@ -222,7 +226,11 @@ func (c *KConn) Wait(ctx context.Context, chPak chan common.IdWithPacket) (packe
 	}
 
 	var (
-		slice    mBufferSlice
+		data struct {
+			buffer     mBufferSlice
+			dataOffset int16
+			dataLen    int16
+		}
 		p        packet.IPacket
 		id       int32
 		err      error
@@ -248,12 +256,12 @@ func (c *KConn) Wait(ctx context.Context, chPak chan common.IdWithPacket) (packe
 		select {
 		case <-ctx.Done():
 			err = common.ErrCancelWait
-		case slice, ok = <-c.conn.recvList:
+		case data, ok = <-c.conn.recvList:
 			if !ok {
 				err = common.ErrConnClosed
 				break
 			}
-			p, err = c.recvMBufferSlice(slice)
+			p, err = c.recvMBufferSlice(data.buffer, data.dataOffset, data.dataLen)
 		case <-tickerCh:
 			if c.kcpCB.IsDead() {
 				err = common.ErrConnClosed
@@ -285,8 +293,8 @@ func (c *KConn) outputData(data []byte, user any) int32 {
 	return int32(n)
 }
 
-func (c *KConn) recvMBufferSlice(slice mBufferSlice) (packet.IPacket, error) {
-	c.kcpCB.Input(slice.getData())
+func (c *KConn) recvMBufferSlice(slice mBufferSlice, dataOffset, dataLen int16) (packet.IPacket, error) {
+	c.kcpCB.Input(slice.getData()[dataOffset : dataOffset+dataLen])
 	slice.finish(putMBuffer)
 
 	var s = c.kcpCB.PeekSize()

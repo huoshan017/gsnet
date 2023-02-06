@@ -54,7 +54,7 @@ type Options struct {
 	recvListLen                int
 	sendListMode               int32                  // 发送队列模式
 	writeBuffSize              int                    // 写缓冲大小
-	readBuffSize               int                    // 都缓冲大小
+	readBuffSize               int                    // 讀缓冲大小
 	connCloseWaitSecs          int                    // 連接關閉等待時間(秒)
 	packetPool                 packet.IPacketPool     // 包池
 	packetCompressType         packet.CompressType    // 包解压缩类型

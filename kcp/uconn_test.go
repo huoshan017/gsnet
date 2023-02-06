@@ -2,10 +2,12 @@ package kcp
 
 import (
 	"net"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/huoshan017/gsnet/options"
+	kcp "github.com/huoshan017/kcpgo"
 )
 
 func createAcceptor(t *testing.T, address string, options *options.ServerOptions) (*Acceptor, error) {
@@ -26,6 +28,7 @@ func TestConnect(t *testing.T) {
 		conn     net.Conn
 		err      error
 	)
+	kcp.UserMtuBufferFunc(getKcpMtuBuffer, putKcpMtuBuffer)
 	acceptor, err = createAcceptor(t, "127.0.0.1:9000", &sops)
 	if err != nil {
 		t.Errorf("create acceptor err: %v", err)
@@ -40,11 +43,16 @@ func TestConnect(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	_, err = conn.Write([]byte("hello"))
+	data := []byte("hello")
+	wdata := getKcpMtuBuffer(int32(len(data)))
+	uconn := conn.(*uConn)
+	copy(wdata, data)
+	_, err = uconn.writeDirectly(encodeDataFrame(wdata, &frameHeader{frm: FRAME_DATA, convId: uconn.convId, token: uconn.token}))
 	if err != nil {
 		t.Errorf("uConn write err: %v", err)
 		return
 	}
+	putKcpMtuBuffer(wdata)
 
 	time.Sleep(3 * time.Second)
 
@@ -53,12 +61,14 @@ func TestConnect(t *testing.T) {
 
 func TestMultiConnect(t *testing.T) {
 	const (
-		count = 2000
+		count = 10000
+		data  = "hello"
 	)
 	var (
 		sops     options.ServerOptions
 		cops     options.ClientOptions
 		acceptor *Acceptor
+		wg       sync.WaitGroup
 		err      error
 	)
 	acceptor, err = createAcceptor(t, "127.0.0.1:9000", &sops)
@@ -67,24 +77,29 @@ func TestMultiConnect(t *testing.T) {
 		return
 	}
 
+	wg.Add(count)
 	for i := 0; i < count; i++ {
 		go func() {
+			defer wg.Done()
 			conn, e := DialUDP("127.0.0.1:9000", &cops.Options)
 			if e != nil {
-				t.Errorf("dial udp err: %v", err)
+				t.Errorf("dial udp err: %v", e)
 				return
 			}
-			_, e = conn.Write([]byte("hello"))
+			wdata := getKcpMtuBuffer(int32(len(data)))
+			uconn := conn.(*uConn)
+			copy(wdata, data)
+			_, e = uconn.writeDirectly(encodeDataFrame(wdata, &frameHeader{frm: FRAME_DATA, convId: uconn.convId, token: uconn.token}))
 			if e != nil {
-				t.Errorf("uConn write err: %v", err)
+				t.Errorf("uConn write err: %v", e)
 				return
 			}
 		}()
 	}
 
-	time.Sleep(3 * time.Second)
-
+	wg.Wait()
 	acceptor.Close()
+	time.Sleep(1 * time.Second)
 }
 
 func TestConnectTimeout(t *testing.T) {

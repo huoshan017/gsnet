@@ -23,17 +23,18 @@ type uConn struct {
 	state    int32
 	cn       uint8
 	tid      uint32
-	recvList chan mBufferSlice
-	writeCh  chan struct {
-		raddr *net.UDPAddr
-		data  []byte
+	recvList chan struct {
+		buffer     mBufferSlice
+		dataOffset int16
+		dataLen    int16
 	}
+	writeCh chan writeInfo
 }
 
 func newUConn(ops *options.Options) *uConn {
 	c := &uConn{options: ops}
 	if c.options.GetKcpMtu() <= 0 {
-		c.options.SetKcpMtu(defaultMtu)
+		c.options.SetKcpMtu(int32(defaultMtu))
 	}
 	return c
 }
@@ -63,6 +64,7 @@ func DialUDP(address string, ops *options.Options) (net.Conn, error) {
 		// send syn
 		err = sendSyn(conn, &header)
 		if err != nil {
+			log.Infof("1111")
 			return nil, err
 		}
 
@@ -74,6 +76,7 @@ func DialUDP(address string, ops *options.Options) (net.Conn, error) {
 			if common.IsTimeoutError(err) {
 				continue
 			}
+			log.Infof("2222")
 			return nil, err
 		}
 		break
@@ -87,6 +90,7 @@ func DialUDP(address string, ops *options.Options) (net.Conn, error) {
 	// send ack
 	err = sendAck(conn, header.convId, header.token)
 	if err != nil {
+		log.Infof("3333")
 		return nil, err
 	}
 
@@ -112,29 +116,22 @@ func (c *uConn) Write(data []byte) (int, error) {
 	if atomic.LoadInt32(&c.state) == STATE_CLOSED {
 		return 0, common.ErrConnClosed
 	}
-	if c.writeCh != nil {
-		select {
-		case c.writeCh <- struct {
-			raddr *net.UDPAddr
-			data  []byte
-		}{raddr: c.raddr, data: data}:
-		default:
-			kcp.RecycleOutputBuffer(data)
-		}
-		return 0, nil
+
+	if c.writeCh == nil {
+		panic("gsnet: kcp uConn Write must used for server")
 	}
 
-	var (
-		n   int
-		err error
-	)
-	if c.raddr != nil {
-		n, err = c.conn.WriteToUDP(data, c.raddr)
-	} else {
-		n, err = c.conn.Write(data)
+	select {
+	case c.writeCh <- struct {
+		raddr  *net.UDPAddr
+		data   []byte
+		convId uint32
+		token  int64
+	}{raddr: c.raddr, data: data}:
+	default:
+		kcp.RecycleOutputBuffer(data)
 	}
-	kcp.RecycleOutputBuffer(data)
-	return n, err
+	return 0, nil
 }
 
 func (c *uConn) Close() error {
@@ -178,9 +175,17 @@ func (c *uConn) recv(slice mBufferSlice) {
 		if c.options.GetRecvListLen() == 0 {
 			c.options.SetRecvListLen(common.DefaultConnRecvListLen)
 		}
-		c.recvList = make(chan mBufferSlice, c.options.GetRecvListLen())
+		c.recvList = make(chan struct {
+			buffer     mBufferSlice
+			dataOffset int16
+			dataLen    int16
+		}, c.options.GetRecvListLen())
 	}
-	c.recvList <- slice
+	c.recvList <- struct {
+		buffer     mBufferSlice
+		dataOffset int16
+		dataLen    int16
+	}{buffer: slice, dataOffset: int16(framePrefixAndHeaderLength), dataLen: int16(len(slice.getData()) - framePrefixHeaderSuffixLength)}
 }
 
 func (c *uConn) readLoop() { // 客户端连接的接收线程
@@ -225,6 +230,19 @@ func (c *uConn) readLoop() { // 客户端连接的接收线程
 	if c.recvList != nil {
 		close(c.recvList)
 	}
+}
+
+func (c *uConn) writeDirectly(data []byte) (int, error) {
+	var (
+		n   int
+		err error
+	)
+	if c.raddr != nil {
+		n, err = c.conn.WriteToUDP(data, c.raddr)
+	} else {
+		n, err = c.conn.Write(data)
+	}
+	return n, err
 }
 
 func toLastSlice(mbuf *mBuffer) (mBufferSlice, bool) {
