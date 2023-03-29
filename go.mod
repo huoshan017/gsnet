@@ -17,11 +17,9 @@ require (
 
 require (
 	github.com/google/go-cmp v0.5.8 // indirect
-	github.com/samber/lo v1.37.0 // indirect
 	github.com/v2pro/plz v0.0.0-20200805122259-422184e41b6e // indirect
 	github.com/v2pro/quokka v0.0.0-20171201153428-382cb39c6ee6 // indirect
 	github.com/v2pro/wombat v0.0.0-20180402055224-a56dbdcddef2 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	golang.org/x/exp v0.0.0-20220303212507-bbda1eaf7a17 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 )
