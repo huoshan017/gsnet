@@ -26,7 +26,7 @@ type uConn struct {
 	recvList chan struct {
 		buffer     mBufferSlice
 		dataOffset int16
-		dataLen    int16
+		dataLen    uint16
 	}
 	writeCh chan writeInfo
 }
@@ -64,7 +64,6 @@ func DialUDP(address string, ops *options.Options) (net.Conn, error) {
 		// send syn
 		err = sendSyn(conn, &header)
 		if err != nil {
-			log.Infof("1111")
 			return nil, err
 		}
 
@@ -76,7 +75,6 @@ func DialUDP(address string, ops *options.Options) (net.Conn, error) {
 			if common.IsTimeoutError(err) {
 				continue
 			}
-			log.Infof("2222")
 			return nil, err
 		}
 		break
@@ -90,7 +88,6 @@ func DialUDP(address string, ops *options.Options) (net.Conn, error) {
 	// send ack
 	err = sendAck(conn, header.convId, header.token)
 	if err != nil {
-		log.Infof("3333")
 		return nil, err
 	}
 
@@ -112,13 +109,22 @@ func (c *uConn) Read(buf []byte) (int, error) {
 	return -1, errors.New("gsnet: kcp uConn.Read not allowed call")
 }
 
+// 發送data寫入udp，data默認為getKcpMtuBuffer獲得的緩存
 func (c *uConn) Write(data []byte) (int, error) {
 	if atomic.LoadInt32(&c.state) == STATE_CLOSED {
 		return 0, common.ErrConnClosed
 	}
 
 	if c.writeCh == nil {
-		panic("gsnet: kcp uConn Write must used for server")
+		// 打包數據幀
+		var header = frameHeader{frm: FRAME_DATA, convId: c.convId, token: c.token}
+		var sdata = encodeDataFrame(data, &header)
+		n, e := c.writeDirectly(sdata)
+		if e != nil {
+			return 0, e
+		}
+		kcp.RecycleOutputBuffer(data)
+		return n, nil
 	}
 
 	select {
@@ -167,7 +173,7 @@ func (c *uConn) SetDeadline(t time.Time) error {
 	return c.conn.SetDeadline(t)
 }
 
-func (c *uConn) recv(slice mBufferSlice) {
+func (c *uConn) recv(slice mBufferSlice, dataLen uint16) {
 	if atomic.LoadInt32(&c.state) == STATE_CLOSED {
 		return
 	}
@@ -178,14 +184,14 @@ func (c *uConn) recv(slice mBufferSlice) {
 		c.recvList = make(chan struct {
 			buffer     mBufferSlice
 			dataOffset int16
-			dataLen    int16
+			dataLen    uint16
 		}, c.options.GetRecvListLen())
 	}
 	c.recvList <- struct {
 		buffer     mBufferSlice
 		dataOffset int16
-		dataLen    int16
-	}{buffer: slice, dataOffset: int16(framePrefixAndHeaderLength), dataLen: int16(len(slice.getData()) - framePrefixHeaderSuffixLength)}
+		dataLen    uint16
+	}{buffer: slice, dataOffset: int16(framePrefixAndHeaderLength), dataLen: dataLen}
 }
 
 func (c *uConn) readLoop() { // 客户端连接的接收线程
@@ -195,10 +201,11 @@ func (c *uConn) readLoop() { // 客户端连接的接收线程
 		}
 	}()
 	var (
-		mbuf  *mBuffer
-		slice mBufferSlice
-		o     bool
-		err   error
+		mbuf   *mBuffer
+		slice  mBufferSlice
+		header frameHeader
+		o      bool
+		err    error
 	)
 	for err == nil {
 		if atomic.LoadInt32(&c.state) == STATE_CLOSED { //
@@ -214,7 +221,7 @@ func (c *uConn) readLoop() { // 客户端连接的接收线程
 		if err != nil {
 			slice, o = toLastSlice(mbuf)
 			mbuf = nil
-			log.Infof("gsnet: uConn.run Read2MBuffer err: %v", err)
+			log.Infof("gsnet: uConn.readLoop Read2MBuffer err: %v", err)
 			continue
 		}
 		// 小于mtu标记为可回收，等后续引用计数为0后就能回收到对象池
@@ -222,7 +229,13 @@ func (c *uConn) readLoop() { // 客户端连接的接收线程
 			mbuf.markRecycle()
 			mbuf = nil
 		}
-		c.recv(slice)
+		if c := checkDecodeFrame(slice.getData(), &header); c < 0 {
+			slice, o = toLastSlice(mbuf)
+			mbuf = nil
+			log.Infof("gsnet: uConn.readLoop checkDecodeFrame failed: %v", c)
+			continue
+		}
+		c.recv(slice, header.dataLen)
 	}
 	if o {
 		slice.finish(putMBuffer)

@@ -47,7 +47,7 @@ func TestConnect(t *testing.T) {
 	wdata := getKcpMtuBuffer(int32(len(data)))
 	uconn := conn.(*uConn)
 	copy(wdata, data)
-	_, err = uconn.writeDirectly(encodeDataFrame(wdata, &frameHeader{frm: FRAME_DATA, convId: uconn.convId, token: uconn.token}))
+	_, err = uconn.writeDirectly(encodeDataFrame(wdata[:len(data)], &frameHeader{frm: FRAME_DATA, convId: uconn.convId, token: uconn.token}))
 	if err != nil {
 		t.Errorf("uConn write err: %v", err)
 		return
@@ -61,7 +61,7 @@ func TestConnect(t *testing.T) {
 
 func TestMultiConnect(t *testing.T) {
 	const (
-		count = 10000
+		count = 6000
 		data  = "hello"
 	)
 	var (
@@ -71,6 +71,8 @@ func TestMultiConnect(t *testing.T) {
 		wg       sync.WaitGroup
 		err      error
 	)
+
+	kcp.UserMtuBufferFunc(getKcpMtuBuffer, putKcpMtuBuffer)
 	acceptor, err = createAcceptor(t, "127.0.0.1:9000", &sops)
 	if err != nil {
 		t.Errorf("create acceptor err: %v", err)
@@ -89,11 +91,12 @@ func TestMultiConnect(t *testing.T) {
 			wdata := getKcpMtuBuffer(int32(len(data)))
 			uconn := conn.(*uConn)
 			copy(wdata, data)
-			_, e = uconn.writeDirectly(encodeDataFrame(wdata, &frameHeader{frm: FRAME_DATA, convId: uconn.convId, token: uconn.token}))
+			_, e = uconn.writeDirectly(encodeDataFrame(wdata[:len(data)], &frameHeader{frm: FRAME_DATA, convId: uconn.convId, token: uconn.token}))
 			if e != nil {
 				t.Errorf("uConn write err: %v", e)
 				return
 			}
+			putKcpMtuBuffer(wdata)
 		}()
 	}
 

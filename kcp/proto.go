@@ -36,9 +36,9 @@ const (
 const (
 	framePrefix                   = "0xbf"
 	frameSuffix                   = "0xef"
-	framePrefixAndHeaderLength    = len(framePrefix) + 1 + 4 + 8
+	framePrefixAndHeaderLength    = len(framePrefix) + 1 + 4 + 8 + 2
 	frameSuffixLength             = len(frameSuffix)
-	framePrefixHeaderSuffixLength = len(framePrefix) + 1 + 4 + 8 + len(frameSuffix)
+	framePrefixHeaderSuffixLength = len(framePrefix) + 1 + 4 + 8 + 2 + len(frameSuffix)
 	defaultMtu                    = 1400 - framePrefixHeaderSuffixLength // 減掉的長度是幀頭去掉會話ID
 )
 
@@ -53,9 +53,10 @@ var (
 )
 
 type frameHeader struct {
-	frm    uint8
-	convId uint32
-	token  int64
+	frm     uint8
+	dataLen uint16
+	convId  uint32
+	token   int64
 }
 
 func checkFrameValid(frm int) bool {
@@ -76,14 +77,22 @@ func isDataFrame(frm int) bool {
 
 func encodeFramePreffixHeader(header *frameHeader, buf []byte) {
 	var count int32
-	copy(buf, framePrefix)
-	count += int32(len(framePrefix))
+	copy(buf, framePrefixBytes)
+	count += int32(len(framePrefixBytes))
 	buf[count] = header.frm
 	count += 1
 	common.Uint32ToBuffer(header.convId, buf[count:])
 	count += 4
 	common.Int64ToBuffer(header.token, buf[count:])
 	count += 8
+	if header.dataLen > 0 {
+		common.Uint16ToBuffer(header.dataLen, buf[count:])
+		count += 2
+	}
+}
+
+func encodeFrameSuffix(buf []byte) {
+	copy(buf, frameSuffixBytes)
 }
 
 func encodeFrameHeader(header *frameHeader, buf []byte) int32 {
@@ -100,35 +109,43 @@ func decodeFramePreffixHeader(buf []byte, header *frameHeader) int32 {
 	count += int32(len(framePrefixBytes))
 	header.frm = buf[count]
 	if !checkFrameValid(int(header.frm)) {
-		return -5
+		return -2
 	}
 	count += 1
 	header.convId = common.BufferToUint32(buf[count:])
 	count += 4
 	header.token = common.BufferToInt64(buf[count:])
 	count += 8
+	header.dataLen = common.BufferToUint16(buf[count:])
+	count += 2
 	return count
 }
 
-func checkDecodeFrame(buf []byte, header *frameHeader) bool {
+func checkDecodeFrame(buf []byte, header *frameHeader) int32 {
 	count := decodeFramePreffixHeader(buf, header)
 	if count < 0 {
-		return false
+		return count
 	}
-	if !bytes.Equal(buf[len(buf)-len(frameSuffixBytes):], frameSuffixBytes) {
-		log.Infof("buf: %v   compare: %v ---- %v", buf, buf[count:count+int32(len(frameSuffixBytes))], frameSuffixBytes)
-		return false
+	if !bytes.Equal(buf[count+int32(header.dataLen):], frameSuffixBytes) {
+		log.Infof("buf: %v   compare: %v ---- %v", buf, buf[count+int32(header.dataLen)], frameSuffixBytes)
+		return -3
 	}
-	return true
+	return 1
 }
 
-func encodeDataFrame(buf []byte, header *frameHeader) []byte {
-	dataLen := len(buf)
+func toFrameBuf(buf []byte) []byte {
 	sh := (*reflect.SliceHeader)(unsafe.Pointer(&buf))
 	sh.Data -= uintptr(framePrefixAndHeaderLength)
 	sh.Cap += framePrefixAndHeaderLength
 	sh.Len += framePrefixHeaderSuffixLength
+	return buf
+}
+
+func encodeDataFrame(buf []byte, header *frameHeader) []byte {
+	dataLen := len(buf)
+	buf = toFrameBuf(buf)
 	// 前綴和幀頭
+	header.dataLen = uint16(dataLen)
 	encodeFramePreffixHeader(header, buf)
 	// 後綴
 	copy(buf[framePrefixAndHeaderLength+dataLen:], frameSuffixBytes)
@@ -173,6 +190,12 @@ func _putBuffer(b []byte, store bool) {
 	found := false
 	for i := 0; i < len(stepSize); i++ {
 		if c == int(stepSize[i]) {
+			if store {
+				pb := (*reflect.SliceHeader)(unsafe.Pointer(&b)).Data
+				if _, o := stored.LoadAndDelete(pb); !o {
+					panic(fmt.Sprintf("gsnet(kcp): not store buffer %p: %v, cant put buffer", b, b))
+				}
+			}
 			stepPools[i].Put(b)
 			found = true
 			break
@@ -180,22 +203,18 @@ func _putBuffer(b []byte, store bool) {
 	}
 	if !found {
 		panic(fmt.Sprintf("gsnet(kcp): not found buffer %v", b))
-	} else if store {
-		pb := (*reflect.SliceHeader)(unsafe.Pointer(&b)).Data
-		if _, o := stored.LoadAndDelete(pb); !o {
-			panic(fmt.Sprintf("gsnet(kcp): not store buffer %v, cant put buffer", b))
-		}
 	}
 }
 
 func getKcpMtuBuffer(s int32) []byte {
 	b := _getBuffer(s+int32(framePrefixHeaderSuffixLength), true)
-	return b[framePrefixAndHeaderLength : int(s)+framePrefixAndHeaderLength]
+	return b[framePrefixAndHeaderLength:]
 }
 
 func putKcpMtuBuffer(b []byte) {
 	sh := (*reflect.SliceHeader)(unsafe.Pointer(&b))
 	sh.Data -= uintptr(framePrefixAndHeaderLength)
 	sh.Cap += framePrefixAndHeaderLength
+	sh.Len = sh.Cap
 	_putBuffer(b, true)
 }

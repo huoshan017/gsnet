@@ -188,7 +188,7 @@ func (c *KConn) RecvNonblock() (packet.IPacket, error) {
 		d struct {
 			buffer     mBufferSlice
 			dataOffset int16
-			dataLen    int16
+			dataLen    uint16
 		}
 		p   packet.IPacket
 		ok  bool
@@ -229,7 +229,7 @@ func (c *KConn) Wait(ctx context.Context, chPak chan common.IdWithPacket) (packe
 		data struct {
 			buffer     mBufferSlice
 			dataOffset int16
-			dataLen    int16
+			dataLen    uint16
 		}
 		p        packet.IPacket
 		id       int32
@@ -293,8 +293,8 @@ func (c *KConn) outputData(data []byte, user any) int32 {
 	return int32(n)
 }
 
-func (c *KConn) recvMBufferSlice(slice mBufferSlice, dataOffset, dataLen int16) (packet.IPacket, error) {
-	c.kcpCB.Input(slice.getData()[dataOffset : dataOffset+dataLen])
+func (c *KConn) recvMBufferSlice(slice mBufferSlice, dataOffset int16, dataLen uint16) (packet.IPacket, error) {
+	c.kcpCB.Input(slice.getData()[dataOffset : uint16(dataOffset)+dataLen])
 	slice.finish(putMBuffer)
 
 	var s = c.kcpCB.PeekSize()

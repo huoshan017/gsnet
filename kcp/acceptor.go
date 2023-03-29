@@ -34,7 +34,9 @@ type reqInfo struct {
 
 type dataInfo struct {
 	slice mBufferSlice
-	conn  *uConn
+	//conn    *uConn
+	addr    string
+	dataLen uint16
 }
 
 type writeInfo struct {
@@ -173,8 +175,8 @@ func (a *Acceptor) Serve() error {
 		}
 
 		var header frameHeader
-		if !checkDecodeFrame(slice.getData(), &header) {
-			log.Infof("gsnet: decode frame header failed")
+		if c := checkDecodeFrame(slice.getData(), &header); c < 0 {
+			log.Infof("gsnet: decode frame header failed, code %v", c)
 			continue
 		}
 
@@ -182,14 +184,7 @@ func (a *Acceptor) Serve() error {
 			slice.finish(putMBuffer)
 			a.reqCh <- reqInfo{frm: header.frm, convId: header.convId, token: header.token, addr: raddr}
 		} else if isDataFrame(int(header.frm)) { // 數據幀
-			var c any
-			c, o = a.connMap.Load(raddr.String())
-			if !o {
-				// todo 如果之前的ack幀未收到，直接收到了data數據幀，這時連接還未建立，需要先創建連接
-				slice.finish(putMBuffer)
-				continue
-			}
-			a.dataCh <- dataInfo{slice: slice, conn: c.(*uConn)}
+			a.dataCh <- dataInfo{slice: slice, addr: raddr.String(), dataLen: header.dataLen}
 		} else if isDisconnectFrame(int(header.frm)) { // 揮手幀
 
 		} else {
@@ -209,6 +204,45 @@ func (a *Acceptor) GetNewConnChan() chan net.Conn {
 
 func (a *Acceptor) Close() {
 	close(a.closeCh)
+}
+
+func (a *Acceptor) handleAck(addrStr string, convId uint32, token int64) bool {
+	var (
+		c any
+		o bool
+	)
+	c, o = a.stateMap.Load(addrStr) // 找不到对应的连接
+	if !o {
+		if _, o = a.connMap.Load(addrStr); !o { // 没有此连接，应该是synack三次超时没有回复后删掉了连接状态
+			var n uint8
+			if n, o = a.deletedMap[addrStr]; o {
+				log.Infof("gsnet: kcp connection from %v not found state on frame ack received, but found in deleted map value %v", addrStr, n)
+			} else {
+				log.Infof("gsnet: kcp connection from %v not found state on frame ack received, not found in deleted map", addrStr)
+			}
+			return false
+		}
+		// 已经建立连接，正常情况不会跑到这里
+		return false
+	}
+	conn := c.(*uConn)
+	if conn.state == STATE_ESTABLISHED { // 已经建立连接
+		return false
+	}
+	a.stateMap.Delete(addrStr)
+	a.deletedMap[addrStr] = conn.cn
+	if err := checkAck(conn, convId, token); err != nil {
+		sendRst(conn)
+		a.discCh <- addrStr
+		return false
+	}
+	if conn.tid > 0 {
+		a.tw.Cancel(conn.tid)
+	}
+	conn.state = STATE_ESTABLISHED
+	a.connCh <- conn
+	a.connMap.Store(addrStr, conn)
+	return true
 }
 
 func (a *Acceptor) handleConnectRequest() {
@@ -259,43 +293,12 @@ func (a *Acceptor) handleConnectRequest() {
 				if tid == 0 || err != nil {
 					break
 				}
-				conn.state = STATE_SYN_RECV
 				conn.tid = tid
 				conn.convId = a.convIdCounter
 				conn.token = a.tokenCounter
 			} else if info.frm == FRAME_ACK { // 第三次握手
-				var c any
-				c, o = a.stateMap.Load(addrStr) // 找不到对应的连接
-				if !o {
-					if _, o = a.connMap.Load(addrStr); !o { // 没有此连接，应该是synack三次超时没有回复后删掉了连接状态
-						var n uint8
-						if n, o = a.deletedMap[addrStr]; o {
-							log.Infof("gsnet: kcp connection from %v not found state on frame ack received, but found in deleted map value %v", addrStr, n)
-						} else {
-							log.Infof("gsnet: kcp connection from %v not found state on frame ack received, not found in deleted map", addrStr)
-						}
-						break
-					}
-					// 已经建立连接，正常情况不会跑到这里
-					break
-				}
-				conn := c.(*uConn)
-				if conn.state == STATE_ESTABLISHED { // 已经建立连接
-					break
-				}
-				a.stateMap.Delete(addrStr)
-				a.deletedMap[addrStr] = conn.cn
-				if err := checkAck(conn, info.convId, info.token); err != nil {
-					sendRst(conn)
-					a.discCh <- addrStr
-					break
-				}
-				if conn.tid > 0 {
-					a.tw.Cancel(conn.tid)
-				}
-				conn.state = STATE_ESTABLISHED
-				a.connCh <- conn
-				a.connMap.Store(addrStr, conn)
+				a.handleAck(addrStr, info.convId, info.token)
+				log.Infof("gsnet: kcp server connection established, conversation(%v) token(%v)", info.convId, info.token)
 			} else {
 				log.Infof("gsnet: kcp connection received unexpected frame with type %v", info.frm)
 			}
@@ -351,7 +354,20 @@ func (a *Acceptor) handle() {
 		select {
 		case d, o := <-a.dataCh:
 			if o {
-				d.conn.recv(d.slice)
+				var c any
+				c, o = a.connMap.Load(d.addr)
+				if !o {
+					// todo 如果之前的ack幀未收到，直接收到了data數據幀，這時連接還未建立，需要先創建連接
+					c, o = a.stateMap.Load(d.addr)
+					if !o {
+						log.Infof("gsnet: kcp get data from %v, but no state", d.addr)
+						break
+					}
+					conn := c.(*uConn)
+					a.handleAck(d.addr, conn.convId, conn.token)
+					log.Infof("gsnet: kcp get data from %v before handle ack", d.addr)
+				}
+				c.(*uConn).recv(d.slice, d.dataLen)
 			}
 		case addr, o := <-a.discCh:
 			if o {
@@ -387,8 +403,8 @@ func (a *Acceptor) writeLoop() {
 	)
 	for run {
 		select {
-		case v, o = <-a.writeChArray[0]:
 		case v, o = <-a.writeChArray[1]:
+		case v, o = <-a.writeChArray[0]:
 		case v, o = <-a.writeChArray[2]:
 		case v, o = <-a.writeChArray[3]:
 		case v, o = <-a.writeChArray[4]:
@@ -451,7 +467,7 @@ func recvSynAck(conn *net.UDPConn, timeout time.Duration, header *frameHeader) e
 	}
 	conn.SetReadDeadline(time.Time{})
 
-	if !checkDecodeFrame(buf[:n], header) {
+	if checkDecodeFrame(buf[:n], header) < 0 {
 		return ErrDecodeFrameFailed
 	}
 

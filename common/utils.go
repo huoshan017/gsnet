@@ -110,6 +110,34 @@ func BufferToUint32(buffer []byte) uint32 {
 	return num
 }
 
+func Int16ToBuffer(num int16, buffer []byte) {
+	for i := 0; i < 2; i++ {
+		buffer[i] = byte(num >> (8 * i) & 0xff)
+	}
+}
+
+func BufferToInt16(buffer []byte) int16 {
+	var num int16
+	for i := 0; i < 2; i++ {
+		num += (int16(buffer[i]) << (8 * i))
+	}
+	return num
+}
+
+func Uint16ToBuffer(num uint16, buffer []byte) {
+	for i := 0; i < 2; i++ {
+		buffer[i] = byte(num >> (8 * i) & 0xff)
+	}
+}
+
+func BufferToUint16(buffer []byte) uint16 {
+	var num uint16
+	for i := 0; i < 2; i++ {
+		num += (uint16(buffer[i]) << (8 * i))
+	}
+	return num
+}
+
 func IsTimeoutError(err error) bool {
 	if net_err, ok := err.(net.Error); ok && net_err.Timeout() {
 		return true
