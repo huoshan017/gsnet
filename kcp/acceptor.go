@@ -63,6 +63,7 @@ type Acceptor struct {
 	discCh        chan string
 	writeChArray  [maxWriteChanCount]chan writeInfo
 	tw            *pt.Wheel
+	sender        *pt.Sender
 	ran           *rand.Rand
 	closeCh       chan struct{}
 }
@@ -153,6 +154,8 @@ func (a *Acceptor) Serve() error {
 	go a.handleConnectRequest()
 	go a.handle()
 	go a.writeLoop()
+
+	a.sender = a.tw.NewSender()
 
 	for err == nil {
 		if mbuf == nil {
@@ -302,12 +305,14 @@ func (a *Acceptor) handleConnectRequest() {
 			} else {
 				log.Infof("gsnet: kcp connection received unexpected frame with type %v", info.frm)
 			}
-		case t, o := <-a.tw.C:
-			if o {
-				t.ExecuteFunc()
-			}
 		case <-a.closeCh:
 			loop = false
+		default:
+			tl, o := a.sender.GetTimerList()
+			if o {
+				tl.ExecuteFunc()
+				loop = false
+			}
 		}
 	}
 }
@@ -327,7 +332,7 @@ func (a *Acceptor) sendSynAckWithTimeout(conn *uConn, addrStr string) (uint32, e
 		return 0, err
 	}
 	var tid uint32
-	tid = a.tw.Add(time.Duration(timeoutAckTimeList[conn.cn])*time.Second, func(args []any) {
+	tid = a.tw.Add(time.Duration(timeoutAckTimeList[conn.cn])*time.Second, func(id uint32, args []any) {
 		conn.cn += 1 // timeout once
 		tid, err = a.sendSynAckWithTimeout(conn, addrStr)
 		if tid > 0 {
@@ -337,7 +342,7 @@ func (a *Acceptor) sendSynAckWithTimeout(conn *uConn, addrStr string) (uint32, e
 			a.discCh <- addrStr
 			//a.deletedMap[addrStr] = conn.cn
 		}
-	}, nil)
+	}, []any{nil})
 	return tid, nil
 }
 
