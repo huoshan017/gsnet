@@ -20,7 +20,7 @@ type AgentGroup struct {
 	agentIds    []int32
 	agentLength int32
 	agentsMap   map[int32]*struct {
-		agent *AgentClient
+		agent *Agent
 		index int32
 	}
 	locker sync.RWMutex
@@ -33,7 +33,7 @@ func NewAgentGroupWithCount(id int32, maxCount int32) *AgentGroup {
 		agentIds: make([]int32, maxCount),
 		rand:     rand.New(rand.NewSource(time.Now().UnixNano() + int64(id))),
 		agentsMap: make(map[int32]*struct {
-			agent *AgentClient
+			agent *Agent
 			index int32
 		}),
 	}
@@ -45,7 +45,7 @@ func NewAgentGroup(id int32) *AgentGroup {
 
 func (ag *AgentGroup) DialAsync(addressList []string, timeout time.Duration, callback func(error)) {
 	for i := 0; i < len(addressList); i++ {
-		agent := NewAgentClient(options.WithAutoReconnect(true))
+		agent := NewAgent(options.WithAutoReconnect(true))
 		agent.SetConnectHandle(func(sess common.ISession) {
 			connGetter, o := sess.(common.IConnGetter)
 			if o {
@@ -71,13 +71,13 @@ func (ag *AgentGroup) DialAsync(addressList []string, timeout time.Duration, cal
 	}
 }
 
-func (ag *AgentGroup) Get(id int32) *AgentClient {
+func (ag *AgentGroup) Get(id int32) *Agent {
 	ag.locker.RLock()
 	defer ag.locker.RUnlock()
 	return ag.agentsMap[id].agent
 }
 
-func (ag *AgentGroup) RandomGet() *AgentClient {
+func (ag *AgentGroup) RandomGet() *Agent {
 	ag.locker.RLock()
 	defer ag.locker.RUnlock()
 	if ag.agentLength <= 0 {
@@ -120,7 +120,7 @@ func (ag *AgentGroup) UnboundSession(sess common.ISession, sessMap map[int32]*co
 	}
 }
 
-func (ag *AgentGroup) addAgent(agent *AgentClient) bool {
+func (ag *AgentGroup) addAgent(agent *Agent) bool {
 	ag.locker.Lock()
 	defer ag.locker.Unlock()
 	if int(ag.agentLength) >= len(ag.agentIds) {
@@ -131,7 +131,7 @@ func (ag *AgentGroup) addAgent(agent *AgentClient) bool {
 	}
 	ag.agentIds[ag.agentLength] = agent.id
 	ag.agentsMap[agent.id] = &struct {
-		agent *AgentClient
+		agent *Agent
 		index int32
 	}{agent, ag.agentLength}
 	ag.agentLength += 1
@@ -143,7 +143,7 @@ func (ag *AgentGroup) removeAgent(id int32) bool {
 	defer ag.locker.Unlock()
 	var (
 		v *struct {
-			agent *AgentClient
+			agent *Agent
 			index int32
 		}
 		o bool

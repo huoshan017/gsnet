@@ -11,80 +11,80 @@ import (
 	"github.com/huoshan017/gsnet/server"
 )
 
-// struct AgentMsgClient
-type MsgAgentClient struct {
-	c       *client.AgentClient
+// struct AgentMsg
+type MsgAgent struct {
+	c       *client.Agent
 	options MsgClientOptions
 	codec   IMsgCodec
 	mapper  *IdMsgMapper
 }
 
-// NewMsgAgentClient  create new agent message client
-func NewMsgAgentClient(codec IMsgCodec, mapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
-	return &MsgAgentClient{
-		c:      client.NewAgentClient(options...),
+// NewMsgAgent  create new agent message client
+func NewMsgAgent(codec IMsgCodec, mapper *IdMsgMapper, options ...options.Option) *MsgAgent {
+	return &MsgAgent{
+		c:      client.NewAgent(options...),
 		codec:  codec,
 		mapper: mapper,
 	}
 }
 
-// MsgAgentClient.Dial  dial to address
-func (c *MsgAgentClient) Dial(address string) error {
+// MsgAgent.Dial  dial to address
+func (c *MsgAgent) Dial(address string) error {
 	return c.c.Dial(address)
 }
 
-// MsgAgentClient.DialTimeout  dial to address with timeout
-func (c *MsgAgentClient) DialTimeout(address string, timeout time.Duration) error {
+// MsgAgent.DialTimeout  dial to address with timeout
+func (c *MsgAgent) DialTimeout(address string, timeout time.Duration) error {
 	return c.c.DialTimeout(address, timeout)
 }
 
-// MsgAgentClient.DialAsync  dial to address async
-func (c *MsgAgentClient) DialAsync(address string, timeout time.Duration, callback func(error)) {
+// MsgAgent.DialAsync  dial to address async
+func (c *MsgAgent) DialAsync(address string, timeout time.Duration, callback func(error)) {
 	c.c.DialAsync(address, timeout, callback)
 }
 
-// MsgAgentClient.Close
-func (c *MsgAgentClient) Close() {
+// MsgAgent.Close
+func (c *MsgAgent) Close() {
 	c.c.Close()
 }
 
-//  MsgAgentClient.CloseWait
-func (c *MsgAgentClient) CloseWait(secs int) {
+// MsgAgent.CloseWait
+func (c *MsgAgent) CloseWait(secs int) {
 	c.c.CloseWait(secs)
 }
 
-// MsgAgentClient.IsNotConnect
-func (c *MsgAgentClient) IsNotConnect() bool {
+// MsgAgent.IsNotConnect
+func (c *MsgAgent) IsNotConnect() bool {
 	return c.c.IsNotConnect()
 }
 
-// MsgAgentClient.IsConnecting
-func (c *MsgAgentClient) IsConnecting() bool {
+// MsgAgent.IsConnecting
+func (c *MsgAgent) IsConnecting() bool {
 	return c.c.IsConnecting()
 }
 
-// MsgAgentClient.IsConnected
-func (c *MsgAgentClient) IsConnected() bool {
+// MsgAgent.IsConnected
+func (c *MsgAgent) IsConnected() bool {
 	return c.c.IsConnected()
 }
 
-// MsgAgentClient.IsReady
-func (c *MsgAgentClient) IsReady() bool {
+// MsgAgent.IsReady
+func (c *MsgAgent) IsReady() bool {
 	return c.c.IsReady()
 }
 
-// MsgAgentClient.IsDisconnecting
-func (c *MsgAgentClient) IsDisconnecting() bool {
+// MsgAgent.IsDisconnecting
+func (c *MsgAgent) IsDisconnecting() bool {
 	return c.c.IsDisconnecting()
 }
 
-// MsgAgentClient.IsDisconnected
-func (c *MsgAgentClient) IsDisconnected() bool {
+// MsgAgent.IsDisconnected
+func (c *MsgAgent) IsDisconnected() bool {
 	return c.c.IsDisconnected()
 }
 
-// MsgAgentClient.SetConnectHandle  set connect handle
-func (c *MsgAgentClient) SetConnectHandle(handle func(*MsgSession)) {
+// MsgAgent.SetConnectHandle  set connect handle
+func (c *MsgAgent) SetConnectHandle(handle func(*MsgSession)) {
 	var h func(common.ISession) = func(sess common.ISession) {
 		ms := MsgSession{sess, c.codec, c.mapper, &c.options.MsgOptions}
 		handle(&ms)
@@ -92,7 +92,7 @@ func (c *MsgAgentClient) SetConnectHandle(handle func(*MsgSession)) {
 	c.c.SetConnectHandle(h)
 }
 
-func (c *MsgAgentClient) SetReadyHandle(handle func(*MsgSession)) {
+func (c *MsgAgent) SetReadyHandle(handle func(*MsgSession)) {
 	var h func(common.ISession) = func(sess common.ISession) {
 		ms := MsgSession{sess, c.codec, c.mapper, &c.options.MsgOptions}
 		handle(&ms)
@@ -100,8 +100,8 @@ func (c *MsgAgentClient) SetReadyHandle(handle func(*MsgSession)) {
 	c.c.SetReadyHandle(h)
 }
 
-// MsgAgentClient.SetDisconnectHandle  set disconnect handle
-func (c *MsgAgentClient) SetDisconnectHandle(handle func(*MsgSession, error)) {
+// MsgAgent.SetDisconnectHandle  set disconnect handle
+func (c *MsgAgent) SetDisconnectHandle(handle func(*MsgSession, error)) {
 	var h func(common.ISession, error) = func(sess common.ISession, err error) {
 		ms := MsgSession{sess, c.codec, c.mapper, &c.options.MsgOptions}
 		handle(&ms, err)
@@ -109,8 +109,8 @@ func (c *MsgAgentClient) SetDisconnectHandle(handle func(*MsgSession, error)) {
 	c.c.SetDisconnectHandle(h)
 }
 
-// MsgAgentClient.SetTickHandle  set tick handle
-func (c *MsgAgentClient) SetTickHandle(handle func(*MsgSession, time.Duration)) {
+// MsgAgent.SetTickHandle  set tick handle
+func (c *MsgAgent) SetTickHandle(handle func(*MsgSession, time.Duration)) {
 	var h func(common.ISession, time.Duration) = func(sess common.ISession, tick time.Duration) {
 		ms := MsgSession{sess, c.codec, c.mapper, &c.options.MsgOptions}
 		handle(&ms, tick)
@@ -118,13 +118,13 @@ func (c *MsgAgentClient) SetTickHandle(handle func(*MsgSession, time.Duration)) 
 	c.c.SetTickHandle(h)
 }
 
-// MsgAgentClient.SetErrorHandle  set error handle
-func (c *MsgAgentClient) SetErrorHandle(handle func(error)) {
+// MsgAgent.SetErrorHandle  set error handle
+func (c *MsgAgent) SetErrorHandle(handle func(error)) {
 	c.c.SetErrorHandle(handle)
 }
 
-// MsgAgentClient.BoundSession  bound message handle and create message agent session
-func (c *MsgAgentClient) BoundServerSession(sess *MsgSession, handle func(*MsgSession, int32, MsgIdType, any) error) *MsgAgentSession {
+// MsgAgent.BoundSession  bound message handle and create message agent session
+func (c *MsgAgent) BoundServerSession(sess *MsgSession, handle func(*MsgSession, int32, MsgIdType, any) error) *MsgAgentSession {
 	var h = func(sess common.ISession, agentId int32, pak packet.IPacket) error {
 		var ms = MsgSession{sess: sess, codec: c.codec, mapper: c.mapper, options: &c.options.MsgOptions}
 		msgid, msgobj, err := ms.splitIdAndMsg(pak.Data())
@@ -137,15 +137,15 @@ func (c *MsgAgentClient) BoundServerSession(sess *MsgSession, handle func(*MsgSe
 	return &MsgAgentSession{AgentSession: agentSess, c: c}
 }
 
-// MsgAgentClient.UnboundSession
-func (c *MsgAgentClient) UnboundServerSession(sess *MsgSession, asess *MsgAgentSession) {
+// MsgAgent.UnboundSession
+func (c *MsgAgent) UnboundServerSession(sess *MsgSession, asess *MsgAgentSession) {
 	c.c.UnboundServerSession(sess.GetSess(), asess.AgentSession)
 }
 
 // struct AgentMsgSession
 type MsgAgentSession struct {
 	*common.AgentSession
-	c *MsgAgentClient
+	c *MsgAgent
 }
 
 // AgentMsgSession.Send
@@ -168,29 +168,29 @@ func (c *MsgAgentSession) SendOnCopy(msgId MsgIdType, msgObj any) error {
 	return c.AgentSession.SendPoolBuffer(pData)
 }
 
-// NewProtobufMsgAgentClient create protobuf message agent client
-func NewProtobufMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
-	return NewMsgAgentClient(&codec.ProtobufCodec{}, idMsgMapper, options...)
+// NewProtobufMsgAgent create protobuf message agent client
+func NewProtobufMsgAgent(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgent {
+	return NewMsgAgent(&codec.ProtobufCodec{}, idMsgMapper, options...)
 }
 
-// NewJsonMsgAgentClient create json message agent client
-func NewJsonMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
-	return NewMsgAgentClient(&codec.JsonCodec{}, idMsgMapper, options...)
+// NewJsonMsgAgent create json message agent client
+func NewJsonMsgAgent(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgent {
+	return NewMsgAgent(&codec.JsonCodec{}, idMsgMapper, options...)
 }
 
-// NewGobMsgAgentClient create gob message agent client
-func NewGobMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
-	return NewMsgAgentClient(&codec.GobCodec{}, idMsgMapper, options...)
+// NewGobMsgAgent create gob message agent client
+func NewGobMsgAgent(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgent {
+	return NewMsgAgent(&codec.GobCodec{}, idMsgMapper, options...)
 }
 
-// NewThriftMsgAgentClient create thrift message agent client
-func NewThriftMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
-	return NewMsgAgentClient(&codec.ThriftCodec{}, idMsgMapper, options...)
+// NewThriftMsgAgent create thrift message agent client
+func NewThriftMsgAgent(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgent {
+	return NewMsgAgent(&codec.ThriftCodec{}, idMsgMapper, options...)
 }
 
-// NewMsgpackMsgAgentClient create msgpack message agent client
-func NewMsgpackMsgAgentClient(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgentClient {
-	return NewMsgAgentClient(&codec.MsgpackCodec{}, idMsgMapper, options...)
+// NewMsgpackMsgAgent create msgpack message agent client
+func NewMsgpackMsgAgent(idMsgMapper *IdMsgMapper, options ...options.Option) *MsgAgent {
+	return NewMsgAgent(&codec.MsgpackCodec{}, idMsgMapper, options...)
 }
 
 // struct AgentMsgServer

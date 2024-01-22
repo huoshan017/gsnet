@@ -14,8 +14,8 @@ import (
 	acommon "github.com/huoshan017/gsnet/example/msg_agent/common"
 )
 
-func createMsgAgentClient() (*msg.MsgAgentClient, error) {
-	c := msg.NewProtobufMsgAgentClient(acommon.IdMsgMapper, options.WithSendListMode(acommon.SendListMode))
+func createMsgAgent() (*msg.MsgAgent, error) {
+	c := msg.NewProtobufMsgAgent(acommon.IdMsgMapper, options.WithSendListMode(acommon.SendListMode))
 	if err := c.Dial(acommon.MsgAgentServerAddress); err != nil {
 		return nil, err
 	}
@@ -37,33 +37,33 @@ func createMsgAgentClient() (*msg.MsgAgentClient, error) {
 	return c, nil
 }
 
-type serverHandlerUseMsgAgentClient struct {
-	msgAgentClient *msg.MsgAgentClient
-	agentSess      *msg.MsgAgentSession
+type serverHandlerUseMsgAgent struct {
+	msgAgent  *msg.MsgAgent
+	agentSess *msg.MsgAgentSession
 }
 
-func newServerHandlerUseMsgAgentClient(args ...any) msg.IMsgSessionHandler {
-	msgAgentClient := args[0].(*msg.MsgAgentClient)
-	return &serverHandlerUseMsgAgentClient{msgAgentClient: msgAgentClient}
+func newServerHandlerUseMsgAgent(args ...any) msg.IMsgSessionHandler {
+	msgAgent := args[0].(*msg.MsgAgent)
+	return &serverHandlerUseMsgAgent{msgAgent: msgAgent}
 }
 
-func (h *serverHandlerUseMsgAgentClient) OnConnected(sess *msg.MsgSession) {
+func (h *serverHandlerUseMsgAgent) OnConnected(sess *msg.MsgSession) {
 	log.Infof("session %v connected to server", sess.GetId())
 }
 
-func (h *serverHandlerUseMsgAgentClient) OnReady(sess *msg.MsgSession) {
-	h.agentSess = h.msgAgentClient.BoundServerSession(sess, h.OnMsgFromAgentServer)
+func (h *serverHandlerUseMsgAgent) OnReady(sess *msg.MsgSession) {
+	h.agentSess = h.msgAgent.BoundServerSession(sess, h.OnMsgFromAgentServer)
 	log.Infof("session %v ready", sess.GetId())
 }
 
-func (h *serverHandlerUseMsgAgentClient) OnDisconnected(sess *msg.MsgSession, err error) {
+func (h *serverHandlerUseMsgAgent) OnDisconnected(sess *msg.MsgSession, err error) {
 	if h.agentSess != nil {
-		h.msgAgentClient.UnboundServerSession(sess, h.agentSess)
+		h.msgAgent.UnboundServerSession(sess, h.agentSess)
 	}
 	log.Infof("session %v disconnected from server", sess.GetId())
 }
 
-func (h *serverHandlerUseMsgAgentClient) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
+func (h *serverHandlerUseMsgAgent) OnMsgHandle(sess *msg.MsgSession, msgid msg.MsgIdType, msgobj any) error {
 	if h.agentSess == nil {
 		log.Fatalf("why dont get message agent session")
 		return nil
@@ -81,24 +81,24 @@ func (h *serverHandlerUseMsgAgentClient) OnMsgHandle(sess *msg.MsgSession, msgid
 	return err
 }
 
-func (h *serverHandlerUseMsgAgentClient) OnTick(sess *msg.MsgSession, tick time.Duration) {
+func (h *serverHandlerUseMsgAgent) OnTick(sess *msg.MsgSession, tick time.Duration) {
 }
 
-func (h *serverHandlerUseMsgAgentClient) OnError(err error) {
+func (h *serverHandlerUseMsgAgent) OnError(err error) {
 	log.Infof("occur err %v on server", err)
 }
 
-func (h *serverHandlerUseMsgAgentClient) OnMsgFromAgentServer(sess *msg.MsgSession, agentId int32, msgid msg.MsgIdType, msgobj any) error {
+func (h *serverHandlerUseMsgAgent) OnMsgFromAgentServer(sess *msg.MsgSession, agentId int32, msgid msg.MsgIdType, msgobj any) error {
 	return sess.SendMsg(msgid, msgobj)
 }
 
-func createServerUseMsgAgentClient(address string) *msg.MsgServer {
-	msgAgentClient, err := createMsgAgentClient()
+func createServerUseMsgAgent(address string) *msg.MsgServer {
+	msgAgent, err := createMsgAgent()
 	if err != nil {
 		log.Fatalf("create agent client err %v", err)
 		return nil
 	}
-	s := msg.NewProtobufMsgServer(newServerHandlerUseMsgAgentClient, []any{msgAgentClient}, acommon.IdMsgMapper, options.WithSendListMode(acommon.SendListMode))
+	s := msg.NewProtobufMsgServer(newServerHandlerUseMsgAgent, []any{msgAgent}, acommon.IdMsgMapper, options.WithSendListMode(acommon.SendListMode))
 	if err = s.Listen(address); err != nil {
 		log.Infof("test server listen err %v", err)
 		return nil
@@ -107,7 +107,7 @@ func createServerUseMsgAgentClient(address string) *msg.MsgServer {
 }
 
 func main() {
-	s := createServerUseMsgAgentClient(acommon.TestAddress)
+	s := createServerUseMsgAgent(acommon.TestAddress)
 	if s == nil {
 		return
 	}

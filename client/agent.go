@@ -71,11 +71,11 @@ func (h *commonHandler) OnError(err error) {
 
 type clientHandler struct {
 	commonHandler
-	owner    *AgentClient
+	owner    *Agent
 	idPacket common.IdWithPacket
 }
 
-func newClientHandler(c *AgentClient) *clientHandler {
+func newClientHandler(c *Agent) *clientHandler {
 	return &clientHandler{owner: c}
 }
 
@@ -106,21 +106,21 @@ func (h *clientHandler) OnPacket(sess common.ISession, pak packet.IPacket) error
 	return nil
 }
 
-type AgentClient struct {
+type Agent struct {
 	id       int32
 	c        *Client
 	handler  *clientHandler
 	pakChans sync.Map
 }
 
-func NewAgentClient(options ...options.Option) *AgentClient {
-	c := &AgentClient{id: getNextAgentClientId()}
+func NewAgent(options ...options.Option) *Agent {
+	c := &Agent{id: getNextAgentId()}
 	c.handler = newClientHandler(c)
 	c.c = NewClient(c.handler, options...)
 	return c
 }
 
-func (c *AgentClient) Dial(address string) error {
+func (c *Agent) Dial(address string) error {
 	if err := c.c.Connect(address); err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ func (c *AgentClient) Dial(address string) error {
 	return nil
 }
 
-func (c *AgentClient) DialTimeout(address string, timeout time.Duration) error {
+func (c *Agent) DialTimeout(address string, timeout time.Duration) error {
 	if err := c.c.ConnectWithTimeout(address, timeout); err != nil {
 		return err
 	}
@@ -150,7 +150,7 @@ func (c *AgentClient) DialTimeout(address string, timeout time.Duration) error {
 	return nil
 }
 
-func (c *AgentClient) DialAsync(address string, timeout time.Duration, callback func(error)) {
+func (c *Agent) DialAsync(address string, timeout time.Duration, callback func(error)) {
 	c.c.ConnectAsync(address, timeout, callback)
 	go func() {
 		defer func() {
@@ -162,75 +162,75 @@ func (c *AgentClient) DialAsync(address string, timeout time.Duration, callback 
 	}()
 }
 
-func (c *AgentClient) Close() {
+func (c *Agent) Close() {
 	c.c.Close()
 }
 
-func (c *AgentClient) CloseWait(secs int) {
+func (c *Agent) CloseWait(secs int) {
 	c.c.CloseWait(secs)
 }
 
-func (c *AgentClient) GetId() int32 {
+func (c *Agent) GetId() int32 {
 	return c.id
 }
 
-func (c *AgentClient) IsNotConnect() bool {
+func (c *Agent) IsNotConnect() bool {
 	return c.c.IsNotConnect()
 }
 
-func (c *AgentClient) IsConnecting() bool {
+func (c *Agent) IsConnecting() bool {
 	return c.c.IsConnecting()
 }
 
-func (c *AgentClient) IsConnected() bool {
+func (c *Agent) IsConnected() bool {
 	return c.c.IsConnected()
 }
 
-func (c *AgentClient) IsReady() bool {
+func (c *Agent) IsReady() bool {
 	return c.c.IsReady()
 }
 
-func (c *AgentClient) IsDisconnecting() bool {
+func (c *Agent) IsDisconnecting() bool {
 	return c.c.IsDisconnecting()
 }
 
-func (c *AgentClient) IsDisconnected() bool {
+func (c *Agent) IsDisconnected() bool {
 	return c.c.IsDisconnected()
 }
 
-func (c *AgentClient) BoundServerSession(sess common.ISession, handle func(common.ISession, int32, packet.IPacket) error) *common.AgentSession {
+func (c *Agent) BoundServerSession(sess common.ISession, handle func(common.ISession, int32, packet.IPacket) error) *common.AgentSession {
 	sess.AddInboundHandle(c.id, handle)
 	agentSessionId := getNextAgentSessionId()
 	c.pakChans.Store(agentSessionId, sess.GetPacketChannel())
 	return common.NewAgentSession(agentSessionId, c.c.GetSession())
 }
 
-func (c *AgentClient) UnboundServerSession(sess common.ISession, asess *common.AgentSession) {
+func (c *Agent) UnboundServerSession(sess common.ISession, asess *common.AgentSession) {
 	sess.RemoveInboundHandle(c.id)
 	c.pakChans.Delete(asess.GetAgentId())
 }
 
-func (c *AgentClient) SetConnectHandle(handle func(common.ISession)) {
+func (c *Agent) SetConnectHandle(handle func(common.ISession)) {
 	c.handler.setConnectHandle(handle)
 }
 
-func (c *AgentClient) SetReadyHandle(handle func(common.ISession)) {
+func (c *Agent) SetReadyHandle(handle func(common.ISession)) {
 	c.handler.setReadyHandle(handle)
 }
 
-func (c *AgentClient) SetDisconnectHandle(handle func(common.ISession, error)) {
+func (c *Agent) SetDisconnectHandle(handle func(common.ISession, error)) {
 	c.handler.setDisconnectHandle(handle)
 }
 
-func (c *AgentClient) SetTickHandle(handle func(common.ISession, time.Duration)) {
+func (c *Agent) SetTickHandle(handle func(common.ISession, time.Duration)) {
 	c.handler.setTickHandle(handle)
 }
 
-func (c *AgentClient) SetErrorHandle(handle func(error)) {
+func (c *Agent) SetErrorHandle(handle func(error)) {
 	c.handler.setErrorHandle(handle)
 }
 
-func (c *AgentClient) getPakChan(agentId uint32) chan common.IdWithPacket {
+func (c *Agent) getPakChan(agentId uint32) chan common.IdWithPacket {
 	var (
 		d any
 		o bool
@@ -241,33 +241,33 @@ func (c *AgentClient) getPakChan(agentId uint32) chan common.IdWithPacket {
 	return d.(chan common.IdWithPacket)
 }
 
-type AgentClientManager struct {
-	clients map[int32]*AgentClient
+type AgentManager struct {
+	clients map[int32]*Agent
 	name2Id map[string]int32
 	locker  sync.RWMutex
 }
 
-func NewAgentClientManager() *AgentClientManager {
-	return &AgentClientManager{
-		clients: make(map[int32]*AgentClient),
+func NewAgentManager() *AgentManager {
+	return &AgentManager{
+		clients: make(map[int32]*Agent),
 		name2Id: make(map[string]int32),
 	}
 }
 
-func (m *AgentClientManager) NewClient(name string, options ...options.Option) *AgentClient {
-	client := NewAgentClient(options...)
+func (m *AgentManager) NewClient(name string, options ...options.Option) *Agent {
+	client := NewAgent(options...)
 	m.addClient(name, client)
 	return client
 }
 
-func (m *AgentClientManager) addClient(name string, c *AgentClient) {
+func (m *AgentManager) addClient(name string, c *Agent) {
 	m.locker.Lock()
 	m.clients[c.id] = c
 	m.name2Id[name] = c.id
 	m.locker.Unlock()
 }
 
-func (m *AgentClientManager) GetClient(name string) *AgentClient {
+func (m *AgentManager) GetClient(name string) *Agent {
 	m.locker.RLock()
 	defer m.locker.RUnlock()
 	id := m.name2Id[name]
@@ -275,12 +275,12 @@ func (m *AgentClientManager) GetClient(name string) *AgentClient {
 }
 
 var (
-	globalAgentClientIdCounter  int32
+	globalAgentIdCounter        int32
 	globalAgentSessionIdCounter uint32
 )
 
-func getNextAgentClientId() int32 {
-	return atomic.AddInt32(&globalAgentClientIdCounter, 1)
+func getNextAgentId() int32 {
+	return atomic.AddInt32(&globalAgentIdCounter, 1)
 }
 
 func getNextAgentSessionId() uint32 {

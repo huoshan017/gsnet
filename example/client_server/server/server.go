@@ -18,7 +18,7 @@ import (
 type serverHandler struct {
 }
 
-func newServerHandlerUseAgentClient(args ...any) common.ISessionHandler {
+func newServerHandler(args ...any) common.ISessionHandler {
 	return &serverHandler{}
 }
 
@@ -46,7 +46,7 @@ func (h *serverHandler) OnError(err error) {
 }
 
 func createServer(address string) *server.Server {
-	s := server.NewServer(newServerHandlerUseAgentClient, options.WithTickSpan(100*time.Millisecond))
+	s := server.NewServer(newServerHandler, options.WithTickSpan(100*time.Millisecond))
 	if err := s.Listen(address); err != nil {
 		log.Infof("test server listen err %v", err)
 		return nil
