@@ -31,7 +31,7 @@ func (s *MsgSession) GetId() uint64 {
 	return s.sess.GetId()
 }
 
-func (s *MsgSession) SetUserData(key string, value any) {
+func (s *MsgSession) SetData(key string, value any) {
 	s.sess.SetUserData(key, value)
 }
 
