@@ -287,7 +287,7 @@ func (s *Server) handleConn(c net.Conn) {
 	}()
 
 	// 创建基础包处理器
-	basePacketHandler := handler.NewDefaultBasePacketHandler4Server(sess, argsGetter, resendEventHandler, &s.options.Options, s.reconnInfoMap)
+	basePacketHandler := handler.NewDefaultBasePacketHandler4Server(sess, argsGetter, resendEventHandler, &s.options.Options)
 
 	// 创建會話處理器
 	var handler common.ISessionHandler

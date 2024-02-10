@@ -113,8 +113,7 @@ func NewDefaultBasePacketHandler4Server(
 	sess common.ISession,
 	argsGetter IPacketArgsGetter,
 	resendEventHandler common.IResendEventHandler,
-	options *options.Options,
-	reconnInfoMap sync.Map) *DefaultBasePacketHandler {
+	options *options.Options) *DefaultBasePacketHandler {
 	var conn common.IConn
 	connGetter, o := sess.(common.IConnGetter)
 	if o {
@@ -129,7 +128,6 @@ func NewDefaultBasePacketHandler4Server(
 		options:            options,
 		lastTime:           time.Now(),
 		state:              HandlerStateNotBegin,
-		reconnInfoMap:      reconnInfoMap,
 	}
 }
 
